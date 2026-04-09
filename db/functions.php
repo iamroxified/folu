@@ -21,6 +21,8 @@ function QueryDB($sql, $params = []) {
   }
 }
 
+require_once __DIR__ . '/school_portal_helpers.php';
+
 function get_code(){
 
   global $conn;
@@ -387,7 +389,11 @@ function total_courses() {
 function total_fee_collections() {
     global $pdo;
     try {
-        $stmt = $pdo->query("SELECT SUM(amount) FROM fees WHERE status = 'paid'");
+        if (schema_has_table('student_payments')) {
+            $stmt = $pdo->query("SELECT SUM(amount_paid) FROM student_payments");
+        } else {
+            $stmt = $pdo->query("SELECT SUM(amount) FROM fees WHERE status = 'paid'");
+        }
         return $stmt->fetchColumn() ?? 0;
     } catch (PDOException $e) {
         error_log("Error getting total fee collections: " . $e->getMessage());
@@ -402,7 +408,11 @@ function total_fee_collections() {
 function pending_fees() {
     global $pdo;
     try {
-        $stmt = $pdo->query("SELECT SUM(amount) FROM fees WHERE status = 'pending'");
+        if (schema_has_table('student_fees')) {
+            $stmt = $pdo->query("SELECT SUM(balance) FROM student_fees WHERE balance > 0");
+        } else {
+            $stmt = $pdo->query("SELECT SUM(amount) FROM fees WHERE status = 'pending'");
+        }
         return $stmt->fetchColumn() ?? 0;
     } catch (PDOException $e) {
         error_log("Error getting pending fees: " . $e->getMessage());
@@ -417,8 +427,8 @@ function pending_fees() {
  */
 function recent_students($limit = 5) {
     global $pdo;
-    $stmt = $pdo->prepare("SELECT * FROM students ORDER BY created_at DESC LIMIT ?");
-    $stmt->execute([$limit]);
+    $limit = max(1, (int) $limit);
+    $stmt = $pdo->query("SELECT * FROM students ORDER BY created_at DESC LIMIT {$limit}");
     return $stmt->fetchAll();
 }
 
@@ -444,17 +454,18 @@ function students_by_class($class) {
  */
 function student_attendance_percentage($student_id) {
     global $pdo;
+    $studentColumn = schema_has_column('attendance', 'student_link') ? 'student_link' : 'student_id';
     
     try {
         // Get total attendance records
-        $total_stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance WHERE student_id = ?");
+        $total_stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance WHERE {$studentColumn} = ?");
         $total_stmt->execute([$student_id]);
         $total = $total_stmt->fetchColumn();
         
         if ($total == 0) return 0;
         
         // Get present records
-        $present_stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance WHERE student_id = ? AND status = 'present'");
+        $present_stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance WHERE {$studentColumn} = ? AND status = 'present'");
         $present_stmt->execute([$student_id]);
         $present = $present_stmt->fetchColumn();
         
@@ -472,8 +483,9 @@ function student_attendance_percentage($student_id) {
  */
 function student_grade_average($student_id) {
     global $pdo;
+    $studentColumn = schema_has_column('grades', 'student_link') ? 'student_link' : 'student_id';
     try {
-        $stmt = $pdo->prepare("SELECT AVG(score) FROM grades WHERE student_id = ?");
+        $stmt = $pdo->prepare("SELECT AVG(score) FROM grades WHERE {$studentColumn} = ?");
         $stmt->execute([$student_id]);
         return $stmt->fetchColumn() ?? 0;
     } catch (PDOException $e) {
@@ -489,7 +501,11 @@ function student_grade_average($student_id) {
 function overdue_fees_count() {
     global $pdo;
     try {
-        $stmt = $pdo->query("SELECT COUNT(*) FROM fees WHERE status = 'overdue'");
+        if (schema_has_table('student_fees')) {
+            $stmt = $pdo->query("SELECT COUNT(*) FROM student_fees WHERE status = 'overdue' OR balance > 0");
+        } else {
+            $stmt = $pdo->query("SELECT COUNT(*) FROM fees WHERE status = 'overdue'");
+        }
         return $stmt->fetchColumn();
     } catch (PDOException $e) {
         error_log("Error getting overdue fees count: " . $e->getMessage());
@@ -525,9 +541,14 @@ function monthly_fee_collection($month = null, $year = null) {
     if (!$year) $year = date('Y');
     
     try {
-        $stmt = $pdo->prepare("SELECT SUM(amount) FROM fees 
+        if (schema_has_table('student_payments')) {
+            $stmt = $pdo->prepare("SELECT SUM(amount_paid) FROM student_payments 
+                              WHERE MONTH(payment_date) = ? AND YEAR(payment_date) = ?");
+        } else {
+            $stmt = $pdo->prepare("SELECT SUM(amount) FROM fees 
                               WHERE MONTH(payment_date) = ? AND YEAR(payment_date) = ? 
                               AND status = 'paid'");
+        }
         $stmt->execute([$month, $year]);
         return $stmt->fetchColumn() ?? 0;
     } catch (PDOException $e) {
@@ -542,6 +563,16 @@ function monthly_fee_collection($month = null, $year = null) {
  */
 function generate_student_id() {
     global $pdo;
+
+    try {
+        $studentColumns = QueryDB("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN);
+
+        if (in_array('admission_no', $studentColumns, true)) {
+            return generate_student_admission_no();
+        }
+    } catch (PDOException $e) {
+        error_log("Error checking student identifier column: " . $e->getMessage());
+    }
     
     do {
         $id = 'STU' . date('Y') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
@@ -573,15 +604,11 @@ function generate_staff_id() {
  * @return string
  */
 function generate_teacher_id() {
-    global $pdo;
-    
-    do {
-        $id = 'TEA' . date('Y') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM teachers WHERE employee_id = ?");
-        $stmt->execute([$id]);
-    } while ($stmt->fetchColumn() > 0);
-    
-    return $id;
+    return generate_teacher_identifier();
+}
+
+function generate_employee_id() {
+    return generate_teacher_identifier();
 }
 
 /**

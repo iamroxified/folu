@@ -1,0 +1,56 @@
+So here is the general workflow of the Folu School Management system
+
+I want to make it dynamic such that other schools can also reuse it, so I want the school logo, school name and other school propertis to be dynamic, also if possible make it installable such that when a new school want to use it, you install it like a wordpress site
+
+Now for roles, there are 4 basic user roles
+1. Admin ( controls everything  )
+    - Enter student mannually or upload in excel. ( option for passport upload should be availabe for students )
+    - Create Sessions and Term and assign active Sessions
+    - Create and modify classes
+    - Create an modify subjects
+    - Create and Modify Grade
+    - Create and modify annoucements (for students, teacher or general)
+    - Create and modify fees and fees types and monitor its allocations ( fees varied from term to term and from class to class)
+    - Check the payments record, sort, filter and modify for student
+    - Check payroll for staff and teacher
+    - Register staffs and teachers and assign classes/duties and subject to them
+    - Create timetable also for subjects and classes
+
+2. Teachers ( Control Academic records eg, attendance, score recording, report generation, check student details but cannot modify it)
+3. Accountant ( Verify the students payment status, add paywemtn to students, create fees and payment structures and types, manage payroll of all staffs and teachers)
+4. Student / Parent ( view score, vire payemtn status and print reciept, submit asignment if availabe, basically view student biodata and also lay complaint)
+
+
+
+    So the workflow is this
+for  Students
+    - A students registers and fill in all the informations either from his end or the admin end
+    - Fees get assigend to the student based on the class and term and also gender.
+    - Student can pay for the fees on their portal and admin can also manually enter their payments for them.
+    - Students can print reciepts, report sheets and attendance overviews and even a transcript of all his academic record
+    - Students can open complaint / suggestion tickets
+    - Students can see notifications sent by admin
+    - Students can print the admission letter with admission number on it
+    - At the end of a term, student should proceed to the next term or class unless stated otherwise by the admin eg if the student is in Primary 1 second term, the student should move to Primary 2 third term and next should be Primary 3 first term, progressively till primary Six third term unless the adminission status chnage to withdrawn( in a case where the student leaves the school)
+    - the admisiion status is pending, admitted, withdrawn, students category are new intakes (NI) or Old Students (OS). If a student is NI in the term he enters, he gets all the fees for a New Intake, but subsequent term, he becomes a regular student OS.
+
+for fees
+- When creating a new fees based on catgory, gender and classes. ege to create a fee the fields should be fee name, fee catgory ( NI or OS), gender ( M/F), class(), session, term. so what this measn is that fees varies across board, fees for new intake in first term is different from fees of OS in first term and also there are fees that females pay liek for Hat that males dont pay for. And the fees varies across classes, fees for primary 1 is different from JSS1
+- a fee assigned to a student can be deassigned and extra fees can be added. eg a student might want to get an extra item from the school the fees can be added to that particular students
+
+
+Payment
+- Payment can be sorted out to see the payemnts details. eg we can sort for all the students that are assigned bus fee in a particular session and semester
+- payment can modified for a student, either deduction or addition and can be printed
+-
+
+attendance
+- The admin can view all attendace even for previous years, but a teacher can only view the attendance of students allocated to him or her within the active session and term.
+- The teacher open the record, mark the student present  which shows that the student was present in school. If teh student is absent, there should be a space for reason and it should also have a space to view the student information incase they want to contact the parents to know why the student is absent
+
+Result
+- Just like attendace also a teacher can enter CA1, CA2 and Exam Score for the students allocated to him within the assigend session and term. Which measn a teacher cannot see previous results and record for the studnent, but an admin and the student can see it
+- On the result module
+    1. Select class, the students assigned to you in the active session will always be displaye e. if a teacher has only one class, once he clicks resul, a modal displaying the drop down of the allocated classes will display, select a class abd click process, the you will see an editable table showing all the SN, Admission number and name of Student, CA1, CA2 and Exam, Total(summation of CA1, CA2 and exam), Grade  (kinda like an excel sheet format) where you can now begin filling their score. Ajax should be added to it so tat it updates on entering to save ytou from staring over in a system faliure witout saving, after all students scores has been entered you can now processthe result which will give you a preciew in a report sheet format
+
+After all is done, if it means for you to drop the existing database and run a fress migration so that there would be clean record entry, i wouldnt mind.
