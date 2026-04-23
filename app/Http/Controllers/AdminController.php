@@ -32,7 +32,7 @@ class AdminController extends Controller
             'pending_admissions' => Student::where('admission_status', 'pending')->count(),
         ];
 
-        return view('admin.dashboard', compact('stats'));
+        return view('admin.dashboard.index', compact('stats'));
     }
 
     // Student Management
@@ -172,7 +172,7 @@ class AdminController extends Controller
             if ($student->category === 'NI') {
                 $student->category = 'OS';
             }
-            
+
             $student->current_class_id = $request->to_class_id;
             $student->current_session_id = $request->to_session_id;
             $student->current_term_id = $request->to_term_id;

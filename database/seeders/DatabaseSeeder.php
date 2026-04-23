@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             TermSeeder::class,
             SchoolSettingsSeeder::class,
+            AdminUserSeeder::class,
         ]);
     }
 }

@@ -1,14 +1,27 @@
 <?php
 
+use App\Http\Controllers\AccountantController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\LegacyAdminController;
 use App\Http\Controllers\LegacyFrontendController;
+use App\Http\Controllers\StudentController;
 use App\Http\Controllers\StudentPortalController;
 use App\Http\Controllers\TeacherPortalController;
 use Illuminate\Support\Facades\Route;
 
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\AccountantController;
-use App\Http\Controllers\StudentController;
+// Authentication Routes
+Route::get('/admin/login', [AdminLoginController::class, 'showLoginForm'])->name('admin.login');
+Route::post('/admin/login', [AdminLoginController::class, 'login'])->name('admin.login.submit');
+Route::get('/logout', function (\Illuminate\Http\Request $request) {
+    \Illuminate\Support\Facades\Auth::logout();
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+    return redirect('/');
+})->name('logout');
+
+// Placeholder for the password reset route referenced in the login view
+Route::get('/password/reset', function () { return 'Password reset page coming soon.'; })->name('password.request');
 
 Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
@@ -108,7 +121,7 @@ Route::middleware(['auth', 'role:Student'])->prefix('student')->name('student.')
     Route::get('/progression', [StudentController::class, 'checkProgression'])->name('progression');
 });
 
-Route::redirect('/admin', '/admin/login.php');
+Route::redirect('/admin', '/admin/login');
 Route::redirect('/teacher', '/teacher/login.php');
 Route::redirect('/student', '/student/login.php');
 Route::redirect('/accountant', '/accountant/login.php');
@@ -126,9 +139,9 @@ Route::match(['get', 'post'], '/student/{path}', [StudentPortalController::class
     ->name('student.portal');
 
 Route::get('/', [LegacyFrontendController::class, 'show'])
-    ->defaults('page', 'index')
+    ->defaults('', 'index')
     ->name('home');
 
-Route::get('/{page}', [LegacyFrontendController::class, 'show'])
+Route::get('/', [LegacyFrontendController::class, 'show'])
     ->where('page', '[^/]+')
     ->name('frontend.page');
