@@ -1,1 +1,1 @@
-@include('admin.pages.students.view')
+@include('admin.students.view')

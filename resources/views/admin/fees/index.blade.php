@@ -1,26 +1,26 @@
 <?php
 // Start session
 
-// Include database configuration and functions
 require_once base_path('db/config.php');
 require_once base_path('db/functions.php');
 
-// Check if user is logged in
 if (!isset($_SESSION['adid'])) {
     header('Location: /admin/login.php');
     exit;
 }
 
-// Fetch fee types data
-$fees = QueryDB("SELECT fees.*, ft.fee_name as fee_type_name, c.class_name, c.class_arm, acs.session_name, acs.session_term 
-                FROM fees
-                LEFT JOIN fee_type ft ON fees.fee_name = ft.id
-                LEFT JOIN classes c ON fees.fee_class = c.id 
-                LEFT JOIN academic_sessions acs ON fees.fee_session = acs.id 
-                ORDER BY ft.fee_name")->fetchAll();
-
-
-
+$fees = QueryDB(
+    "SELECT fs.*,
+            sc.class_name,
+            sc.section AS class_arm,
+            ac.session_name,
+            t.term_name
+     FROM fee_structures fs
+     LEFT JOIN school_classes sc ON fs.class_id = sc.id
+     LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
+     LEFT JOIN terms t ON fs.term_id = t.id
+     ORDER BY fs.created_at DESC, fs.id DESC"
+)->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -40,41 +40,49 @@ $fees = QueryDB("SELECT fees.*, ft.fee_name as fee_type_name, c.class_name, c.cl
             <div class="container">
                 <div class="page-inner">
                     <div class="d-flex align-items-left flex-column flex-md-row">
-                        <h2 class="text-dark pb-2 fw-bold">Fees </h2>
+                        <h2 class="text-dark pb-2 fw-bold">Fee Structures</h2>
                     </div>
 
                     <div class="row">
                         <div class="col-md-12">
                             <div class="card">
                                 <div class="card-header">
-                                    <div class="card-title">All Fees</div>
+                                    <div class="card-title">All Fee Structures</div>
+                                    <div class="card-category">Live schema view backed by `fee_structures`.</div>
                                 </div>
                                 <div class="card-body">
                                     <div class="table-responsive">
                                         <table id="basic-datatables" class="display table table-striped table-hover">
                                             <thead>
                                                 <tr>
-                                                    <th>Fee Name</th>
+                                                    <th>Name</th>
+                                                    <th>Type</th>
                                                     <th>Class</th>
                                                     <th>Session</th>
+                                                    <th>Term</th>
                                                     <th>Amount</th>
-                                                    <th>Description</th>
-                                                    <th>Created At</th>
+                                                    <th>Category</th>
                                                     <th>Status</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($fees as $fee):  ?> 
-                                                  <tr>
-                                                        <td><?php echo htmlspecialchars($fee['fee_type_name']); ?></td>
-                                                        <td><?php echo htmlspecialchars($fee['class_name'] . ' ' . $fee['class_arm']); ?></td>
-                                                        <td><?php echo htmlspecialchars($fee['session_name'] . ' (' . $fee['session_term'] . ' Term)'); ?></td>
-                                                        <td><?php echo htmlspecialchars($fee['fee_amount']); ?></td>
-                                                        <td><?php echo htmlspecialchars($fee['fee_description']); ?></td>
-                                                        <td><?php echo htmlspecialchars($fee['created_at']); ?></td>
-
-                                                        <td><?php echo htmlspecialchars($fee['status']); ?></td>
-                                                    </tr>
+                                                <?php foreach ($fees as $fee): ?>
+                                                <tr>
+                                                    <td><?php echo htmlspecialchars((string) $fee['name']); ?></td>
+                                                    <td><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $fee['fee_type']))); ?></td>
+                                                    <td><?php echo htmlspecialchars(trim(((string) ($fee['class_name'] ?? 'All Classes')) . ' ' . ((string) ($fee['class_arm'] ?? '')))); ?></td>
+                                                    <td><?php echo htmlspecialchars((string) ($fee['session_name'] ?? 'N/A')); ?></td>
+                                                    <td><?php echo htmlspecialchars((string) ($fee['term_name'] ?? 'N/A')); ?></td>
+                                                    <td>N<?php echo number_format((float) ($fee['amount'] ?? 0), 2); ?></td>
+                                                    <td><?php echo htmlspecialchars((string) ($fee['category'] ?? 'N/A')); ?></td>
+                                                    <td>
+                                                        <?php if (!empty($fee['is_active'])): ?>
+                                                        <span class="badge badge-success">Active</span>
+                                                        <?php else: ?>
+                                                        <span class="badge badge-secondary">Inactive</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                </tr>
                                                 <?php endforeach; ?>
                                             </tbody>
                                         </table>
@@ -91,35 +99,8 @@ $fees = QueryDB("SELECT fees.*, ft.fee_name as fee_type_name, c.class_name, c.cl
             <script>
                 $(document).ready(function() {
                     $('#basic-datatables').DataTable({});
-
-                    $('#multi-filter-select').DataTable({
-                        "pageLength": 5,
-                        initComplete: function() {
-                            this.api().columns().every(function() {
-                                var column = this;
-                                var select = $('<select class="form-control"><option value=""></option></select>')
-                                    .appendTo($(column.footer()).empty())
-                                    .on('change', function() {
-                                        var val = $.fn.dataTable.util.escapeRegex(
-                                            $(this).val()
-                                        );
-
-                                        column
-                                            .search(val ? '^' + val + '$' : '', true, false)
-                                            .draw();
-                                    });
-
-                                column.data().unique().sort().each(function(d, j) {
-                                    select.append('<option value="' + d + '">' + d + '</option>')
-                                });
-                            });
-                        }
-                    });
                 });
             </script>
 </body>
 
 </html>
-
-
-

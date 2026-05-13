@@ -1,0 +1,2 @@
+<?php echo $__env->make('admin.students.ajax.fetch-lgas', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+<?php /**PATH C:\laragon\www\folu\resources\views/admin/fetch_lgas.blade.php ENDPATH**/ ?>

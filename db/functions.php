@@ -31,7 +31,7 @@ function get_code(){
   $serials = substr($shuffled, 0,7).rand(100,999);
   $final = str_shuffle($serials);
   return $final;
-  
+
 }
 
 function d_code(){
@@ -41,7 +41,7 @@ function d_code(){
   $shuffled = str_shuffle($alphabets);
   $serials = substr($shuffled, 0,5).rand(100,999);
   $final = str_shuffle($serials);
-  return $final; 
+  return $final;
 }
 
 function ans_code(){
@@ -57,15 +57,15 @@ function ans_code(){
 function author_code(){
 
   global $conn;
-  
+
   $alphabets ="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvvxyz";
-  
+
   $shuffled = str_shuffle($alphabets);
-  
+
   $serials = substr($shuffled, 0,5).rand(100,999);
-  
+
   return $serials;
-  
+
 }
 
 function validate($value){
@@ -192,11 +192,6 @@ function ausername($user_id) {
     }
 }
 
- function user_bmid($mid){
-  $get =  QueryDB("SELECT bmid from users where username ='$mid'  ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['bmid'];
-}
 
  function fimocol_username($mid){
   $get =  QueryDB("SELECT username from users where bmid ='$mid' ");
@@ -211,29 +206,9 @@ function ausername($user_id) {
 }
 
 
-function get_user_details($email){
-  $get = QueryDB("SELECT * FROM users WHERE username = '$email' ");
-  return $get->fetch(PDO::FETCH_ASSOC);
-}
-
-
-
-
-function all_users(){
-  return QueryDB("SELECT COUNT(*) FROM users ")->fetchColumn();
-}
-
-function all_students(){
-  return QueryDB("SELECT COUNT(*) FROM students ")->fetchColumn();
-}
-
-function all_staff(){
-  return QueryDB("SELECT COUNT(*) FROM staff ")->fetchColumn();
-}
-
 function generate_student_admission_no() {
     global $pdo;
-    
+
     $year = date('Y');
     $prefix = "FIMOCOL/{$year}/";
 
@@ -255,81 +230,6 @@ function generate_student_admission_no() {
     $new_admission_no = $prefix . str_pad($new_number, 3, '0', STR_PAD_LEFT);
 
     return $new_admission_no;
-}
-
-
-function lan_house_count($id){
-  return QueryDB("SELECT COUNT(*) FROM houses where landlord_id='$id' ")->fetchColumn();
-}
-
-function get_username($id){
-  $get = QueryDB("SELECT name FROM users WHERE id = '$id' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['name'];
-}
-
-function total_amount($id){
-  $get = QueryDB("SELECT SUM(COALESCE(amount, 0)) AS total_amount FROM applications where tenant_id='$id' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['total_amount'] ?? 0;
-}
-
-function total_rentamount($id){
-  $get = QueryDB("SELECT SUM(COALESCE(amount, 0)) AS total_amount FROM applications where house_id='$id' and status='approved' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['total_amount'] ?? 0;
-}
-
-function get_house_id($id){
-  $get = QueryDB("SELECT id  FROM houses where landlord_id='$id' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['id'] ?? 0;
-}
-
-function get_payment_details($email){
-  $get = QueryDB("SELECT * FROM payment WHERE pay_user = '$email' ");
-  return $get->fetch(PDO::FETCH_ASSOC);
-  
-}
-
-
-function pay_time($email){
-  $get = QueryDB("SELECT confirm_time from payment where pay_user ='$email' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['confirm_time'];
-}
-
-
-function get_user_name_from_code($email){
-  $get = QueryDB("SELECT fname from f_users where ucode ='$email' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['fname'];
-}
-
-function get_email_from_code($email)
-{
-  $get = QueryDB("SELECT email from f_users where track='$email' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['email'];
-}
-
-function get_user_photo_from_code($email){
-  $get = QueryDB("SELECT passport from f_users where ucode ='$email' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['passport'];
-}
-
-function get_fname($code){
-  $get = QueryDB("SELECT fname from f_users where ucode ='$code' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['fname'];
-}
-
-
-function get_track_name($code){
-  $get = QueryDB("SELECT track_name from tracks where track_id ='$code' ");
-  $getter = $get->fetch(PDO::FETCH_ASSOC);
-  return $getter['track_name'];
 }
 
 /**
@@ -391,8 +291,12 @@ function total_fee_collections() {
     try {
         if (schema_has_table('student_payments')) {
             $stmt = $pdo->query("SELECT SUM(amount_paid) FROM student_payments");
+        } elseif (schema_has_table('payments')) {
+            $stmt = $pdo->query("SELECT SUM(amount) FROM payments WHERE payable_type = 'student_fee' AND status = 'completed'");
+        } elseif (schema_has_table('fee_payments')) {
+            $stmt = $pdo->query("SELECT SUM(amount_paid) FROM fee_payments WHERE status IN ('confirmed', 'completed')");
         } else {
-            $stmt = $pdo->query("SELECT SUM(amount) FROM fees WHERE status = 'paid'");
+            return 0;
         }
         return $stmt->fetchColumn() ?? 0;
     } catch (PDOException $e) {
@@ -410,8 +314,10 @@ function pending_fees() {
     try {
         if (schema_has_table('student_fees')) {
             $stmt = $pdo->query("SELECT SUM(balance) FROM student_fees WHERE balance > 0");
-        } else {
+        } elseif (schema_has_table('fees')) {
             $stmt = $pdo->query("SELECT SUM(amount) FROM fees WHERE status = 'pending'");
+        } else {
+            return 0;
         }
         return $stmt->fetchColumn() ?? 0;
     } catch (PDOException $e) {
@@ -439,9 +345,9 @@ function recent_students($limit = 5) {
  */
 function students_by_class($class) {
     global $pdo;
-    $stmt = $pdo->prepare("SELECT s.* FROM students s 
-                          JOIN student_course_enrollments sce ON s.id = sce.student_id 
-                          JOIN courses c ON sce.course_id = c.id 
+    $stmt = $pdo->prepare("SELECT s.* FROM students s
+                          JOIN student_course_enrollments sce ON s.id = sce.student_id
+                          JOIN courses c ON sce.course_id = c.id
                           WHERE c.course_name = ?");
     $stmt->execute([$class]);
     return $stmt->fetchAll();
@@ -454,21 +360,27 @@ function students_by_class($class) {
  */
 function student_attendance_percentage($student_id) {
     global $pdo;
-    $studentColumn = schema_has_column('attendance', 'student_link') ? 'student_link' : 'student_id';
-    
+
     try {
+        $attendanceTable = schema_has_table('attendance') ? 'attendance' : (schema_has_table('student_attendance') ? 'student_attendance' : null);
+        if ($attendanceTable === null) {
+            return 0;
+        }
+
+        $studentColumn = schema_has_column($attendanceTable, 'student_link') ? 'student_link' : 'student_id';
+
         // Get total attendance records
-        $total_stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance WHERE {$studentColumn} = ?");
+        $total_stmt = $pdo->prepare("SELECT COUNT(*) FROM {$attendanceTable} WHERE {$studentColumn} = ?");
         $total_stmt->execute([$student_id]);
         $total = $total_stmt->fetchColumn();
-        
+
         if ($total == 0) return 0;
-        
+
         // Get present records
-        $present_stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance WHERE {$studentColumn} = ? AND status = 'present'");
+        $present_stmt = $pdo->prepare("SELECT COUNT(*) FROM {$attendanceTable} WHERE {$studentColumn} = ? AND status = 'present'");
         $present_stmt->execute([$student_id]);
         $present = $present_stmt->fetchColumn();
-        
+
         return ($present / $total) * 100;
     } catch (PDOException $e) {
         error_log("Error getting student attendance percentage: " . $e->getMessage());
@@ -483,9 +395,19 @@ function student_attendance_percentage($student_id) {
  */
 function student_grade_average($student_id) {
     global $pdo;
-    $studentColumn = schema_has_column('grades', 'student_link') ? 'student_link' : 'student_id';
     try {
-        $stmt = $pdo->prepare("SELECT AVG(score) FROM grades WHERE {$studentColumn} = ?");
+        $gradesTable = schema_has_table('grades') ? 'grades' : (schema_has_table('student_grades') ? 'student_grades' : null);
+        if ($gradesTable === null) {
+            return 0;
+        }
+
+        $studentColumn = schema_has_column($gradesTable, 'student_link') ? 'student_link' : 'student_id';
+        $scoreColumn = schema_has_column($gradesTable, 'score') ? 'score' : (schema_has_column($gradesTable, 'total_score') ? 'total_score' : null);
+        if ($scoreColumn === null) {
+            return 0;
+        }
+
+        $stmt = $pdo->prepare("SELECT AVG({$scoreColumn}) FROM {$gradesTable} WHERE {$studentColumn} = ?");
         $stmt->execute([$student_id]);
         return $stmt->fetchColumn() ?? 0;
     } catch (PDOException $e) {
@@ -503,8 +425,10 @@ function overdue_fees_count() {
     try {
         if (schema_has_table('student_fees')) {
             $stmt = $pdo->query("SELECT COUNT(*) FROM student_fees WHERE status = 'overdue' OR balance > 0");
-        } else {
+        } elseif (schema_has_table('fees')) {
             $stmt = $pdo->query("SELECT COUNT(*) FROM fees WHERE status = 'overdue'");
+        } else {
+            return 0;
         }
         return $stmt->fetchColumn();
     } catch (PDOException $e) {
@@ -520,7 +444,14 @@ function overdue_fees_count() {
 function today_attendance_count() {
     global $pdo;
     try {
-        $stmt = $pdo->query("SELECT COUNT(*) FROM attendance WHERE DATE(date) = CURDATE() AND status = 'present'");
+        if (schema_has_table('attendance')) {
+            $stmt = $pdo->query("SELECT COUNT(*) FROM attendance WHERE DATE(date) = CURDATE() AND status = 'present'");
+        } elseif (schema_has_table('student_attendance')) {
+            $dateColumn = schema_has_column('student_attendance', 'date') ? 'date' : 'attendance_date';
+            $stmt = $pdo->query("SELECT COUNT(*) FROM student_attendance WHERE DATE({$dateColumn}) = CURDATE() AND status = 'present'");
+        } else {
+            return 0;
+        }
         return $stmt->fetchColumn();
     } catch (PDOException $e) {
         error_log("Error getting today's attendance count: " . $e->getMessage());
@@ -536,18 +467,24 @@ function today_attendance_count() {
  */
 function monthly_fee_collection($month = null, $year = null) {
     global $pdo;
-    
+
     if (!$month) $month = date('m');
     if (!$year) $year = date('Y');
-    
+
     try {
         if (schema_has_table('student_payments')) {
-            $stmt = $pdo->prepare("SELECT SUM(amount_paid) FROM student_payments 
+            $stmt = $pdo->prepare("SELECT SUM(amount_paid) FROM student_payments
                               WHERE MONTH(payment_date) = ? AND YEAR(payment_date) = ?");
+        } elseif (schema_has_table('payments')) {
+            $stmt = $pdo->prepare("SELECT SUM(amount) FROM payments
+                              WHERE payable_type = 'student_fee' AND status = 'completed'
+                              AND MONTH(payment_date) = ? AND YEAR(payment_date) = ?");
+        } elseif (schema_has_table('fee_payments')) {
+            $stmt = $pdo->prepare("SELECT SUM(amount_paid) FROM fee_payments
+                              WHERE status IN ('confirmed', 'completed')
+                              AND MONTH(payment_date) = ? AND YEAR(payment_date) = ?");
         } else {
-            $stmt = $pdo->prepare("SELECT SUM(amount) FROM fees 
-                              WHERE MONTH(payment_date) = ? AND YEAR(payment_date) = ? 
-                              AND status = 'paid'");
+            return 0;
         }
         $stmt->execute([$month, $year]);
         return $stmt->fetchColumn() ?? 0;
@@ -573,13 +510,13 @@ function generate_student_id() {
     } catch (PDOException $e) {
         error_log("Error checking student identifier column: " . $e->getMessage());
     }
-    
+
     do {
         $id = 'STU' . date('Y') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE student_number = ?");
         $stmt->execute([$id]);
     } while ($stmt->fetchColumn() > 0);
-    
+
     return $id;
 }
 
@@ -589,13 +526,13 @@ function generate_student_id() {
  */
 function generate_staff_id() {
     global $pdo;
-    
+
     do {
         $id = 'STF' . date('Y') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM staff WHERE staff_number = ?");
         $stmt->execute([$id]);
     } while ($stmt->fetchColumn() > 0);
-    
+
     return $id;
 }
 

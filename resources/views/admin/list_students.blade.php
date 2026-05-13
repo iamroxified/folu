@@ -1,1 +1,1 @@
-@include('admin.pages.students.list')
+@include('admin.students.list')

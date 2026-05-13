@@ -11,9 +11,28 @@ if (!isset($_SESSION['adid'])) {
     exit;
 }
 
-// Fetch attendance summary
-$attendanceSummary = QueryDB("SELECT s.first_name, s.last_name, (SELECT COUNT(*) FROM attendance a WHERE a.student_link = s.id AND a.status = 'present') as present_count, (SELECT COUNT(*) FROM attendance a WHERE a.student_link = s.id AND a.status = 'absent') as absent_count FROM students s")
-    ->fetchAll(PDO::FETCH_ASSOC);
+$attendanceSummary = [];
+
+if (schema_has_table('student_attendance')) {
+    $attendanceSummary = QueryDB(
+        "SELECT s.first_name,
+                s.last_name,
+                SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) AS present_count,
+                SUM(CASE WHEN a.status = 'absent' THEN 1 ELSE 0 END) AS absent_count
+         FROM students s
+         LEFT JOIN student_attendance a ON a.student_id = s.id
+         GROUP BY s.id, s.first_name, s.last_name
+         ORDER BY s.last_name, s.first_name"
+    )->fetchAll(PDO::FETCH_ASSOC);
+} elseif (schema_has_table('attendance')) {
+    $attendanceSummary = QueryDB(
+        "SELECT s.first_name,
+                s.last_name,
+                (SELECT COUNT(*) FROM attendance a WHERE a.student_link = s.id AND a.status = 'present') AS present_count,
+                (SELECT COUNT(*) FROM attendance a WHERE a.student_link = s.id AND a.status = 'absent') AS absent_count
+         FROM students s"
+    )->fetchAll(PDO::FETCH_ASSOC);
+}
 
 ?>
 <!DOCTYPE html>
@@ -56,7 +75,6 @@ $attendanceSummary = QueryDB("SELECT s.first_name, s.last_name, (SELECT COUNT(*)
             @include('admin.partials.footer')
 </body>
 </html>
-
 
 
 

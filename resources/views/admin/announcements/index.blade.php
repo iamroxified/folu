@@ -92,7 +92,7 @@ $announcements = get_announcements_for_audience('all');
                                                 <option value="">All Sessions</option>
                                                 <?php foreach ($sessions as $session): ?>
                                                     <option value="<?php echo (int) $session['id']; ?>" <?php echo $currentSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
-                                                        <?php echo htmlspecialchars($session['session_name'] . ' - ' . session_term_label($session['session_term'])); ?>
+                                                        <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>

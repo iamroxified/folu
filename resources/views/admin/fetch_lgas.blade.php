@@ -1,1 +1,1 @@
-@include('admin.pages.students.ajax.fetch-lgas')
+@include('admin.students.ajax.fetch-lgas')

@@ -10,6 +10,17 @@ if (!isset($_SESSION['adid'])) {
 $message = '';
 $error = '';
 $editId = (int) ($_GET['edit'] ?? 0);
+$teacherAssignmentCountSelect = schema_has_table('teacher_subjects')
+    ? '(SELECT COUNT(*) FROM teacher_subjects ts WHERE ts.subject_link = s.id) AS teacher_assignment_count'
+    : '0 AS teacher_assignment_count';
+$classAssignmentCountSelect = schema_has_table('class_subject_assignments')
+    ? '(SELECT COUNT(*) FROM class_subject_assignments csa WHERE csa.subject_id = s.id) AS class_assignment_count'
+    : '0 AS class_assignment_count';
+$resultCountSelect = schema_has_table('student_grades')
+    ? '(SELECT COUNT(*) FROM student_grades g WHERE g.subject_id = s.id) AS result_count'
+    : (schema_has_table('grades')
+        ? '(SELECT COUNT(*) FROM grades g WHERE g.subject_link = s.id) AS result_count'
+        : '0 AS result_count');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['action'] ?? '');
@@ -20,15 +31,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $subjectName = validate($_POST['subject_name'] ?? '');
             $subjectCode = strtoupper(validate($_POST['subject_code'] ?? ''));
             $classLevel = validate($_POST['class_level'] ?? '');
-            $isCore = (int) ($_POST['is_core'] ?? 0);
+            $subjectType = validate($_POST['subject_type'] ?? 'core');
+            $subjectType = in_array($subjectType, ['core', 'elective', 'optional'], true) ? $subjectType : 'core';
+            $gradeLevels = $classLevel !== '' ? json_encode([$classLevel], JSON_UNESCAPED_SLASHES) : null;
 
             if ($subjectName === '' || $subjectCode === '' || $classLevel === '') {
                 throw new Exception('Please fill in the subject name, subject code, and class level.');
             }
 
             $duplicate = QueryDB(
-                'SELECT COUNT(*) FROM subjects WHERE subject_name = ? AND subject_code = ? AND class_level = ? AND id != ?',
-                [$subjectName, $subjectCode, $classLevel, $subjectId]
+                'SELECT COUNT(*) FROM subjects WHERE subject_code = ? AND id != ?',
+                [$subjectCode, $subjectId]
             )->fetchColumn();
 
             if ((int) $duplicate > 0) {
@@ -37,15 +50,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($subjectId > 0) {
                 QueryDB(
-                    'UPDATE subjects SET subject_name = ?, subject_code = ?, class_level = ?, is_core = ? WHERE id = ?',
-                    [$subjectName, $subjectCode, $classLevel, $isCore, $subjectId]
+                    'UPDATE subjects SET subject_name = ?, subject_code = ?, grade_levels = ?, subject_type = ?, updated_at = NOW() WHERE id = ?',
+                    [$subjectName, $subjectCode, $gradeLevels, $subjectType, $subjectId]
                 );
                 $message = 'Subject updated successfully.';
                 $editId = 0;
             } else {
                 QueryDB(
-                    'INSERT INTO subjects (subject_name, subject_code, class_level, is_core, created_at) VALUES (?, ?, ?, ?, NOW())',
-                    [$subjectName, $subjectCode, $classLevel, $isCore]
+                    'INSERT INTO subjects (subject_name, subject_code, grade_levels, subject_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
+                    [$subjectName, $subjectCode, $gradeLevels, $subjectType, 'active']
                 );
                 $message = 'Subject created successfully.';
             }
@@ -61,9 +74,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hasAssignments += (int) QueryDB('SELECT COUNT(*) FROM teacher_subjects WHERE subject_link = ?', [$subjectId])->fetchColumn();
             }
             if (schema_has_table('class_subject_assignments')) {
-                $hasAssignments += (int) QueryDB('SELECT COUNT(*) FROM class_subject_assignments WHERE subject_link = ?', [$subjectId])->fetchColumn();
+                $hasAssignments += (int) QueryDB('SELECT COUNT(*) FROM class_subject_assignments WHERE subject_id = ?', [$subjectId])->fetchColumn();
             }
-            if (schema_has_table('grades')) {
+            if (schema_has_table('student_grades')) {
+                $hasAssignments += (int) QueryDB('SELECT COUNT(*) FROM student_grades WHERE subject_id = ?', [$subjectId])->fetchColumn();
+            } elseif (schema_has_table('grades')) {
                 $hasAssignments += (int) QueryDB('SELECT COUNT(*) FROM grades WHERE subject_link = ?', [$subjectId])->fetchColumn();
             }
             if (schema_has_table('class_timetables')) {
@@ -86,13 +101,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $editingSubject = $editId > 0
     ? QueryDB('SELECT * FROM subjects WHERE id = ? LIMIT 1', [$editId])->fetch(PDO::FETCH_ASSOC)
     : null;
+$editingSubjectLevels = [];
+if ($editingSubject && !empty($editingSubject['grade_levels'])) {
+    $decodedLevels = json_decode((string) $editingSubject['grade_levels'], true);
+    $editingSubjectLevels = is_array($decodedLevels) ? $decodedLevels : [];
+}
+$editingSubjectLevel = (string) ($editingSubjectLevels[0] ?? '');
 $subjects = QueryDB(
     "SELECT s.*,
-            (SELECT COUNT(*) FROM teacher_subjects ts WHERE ts.subject_link = s.id) AS teacher_assignment_count,
-            (SELECT COUNT(*) FROM class_subject_assignments csa WHERE csa.subject_link = s.id) AS class_assignment_count,
-            (SELECT COUNT(*) FROM grades g WHERE g.subject_link = s.id) AS result_count
+            {$teacherAssignmentCountSelect},
+            {$classAssignmentCountSelect},
+            {$resultCountSelect}
      FROM subjects s
-     ORDER BY s.class_level, s.subject_name, s.subject_code"
+     ORDER BY s.subject_name, s.subject_code"
 )->fetchAll();
 $classLevels = ['ALL', 'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6', 'JSS1', 'JSS2', 'JSS3', 'SSS1', 'SSS2', 'SSS3'];
 ?>
@@ -148,17 +169,18 @@ $classLevels = ['ALL', 'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Prim
                                             <select class="form-control" id="class_level" name="class_level" required>
                                                 <option value="">Select Class Level</option>
                                                 <?php foreach ($classLevels as $level): ?>
-                                                    <option value="<?php echo htmlspecialchars($level); ?>" <?php echo (($editingSubject['class_level'] ?? '') === $level) ? 'selected' : ''; ?>>
+                                                    <option value="<?php echo htmlspecialchars($level); ?>" <?php echo ($editingSubjectLevel === $level) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars($level); ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
                                         <div class="form-group">
-                                            <label for="is_core">Subject Type</label>
-                                            <select class="form-control" id="is_core" name="is_core">
-                                                <option value="1" <?php echo ((int) ($editingSubject['is_core'] ?? 1) === 1) ? 'selected' : ''; ?>>Core Subject</option>
-                                                <option value="0" <?php echo ((int) ($editingSubject['is_core'] ?? 1) === 0) ? 'selected' : ''; ?>>Elective Subject</option>
+                                            <label for="subject_type">Subject Type</label>
+                                            <select class="form-control" id="subject_type" name="subject_type">
+                                                <option value="core" <?php echo (($editingSubject['subject_type'] ?? 'core') === 'core') ? 'selected' : ''; ?>>Core Subject</option>
+                                                <option value="elective" <?php echo (($editingSubject['subject_type'] ?? 'core') === 'elective') ? 'selected' : ''; ?>>Elective Subject</option>
+                                                <option value="optional" <?php echo (($editingSubject['subject_type'] ?? 'core') === 'optional') ? 'selected' : ''; ?>>Optional Subject</option>
                                             </select>
                                         </div>
                                         <button type="submit" class="btn btn-primary"><?php echo $editingSubject ? 'Update Subject' : 'Create Subject'; ?></button>
@@ -195,13 +217,18 @@ $classLevels = ['ALL', 'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Prim
                                                     </tr>
                                                 <?php else: ?>
                                                     <?php foreach ($subjects as $subject): ?>
+                                                        <?php
+                                                            $subjectLevels = json_decode((string) ($subject['grade_levels'] ?? '[]'), true);
+                                                            $subjectLevels = is_array($subjectLevels) ? $subjectLevels : [];
+                                                            $subjectType = (string) ($subject['subject_type'] ?? 'core');
+                                                        ?>
                                                         <tr>
                                                             <td><?php echo htmlspecialchars((string) $subject['subject_code']); ?></td>
                                                             <td><?php echo htmlspecialchars((string) $subject['subject_name']); ?></td>
-                                                            <td><?php echo htmlspecialchars((string) $subject['class_level']); ?></td>
+                                                            <td><?php echo htmlspecialchars($subjectLevels !== [] ? implode(', ', $subjectLevels) : 'N/A'); ?></td>
                                                             <td>
-                                                                <span class="badge badge-<?php echo ((int) ($subject['is_core'] ?? 0) === 1) ? 'primary' : 'secondary'; ?>">
-                                                                    <?php echo ((int) ($subject['is_core'] ?? 0) === 1) ? 'Core' : 'Elective'; ?>
+                                                                <span class="badge badge-<?php echo $subjectType === 'core' ? 'primary' : ($subjectType === 'optional' ? 'info' : 'secondary'); ?>">
+                                                                    <?php echo htmlspecialchars(ucfirst($subjectType)); ?>
                                                                 </span>
                                                             </td>
                                                             <td>

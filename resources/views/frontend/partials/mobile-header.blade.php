@@ -3,7 +3,7 @@
             <div class="kingster-mobile-header-container kingster-container clearfix">
                 <div class="kingster-logo  kingster-item-pdlr">
                     <div class="kingster-logo-inner">
-                        <a class="" href="index"><img src="images/folu_logo.jpg" alt="" /></a>
+                        <a class="" href="index"><img src="images/folu-banner.png" alt="" width="20px" /></a>
                     </div>
                 </div>
                 <div class="kingster-mobile-menu-right">

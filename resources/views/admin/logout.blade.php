@@ -1,1 +1,1 @@
-@include('admin.pages.auth.logout')
+@include('admin.auth.logout')

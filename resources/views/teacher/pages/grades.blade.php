@@ -18,9 +18,10 @@ $currentSessionId = get_teacher_default_session_id((int) $teacher['id']) ?? 0;
 $currentSession = $currentSessionId > 0
     ? QueryDB('SELECT * FROM academic_sessions WHERE id = ? LIMIT 1', [$currentSessionId])->fetch(PDO::FETCH_ASSOC)
     : null;
+$currentTerm = get_current_academic_term($currentSessionId);
 $accessibleClasses = get_teacher_accessible_classes((int) $teacher['id'], $currentSessionId);
 $selectedClassId = (int) ($_REQUEST['class_link'] ?? ($accessibleClasses[0]['id'] ?? 0));
-$selectedTerm = validate($_REQUEST['term'] ?? ((string) ($currentSession['session_term'] ?? '1')));
+$selectedTerm = validate($_REQUEST['term'] ?? ((string) (normalize_term_code($currentTerm['term_code'] ?? ($currentTerm['term_name'] ?? '1')) ?? '1')));
 $selectedExamType = validate($_REQUEST['exam_type'] ?? 'test');
 $message = '';
 $error = '';
@@ -66,13 +67,36 @@ $students = $selectedClassId > 0 ? get_students_by_class_and_session($selectedCl
 $existingGrades = [];
 
 if ($selectedClassId > 0 && $selectedSubjectId > 0) {
-    foreach (
-        QueryDB(
-            'SELECT * FROM grades WHERE class_link = ? AND subject_link = ? AND academic_session_link = ? AND term = ? AND exam_type = ?',
-            [$selectedClassId, $selectedSubjectId, $currentSessionId, $selectedTerm, $selectedExamType]
-        )->fetchAll() as $gradeRow
-    ) {
-        $existingGrades[(int) $gradeRow['student_link']] = $gradeRow;
+    if (schema_has_table('student_grades')) {
+        $sessionName = (string) ($currentSession['session_name'] ?? '');
+        $termName = match (normalize_term_code($selectedTerm)) {
+            '1' => 'first',
+            '2' => 'second',
+            '3' => 'third',
+            default => 'first',
+        };
+        $assessmentType = in_array($selectedExamType, ['assignment', 'test'], true) ? $selectedExamType : 'exam';
+        $assessmentName = ucwords(str_replace('_', ' ', strtolower($selectedExamType)));
+
+        foreach (
+            QueryDB(
+                'SELECT student_id AS student_link, score, letter_grade AS grade, comments AS remarks
+                 FROM student_grades
+                 WHERE school_class_id = ? AND subject_id = ? AND (? = "" OR academic_year = ?) AND term = ? AND assessment_type = ? AND assessment_name = ?',
+                [$selectedClassId, $selectedSubjectId, $sessionName, $sessionName, $termName, $assessmentType, $assessmentName]
+            )->fetchAll() as $gradeRow
+        ) {
+            $existingGrades[(int) $gradeRow['student_link']] = $gradeRow;
+        }
+    } else {
+        foreach (
+            QueryDB(
+                'SELECT * FROM grades WHERE class_link = ? AND subject_link = ? AND academic_session_link = ? AND term = ? AND exam_type = ?',
+                [$selectedClassId, $selectedSubjectId, $currentSessionId, $selectedTerm, $selectedExamType]
+            )->fetchAll() as $gradeRow
+        ) {
+            $existingGrades[(int) $gradeRow['student_link']] = $gradeRow;
+        }
     }
 }
 ?>
@@ -96,7 +120,7 @@ if ($selectedClassId > 0 && $selectedSubjectId > 0) {
 
           <?php if ($currentSession): ?>
             <div class="alert alert-info">
-              Working session: <?php echo htmlspecialchars((string) ($currentSession['session_name'] . ' - ' . session_term_label($currentSession['session_term'] ?? ''))); ?>
+              Working session: <?php echo htmlspecialchars(session_term_context_label($currentSession, $currentTerm)); ?>
             </div>
           <?php endif; ?>
 

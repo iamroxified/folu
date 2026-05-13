@@ -18,6 +18,7 @@ $currentSessionId = get_teacher_default_session_id((int) $teacher['id']) ?? 0;
 $currentSession = $currentSessionId > 0
     ? QueryDB('SELECT * FROM academic_sessions WHERE id = ? LIMIT 1', [$currentSessionId])->fetch(PDO::FETCH_ASSOC)
     : null;
+$currentTerm = get_current_academic_term($currentSessionId);
 $classAssignments = get_teacher_class_assignments((int) $teacher['id'], $currentSessionId);
 $subjectAssignments = get_teacher_subject_assignments((int) $teacher['id'], $currentSessionId);
 $accessibleClasses = get_teacher_accessible_classes((int) $teacher['id'], $currentSessionId);
@@ -30,10 +31,19 @@ foreach ($accessibleClasses as $class) {
     }
 }
 
-$attendanceCount = (int) QueryDB(
-    'SELECT COUNT(*) FROM attendance WHERE marked_by_user_link = ? AND (? = 0 OR academic_session_link = ?)',
-    [(int) $teacher['user_link'], $currentSessionId, $currentSessionId]
-)->fetchColumn();
+$attendanceCount = schema_has_table('attendance')
+    ? (int) QueryDB(
+        'SELECT COUNT(*) FROM attendance WHERE marked_by_user_link = ? AND (? = 0 OR academic_session_link = ?)',
+        [(int) $teacher['user_link'], $currentSessionId, $currentSessionId]
+    )->fetchColumn()
+    : (
+        schema_has_table('student_attendance')
+            ? (int) QueryDB(
+                'SELECT COUNT(*) FROM student_attendance WHERE marked_by = ? AND (? = 0 OR session_id = ?)',
+                [(int) $teacher['user_link'], $currentSessionId, $currentSessionId]
+            )->fetchColumn()
+            : 0
+    );
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -55,7 +65,7 @@ $attendanceCount = (int) QueryDB(
 
                     <?php if ($currentSession): ?>
                         <div class="alert alert-info">
-                            Working session: <?php echo htmlspecialchars((string) ($currentSession['session_name'] . ' - ' . session_term_label($currentSession['session_term'] ?? ''))); ?>
+                            Working session: <?php echo htmlspecialchars(session_term_context_label($currentSession, $currentTerm)); ?>
                         </div>
                     <?php endif; ?>
 

@@ -12,6 +12,12 @@ class LegacyAdminController extends Controller
             session_start();
         }
 
+        if (\Illuminate\Support\Facades\Auth::check()) {
+            $_SESSION['adid'] = \Illuminate\Support\Facades\Auth::id();
+            $_SESSION['username'] = \Illuminate\Support\Facades\Auth::user()->username ?? \Illuminate\Support\Facades\Auth::user()->name;
+            $_SESSION['email'] = \Illuminate\Support\Facades\Auth::user()->email ?? '';
+        }
+
         $_SERVER['REQUEST_METHOD'] = request()->method();
         $_SERVER['REQUEST_URI'] = '/' . ltrim(request()->path(), '/');
         $_SERVER['PHP_SELF'] = $_SERVER['REQUEST_URI'];
@@ -19,7 +25,7 @@ class LegacyAdminController extends Controller
         $_POST = request()->post();
         $_REQUEST = array_merge($_GET, $_POST);
 
-        $view = 'admin.pages.' . $this->normalizePath($path);
+        $view = 'admin.' . $this->normalizePath($path);
 
         abort_unless(view()->exists($view), 404);
 

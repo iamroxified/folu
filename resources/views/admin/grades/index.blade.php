@@ -68,13 +68,40 @@ if ($selectedClassId > 0) {
 }
 
 if ($selectedClassId > 0 && $selectedSubjectId > 0 && $selectedSessionId > 0) {
-    foreach (
-        QueryDB(
-            'SELECT * FROM grades WHERE class_link = ? AND subject_link = ? AND academic_session_link = ? AND term = ? AND exam_type = ?',
-            [$selectedClassId, $selectedSubjectId, $selectedSessionId, $selectedTerm, $selectedExamType]
-        )->fetchAll() as $gradeRow
-    ) {
-        $existingGrades[(int) $gradeRow['student_link']] = $gradeRow;
+    if (schema_has_table('student_grades')) {
+        $selectedSession = QueryDB(
+            'SELECT * FROM academic_sessions WHERE id = ? LIMIT 1',
+            [$selectedSessionId]
+        )->fetch(PDO::FETCH_ASSOC);
+        $sessionName = (string) ($selectedSession['session_name'] ?? '');
+        $termName = match (normalize_term_code($selectedTerm)) {
+            '1' => 'first',
+            '2' => 'second',
+            '3' => 'third',
+            default => 'first',
+        };
+        $assessmentType = in_array($selectedExamType, ['assignment', 'test'], true) ? $selectedExamType : 'exam';
+        $assessmentName = ucwords(str_replace('_', ' ', strtolower($selectedExamType)));
+
+        foreach (
+            QueryDB(
+                'SELECT student_id AS student_link, score, letter_grade AS grade, comments AS remarks
+                 FROM student_grades
+                 WHERE school_class_id = ? AND subject_id = ? AND (? = "" OR academic_year = ?) AND term = ? AND assessment_type = ? AND assessment_name = ?',
+                [$selectedClassId, $selectedSubjectId, $sessionName, $sessionName, $termName, $assessmentType, $assessmentName]
+            )->fetchAll() as $gradeRow
+        ) {
+            $existingGrades[(int) $gradeRow['student_link']] = $gradeRow;
+        }
+    } elseif (schema_has_table('grades')) {
+        foreach (
+            QueryDB(
+                'SELECT * FROM grades WHERE class_link = ? AND subject_link = ? AND academic_session_link = ? AND term = ? AND exam_type = ?',
+                [$selectedClassId, $selectedSubjectId, $selectedSessionId, $selectedTerm, $selectedExamType]
+            )->fetchAll() as $gradeRow
+        ) {
+            $existingGrades[(int) $gradeRow['student_link']] = $gradeRow;
+        }
     }
 }
 ?>

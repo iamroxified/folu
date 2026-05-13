@@ -1,0 +1,2 @@
+<?php echo $__env->make('admin.fees.types.index', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+<?php /**PATH C:\laragon\www\folu\resources\views/admin/fee_type.blade.php ENDPATH**/ ?>

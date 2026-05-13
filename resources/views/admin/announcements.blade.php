@@ -1,1 +1,1 @@
-@include('admin.pages.announcements.index')
+@include('admin.announcements.index')

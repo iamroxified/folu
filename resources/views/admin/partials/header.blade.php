@@ -166,7 +166,7 @@
                </div>
                <span class="profile-username">
                  <span class="op-7">Hi,</span>
-                 <span class="fw-bold"><?php echo $_SESSION['username']; ?></span>
+                 <span class="fw-bold">{{ isset($_SESSION['username']) ? $_SESSION['username'] : (Auth::check() ? Auth::user()->name : 'Admin') }}</span>
                </span>
              </a>
              <ul class="dropdown-menu dropdown-user animated fadeIn">
@@ -177,7 +177,7 @@
                        <img src="/admin/assets/img/profile.jpg" alt="image profile" class="avatar-img rounded" />
                      </div>
                      <div class="u-text">
-                       <h4><?php echo $_SESSION['username']; ?></h4>
+                       <h4>{{ isset($_SESSION['username']) ? $_SESSION['username'] : (Auth::check() ? Auth::user()->name : 'Admin') }}</h4>
                        <!-- <p class="text-muted"><?php // echo $email; ?></p> -->
                        <a href="#" class="btn btn-xs btn-primary btn-sm">View Profile</a>
                      </div>

@@ -5,7 +5,7 @@
                 <div class="kingster-top-bar-container-inner clearfix">
                   <div class="kingster-top-bar-left kingster-item-pdlr"><i class="fa fa-envelope-open-o"
                       id="i_fd84_0"></i>
-                    contact@foluinternationalschools.com <i class="fa fa-phone" id="i_fd84_1"></i> +2349024945875</div>
+                    contact@foluinternationalschools.org.ng <i class="fa fa-phone" id="i_fd84_1"></i> +2349024945875</div>
                   <div class="kingster-top-bar-right kingster-item-pdlr">
                     <ul id="kingster-top-bar-menu" class="sf-menu kingster-top-bar-menu kingster-top-bar-right-menu">
                       <li class="menu-item kingster-normal-menu"><a href="#">Alumni</a></li>
@@ -13,7 +13,7 @@
                       <li class="menu-item kingster-normal-menu"><a href="admin">Portal</a></li>
                     </ul>
                     <div class="kingster-top-bar-right-social"></div><a class="kingster-top-bar-right-button" href="#"
-                      target="_blank">Support KU</a>
+                      target="_blank">Support FIS</a>
                   </div>
                 </div>
               </div>
@@ -26,7 +26,7 @@
                 <div class="kingster-header-container-inner clearfix">
                   <div class="kingster-logo  kingster-item-pdlr">
                     <div class="kingster-logo-inner">
-                      <a class="" href="index"><img src="images/folu-logo.png" alt="" /></a>
+                      <a class="" href="index"><img src="images/folu-banner.png" alt="" /></a>
                     </div>
                   </div>
                   <div class="kingster-navigation kingster-item-pdlr clearfix ">

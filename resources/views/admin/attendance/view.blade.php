@@ -11,9 +11,26 @@ if (!isset($_SESSION['adid'])) {
     exit;
 }
 
-// Fetch attendance records
-$attendanceRecords = QueryDB("SELECT a.*, s.first_name, s.last_name FROM attendance a JOIN students s ON a.student_link = s.id ORDER BY a.date DESC")
-    ->fetchAll();
+$attendanceRecords = [];
+
+if (schema_has_table('student_attendance')) {
+    $attendanceRecords = QueryDB(
+        "SELECT COALESCE(a.date, a.attendance_date) AS date,
+                a.status,
+                s.first_name,
+                s.last_name
+         FROM student_attendance a
+         JOIN students s ON a.student_id = s.id
+         ORDER BY COALESCE(a.date, a.attendance_date) DESC, a.id DESC"
+    )->fetchAll();
+} elseif (schema_has_table('attendance')) {
+    $attendanceRecords = QueryDB(
+        "SELECT a.*, s.first_name, s.last_name
+         FROM attendance a
+         JOIN students s ON a.student_link = s.id
+         ORDER BY a.date DESC"
+    )->fetchAll();
+}
 
 ?>
 <!DOCTYPE html>
@@ -56,7 +73,6 @@ $attendanceRecords = QueryDB("SELECT a.*, s.first_name, s.last_name FROM attenda
             @include('admin.partials.footer')
 </body>
 </html>
-
 
 
 

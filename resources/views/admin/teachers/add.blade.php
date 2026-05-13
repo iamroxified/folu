@@ -39,12 +39,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $teacherId = generate_teacher_id();
             $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-            QueryDB(
-                'INSERT INTO users (username, password, email, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
-                [$username, $hashedPassword, $email, 'teacher', $status]
-            );
-
-            $userId = (int) $pdo->lastInsertId();
+            $userId = create_portal_user([
+                'username' => $username,
+                'name' => trim($firstName . ' ' . $lastName),
+                'email' => $email,
+                'password' => $hashedPassword,
+                'role_name' => 'teacher',
+                'status' => $status,
+            ]);
 
             QueryDB(
                 'INSERT INTO teachers (user_link, teacher_id, first_name, last_name, email, phone, qualification, specialization, employment_date, status, created_at, updated_at)

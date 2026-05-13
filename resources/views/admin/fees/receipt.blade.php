@@ -21,29 +21,27 @@ try {
     // Fetch payment details
     $payment_stmt = $pdo->prepare("
         SELECT 
-            sp.*,
+            p.*,
+            p.payment_reference AS receipt_number,
+            p.amount AS amount_paid,
+            p.description AS payment_description,
             s.first_name,
             s.last_name,
             s.admission_no,
-            c.class_name,
-            f.fee_description,
-            ft.fee_name as type_name,
+            COALESCE(c.class_name, sc.class_name) AS class_name,
+            fs.description AS fee_description,
+            fs.name AS type_name,
             ac.session_name,
-            CASE sf.term
-                WHEN 'first' THEN 'First Term'
-                WHEN 'second' THEN 'Second Term'
-                WHEN 'third' THEN 'Third Term'
-                WHEN 'annual' THEN 'Full Session'
-                ELSE 'N/A'
-            END as term_name
-        FROM student_payments sp
-        JOIN students s ON sp.student_link = s.id
-        JOIN student_fees sf ON sp.student_fee_id = sf.id
-        JOIN fees f ON sf.fee_structure_link = f.id
-        LEFT JOIN fee_type ft ON f.fee_name = ft.id
+            t.term_name
+        FROM payments p
+        JOIN student_fees sf ON p.payable_type = 'student_fee' AND p.payable_id = sf.id
+        JOIN students s ON sf.student_id = s.id
+        LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
         LEFT JOIN classes c ON s.class_link = c.id
-        LEFT JOIN academic_sessions ac ON sp.academic_session_link = ac.id
-        WHERE sp.receipt_number = ?
+        LEFT JOIN school_classes sc ON s.current_class_id = sc.id
+        LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
+        LEFT JOIN terms t ON fs.term_id = t.id
+        WHERE p.payment_reference = ? AND p.status = 'completed'
     ");
     
     $payment_stmt->execute([$receipt_number]);
@@ -171,10 +169,10 @@ try {
                     <td>Payment Method:</td>
                     <td><?php echo ucfirst(htmlspecialchars($payment['payment_method'])); ?></td>
                 </tr>
-                <?php if ($payment['transaction_reference']): ?>
+                <?php if (!empty($payment['transaction_id'])): ?>
                 <tr>
                     <td>Transaction Reference:</td>
-                    <td><?php echo htmlspecialchars($payment['transaction_reference']); ?></td>
+                    <td><?php echo htmlspecialchars($payment['transaction_id']); ?></td>
                 </tr>
                 <?php endif; ?>
             </table>
@@ -201,6 +199,5 @@ try {
     </div>
 </body>
 </html>
-
 
 

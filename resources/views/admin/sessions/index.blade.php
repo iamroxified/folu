@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             QueryDB(
-                'INSERT INTO academic_sessions (session_name, start_date, end_date, is_current, created_at) VALUES (?, ?, ?, 0, NOW())',
+                'INSERT INTO academic_sessions (session_name, start_date, end_date, is_active, created_at) VALUES (?, ?, ?, 0, NOW())',
                 [$sessionName, $startDate, $endDate]
             );
 
@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             QueryDB(
-                'INSERT INTO academic_terms (academic_session_link, term_code, term_name, start_date, end_date, is_current, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())',
+                'INSERT INTO academic_terms (academic_session_link, term_code, term_name, start_date, end_date, is_active, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())',
                 [$selectedSessionId, $termCode, session_term_label($termCode), $startDate, $endDate]
             );
 
@@ -270,7 +270,7 @@ $allTerms = QueryDB(
                                                         <td><?php echo htmlspecialchars((string) $session['session_name']); ?></td>
                                                         <td><?php echo htmlspecialchars((string) ($session['start_date'] . ' to ' . $session['end_date'])); ?></td>
                                                         <td>
-                                                            <?php if ((int) ($session['is_current'] ?? 0) === 1): ?>
+                                                            <?php if ((int) ($session['is_active'] ?? 0) === 1): ?>
                                                                 <span class="badge badge-success">Active Session</span>
                                                             <?php else: ?>
                                                                 <span class="badge badge-secondary">Inactive</span>
@@ -324,7 +324,7 @@ $allTerms = QueryDB(
                                                         <td><?php echo htmlspecialchars(term_label($term)); ?></td>
                                                         <td><?php echo htmlspecialchars((string) (($term['start_date'] ?? '') . ' to ' . ($term['end_date'] ?? ''))); ?></td>
                                                         <td>
-                                                            <?php if ((int) ($term['is_current'] ?? 0) === 1): ?>
+                                                            <?php if ((int) ($term['is_active'] ?? 0) === 1): ?>
                                                                 <span class="badge badge-info">Active Term</span>
                                                             <?php else: ?>
                                                                 <span class="badge badge-secondary">Inactive</span>

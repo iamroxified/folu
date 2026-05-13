@@ -1,1 +1,1 @@
-@include('admin.pages.students.delete')
+@include('admin.students.delete')

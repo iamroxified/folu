@@ -1,1 +1,1 @@
-@include('admin.pages.fees.receipt')
+@include('admin.fees.receipt')

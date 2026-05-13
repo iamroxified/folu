@@ -12,6 +12,16 @@ class StudentPortalController extends Controller
             session_start();
         }
 
+        if (\Illuminate\Support\Facades\Auth::check()) {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $student = \App\Models\Student::where('email', $user->email)->first(); // Note: adjust if needed, but the view uses helpers
+
+            $_SESSION['student_user_id'] = $user->id;
+            $_SESSION['student_id'] = $student->id ?? 0;
+            $_SESSION['student_username'] = $user->username ?? $user->name;
+            $_SESSION['student_name'] = $user->name;
+        }
+
         $_SERVER['REQUEST_METHOD'] = request()->method();
         $_SERVER['REQUEST_URI'] = '/' . ltrim(request()->path(), '/');
         $_SERVER['PHP_SELF'] = $_SERVER['REQUEST_URI'];

@@ -1,61 +1,34 @@
 <?php
-// Start session
-
-// Include database configuration and functions
 require_once base_path('db/config.php');
 require_once base_path('db/functions.php');
 
-// Check if user is logged in
 if (!isset($_SESSION['adid'])) {
     header('Location: /admin/login.php');
     exit;
 }
 
-// Get fee type ID
-$fee_type_id = $_GET['id'] ?? null;
-if (!$fee_type_id) {
-    die('Fee Type ID is required');
+$feeTypeOptions = array_values(schema_enum_values('fee_structures', 'fee_type'));
+$requestedId = $_GET['id'] ?? null;
+$selectedIndex = is_numeric($requestedId) ? ((int) $requestedId - 1) : null;
+$selectedType = $requestedId !== null && !is_numeric($requestedId)
+    ? (string) $requestedId
+    : ($selectedIndex !== null && isset($feeTypeOptions[$selectedIndex]) ? $feeTypeOptions[$selectedIndex] : null);
+
+if ($selectedType === null || !in_array($selectedType, $feeTypeOptions, true)) {
+    die('Fee type not found');
 }
 
-// Fetch fee type details
-$stmt = $pdo->prepare("SELECT * FROM fee_type WHERE id = ?");
-$stmt->execute([$fee_type_id]);
-$fee_type = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$fee_type) {
-    die('Fee Type not found');
-}
-
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $fee_name = trim($_POST['fee_name']);
-    $description = trim($_POST['description']);
-    $status = trim($_POST['status']);
-
-    if (empty($fee_name) || empty($status)) {
-        $error = "Fee name and status are required.";
-    } else {
-        try {
-            $update_stmt = $pdo->prepare("UPDATE fee_type SET fee_name = ?, description = ?, status = ? WHERE id = ?");
-            $update_stmt->execute([$fee_name, $description, $status, $fee_type_id]);
-            $success = "Fee type updated successfully!";
-
-            // Refresh data
-            $stmt->execute([$fee_type_id]);
-            $fee_type = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        } catch (PDOException $e) {
-            $error = "Database error: " . $e->getMessage();
-        }
-    }
-}
+$usageCount = (int) QueryDB(
+    'SELECT COUNT(*) FROM fee_structures WHERE fee_type = ?',
+    [$selectedType]
+)->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>Edit Fee Type</title>
+  <title>Fee Type Details</title>
   @include('admin.partials.links')
 </head>
 
@@ -68,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="container">
         <div class="page-inner">
           <div class="d-flex align-items-left align-items-md-center flex-column flex-md-row">
-            <h2 class="text-dark pb-2 fw-bold">Edit Fee Type</h2>
+            <h2 class="text-dark pb-2 fw-bold">Fee Type Details</h2>
             <div class="ml-md-auto py-2 py-md-0">
                 <a href="fee_type.php" class="btn btn-secondary btn-round">Back to Fee Types</a>
             </div>
@@ -77,35 +50,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="col-md-12">
               <div class="card">
                 <div class="card-header">
-                  <div class="card-title">Edit Fee Type Details</div>
+                  <div class="card-title"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $selectedType))); ?></div>
                 </div>
                 <div class="card-body">
-                  <?php if (isset($error)): ?>
-                  <div class="alert alert-danger"><?php echo $error; ?></div>
-                  <?php endif; ?>
-                  <?php if (isset($success)): ?>
-                  <div class="alert alert-success"><?php echo $success; ?></div>
-                  <?php endif; ?>
-                  <form method="POST" action="">
-                    <div class="form-group">
-                      <label for="fee_name">Fee Name</label>
-                      <input type="text" class="form-control" id="fee_name" name="fee_name" value="<?php echo htmlspecialchars($fee_type['fee_name']); ?>" required>
-                    </div>
-                    <div class="form-group">
-                      <label for="description">Description</label>
-                      <textarea class="form-control" id="description" name="description" rows="3"><?php echo htmlspecialchars($fee_type['description']); ?></textarea>
-                    </div>
-                    <div class="form-group">
-                      <label for="status">Status</label>
-                      <select class="form-control" id="status" name="status" required>
-                        <option value="active" <?php echo ($fee_type['status'] == 'active') ? 'selected' : ''; ?>>Active</option>
-                        <option value="inactive" <?php echo ($fee_type['status'] == 'inactive') ? 'selected' : ''; ?>>Inactive</option>
-                      </select>
-                    </div>
-                    <div class="card-action">
-                      <button type="submit" class="btn btn-success">Update Fee Type</button>
-                    </div>
-                  </form>
+                  <div class="alert alert-info">
+                    This fee type is defined by the `fee_structures.fee_type` enum in the live schema, so it is not editable from this legacy screen.
+                  </div>
+                  <div class="table-responsive">
+                    <table class="table table-bordered">
+                      <tr>
+                        <th style="width: 220px;">Stored Value</th>
+                        <td><code><?php echo htmlspecialchars($selectedType); ?></code></td>
+                      </tr>
+                      <tr>
+                        <th>Display Name</th>
+                        <td><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $selectedType))); ?></td>
+                      </tr>
+                      <tr>
+                        <th>Structures Using It</th>
+                        <td><?php echo $usageCount; ?></td>
+                      </tr>
+                    </table>
+                  </div>
+                  <a href="add_fees.php" class="btn btn-primary">Create a Fee Structure</a>
                 </div>
               </div>
             </div>
@@ -118,7 +85,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </body>
 
 </html>
-
-
-
-

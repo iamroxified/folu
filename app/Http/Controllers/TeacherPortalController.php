@@ -12,6 +12,16 @@ class TeacherPortalController extends Controller
             session_start();
         }
 
+        if (\Illuminate\Support\Facades\Auth::check()) {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $teacher = \App\Models\Staff::where('email', $user->email)->first(); // Note: adjust if needed, but the view uses helpers
+
+            $_SESSION['teacher_user_id'] = $user->id;
+            $_SESSION['teacher_id'] = $teacher->id ?? 0;
+            $_SESSION['teacher_username'] = $user->username ?? $user->name;
+            $_SESSION['teacher_name'] = $user->name;
+        }
+
         $_SERVER['REQUEST_METHOD'] = request()->method();
         $_SERVER['REQUEST_URI'] = '/' . ltrim(request()->path(), '/');
         $_SERVER['PHP_SELF'] = $_SERVER['REQUEST_URI'];

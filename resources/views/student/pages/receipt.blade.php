@@ -16,13 +16,23 @@ if (!$student) {
 
 $paymentId = (int) ($_GET['id'] ?? 0);
 $payment = QueryDB(
-    'SELECT sp.*, f.fee_name, f.fee_description, ac.session_name, at.term_name AS session_term
-     FROM student_payments sp
-     LEFT JOIN fees f ON sp.fee_structure_link = f.id
-     LEFT JOIN academic_sessions ac ON sp.academic_session_link = ac.id
-     LEFT JOIN academic_terms at ON sp.term_link = at.id
-     WHERE sp.id = ? AND sp.student_link = ?
-     LIMIT 1',
+    "SELECT p.*,
+            p.payment_reference AS receipt_number,
+            p.amount AS amount_paid,
+            p.description AS payment_description,
+            fs.id AS fee_structure_link,
+            fs.name AS fee_name,
+            fs.description AS fee_description,
+            fs.fee_type,
+            ac.session_name,
+            t.term_name AS session_term
+     FROM payments p
+     JOIN student_fees sf ON p.payable_type = 'student_fee' AND p.payable_id = sf.id
+     LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
+     LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
+     LEFT JOIN terms t ON fs.term_id = t.id
+     WHERE p.id = ? AND sf.student_id = ? AND p.status = 'completed'
+     LIMIT 1",
     [$paymentId, (int) $student['id']]
 )->fetch(PDO::FETCH_ASSOC);
 

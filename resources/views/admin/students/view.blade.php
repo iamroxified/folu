@@ -52,11 +52,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payment'])) {
     } else {
         try {
             $pdo->beginTransaction();
-            $receipt_number = 'RCP' . date('Y') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+            $receipt_number = 'RCP' . date('Y') . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
 
             if ($fee_id) {
                 // Direct fee payment from modal - update existing fee record
-                $existing_fee_stmt = $pdo->prepare("SELECT * FROM student_fees WHERE id = ? AND student_link = ?");
+                $existing_fee_stmt = $pdo->prepare("SELECT * FROM student_fees WHERE id = ? AND student_id = ?");
                 $existing_fee_stmt->execute([$fee_id, $studentId]);
                 $existing_fee = $existing_fee_stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -81,48 +81,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payment'])) {
                 }
 
                 // Update student_fees table
-                $update_fee_stmt = $pdo->prepare("UPDATE student_fees SET amount_paid = ?, balance = ?, status = ?, payment_date = CURDATE(), payment_method = ?, receipt_number = ?, updated_at = NOW() WHERE id = ?");
+                $update_fee_stmt = $pdo->prepare("UPDATE student_fees SET amount_paid = ?, balance = ?, status = ?, updated_at = NOW() WHERE id = ?");
 
                 $update_fee_stmt->execute([
                     $new_amount_paid,
                     $new_balance,
                     $status,
-                    $payment_method,
-                    $receipt_number,
                     $existing_fee['id']
                 ]);
 
-                // Record the payment in student_payments table
-                $payment_insert_stmt = $pdo->prepare("INSERT INTO student_payments (
-                    student_link,
-                    fee_structure_link,
-                    amount_due,
-                    amount_paid,
-                    balance,
-                    status,
-                    due_date,
-                    payment_date,
+                $paymentMethodForStorage = $payment_method === 'pos' ? 'card' : $payment_method;
+                $payment_insert_stmt = $pdo->prepare("INSERT INTO payments (
+                    payment_reference,
+                    payable_type,
+                    payable_id,
+                    amount,
                     payment_method,
-                    receipt_number,
-                    academic_session_link,
-                    description
-                ) VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(CURDATE(), INTERVAL 30 DAY), CURDATE(), ?, ?, ?, ?)");
+                    payment_date,
+                    payer_name,
+                    payer_phone,
+                    description,
+                    status,
+                    created_at,
+                    updated_at
+                ) VALUES (?, 'student_fee', ?, ?, ?, CURDATE(), ?, ?, ?, 'completed', NOW(), NOW())");
 
                 $payment_insert_stmt->execute([
-                    $studentId,
-                    $existing_fee['fee_structure_link'],
-                    $existing_fee['amount_due'],
-                    $payment_amount,
-                    $new_balance,
-                    $status,
-                    $payment_method,
                     $receipt_number,
-                    $student['academic_session_link'],
+                    $existing_fee['id'],
+                    $payment_amount,
+                    $paymentMethodForStorage,
+                    trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? '')),
+                    $student['phone'] ?? null,
                     $payment_description ?: 'Fee Payment - Receipt #' . $receipt_number
                 ]);
 
             } else {
                 // Legacy payment processing for general payments
+                throw new Exception('Please select one of the student\'s allocated fees before processing a payment.');
+
                 if (!$selected_session || !$selected_class || !$selected_term) {
                     throw new Exception('Please fill in all required fields.');
                 }
@@ -241,31 +238,31 @@ try {
     $classes = $classes_stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Get student fee summary
-    $fee_summary_stmt = $pdo->prepare("SELECT COALESCE(SUM(sf.amount_due), 0) as total_due, COALESCE(SUM(sf.amount_paid), 0) as total_paid, COALESCE(SUM(sf.balance), 0) as total_balance FROM student_fees sf WHERE sf.student_link = ?");
+    $fee_summary_stmt = $pdo->prepare("SELECT COALESCE(SUM(sf.amount_due), 0) as total_due, COALESCE(SUM(sf.amount_paid), 0) as total_paid, COALESCE(SUM(sf.balance), 0) as total_balance FROM student_fees sf WHERE sf.student_id = ?");
     $fee_summary_stmt->execute([$studentId]);
     $fee_summary = $fee_summary_stmt->fetch(PDO::FETCH_ASSOC);
 
     // Get recent payment history
     $payment_history_stmt = $pdo->prepare("
         SELECT 
-            sf.*,
-            f.fee_description,
-            ft.fee_name as type_name,
+            p.payment_reference AS receipt_number,
+            p.payment_date,
+            p.amount AS amount_paid,
+            sf.status,
+            sf.amount_due,
+            sf.balance,
+            COALESCE(fs.name, fs.description, 'Fee') AS type_name,
             ac.session_name,
-            ac.session_term,
-            CASE ac.session_term
-                WHEN 1 THEN 'First Term'
-                WHEN 2 THEN 'Second Term'
-                WHEN 3 THEN 'Third Term'
-                ELSE 'Full Session'
-            END as term
-        FROM student_fees sf 
-        JOIN fees f ON sf.fee_structure_link = f.id 
-        LEFT JOIN fee_type ft ON f.fee_name = ft.id
-        LEFT JOIN academic_sessions ac ON sf.academic_session_link = ac.id 
-        WHERE sf.student_link = ? 
-        AND sf.amount_paid > 0 
-        ORDER BY sf.payment_date DESC, sf.updated_at DESC 
+            t.term_name AS session_term,
+            t.term_name AS term
+        FROM payments p
+        JOIN student_fees sf ON p.payable_type = 'student_fee' AND p.payable_id = sf.id
+        LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
+        LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
+        LEFT JOIN terms t ON fs.term_id = t.id
+        WHERE sf.student_id = ?
+        AND p.status = 'completed'
+        ORDER BY COALESCE(p.payment_date, p.created_at) DESC, p.id DESC
         LIMIT 10
     ");
     $payment_history_stmt->execute([$studentId]);
@@ -275,31 +272,20 @@ try {
     $outstanding_stmt = $pdo->prepare("
         SELECT 
             sf.*,
-            f.fee_amount,
-            f.fee_description,
-            f.fee_session,
-            ft.fee_name as type_name,
+            COALESCE(fs.name, fs.description, 'Fee') AS type_name,
+            COALESCE(fs.description, fs.name) AS fee_description,
             ac.session_name,
-            ac.session_term,
-            CASE ac.session_term
-                WHEN 1 THEN 'First Term'
-                WHEN 2 THEN 'Second Term'
-                WHEN 3 THEN 'Third Term'
-                ELSE 'Full Session'
-            END as term
-        FROM student_fees sf 
-        JOIN fees f ON sf.fee_structure_link = f.id 
-        LEFT JOIN fee_type ft ON f.fee_name = ft.id
-        LEFT JOIN academic_sessions ac ON sf.academic_session_link = ac.id 
-        WHERE sf.student_link = ? 
-        AND sf.balance > 0 
-        AND (
-            f.fee_class = (SELECT class_link FROM students WHERE id = ?)
-            OR f.fee_class IS NULL
-        )
-        ORDER BY sf.due_date ASC, f.fee_session ASC
+            t.term_name AS session_term,
+            t.term_name AS term
+        FROM student_fees sf
+        LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
+        LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
+        LEFT JOIN terms t ON fs.term_id = t.id
+        WHERE sf.student_id = ?
+        AND sf.balance > 0
+        ORDER BY sf.due_date ASC, sf.updated_at DESC
     ");
-    $outstanding_stmt->execute([$studentId, $studentId]);
+    $outstanding_stmt->execute([$studentId]);
     $outstanding_fees = $outstanding_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
@@ -508,7 +494,12 @@ $gradeAverage = student_grade_average($studentId);
                         </tr>
                         <tr>
                           <td><strong>Admission Date:</strong></td>
-                          <td><?php echo date('M d, Y', strtotime($student['created_at'])); ?></td>
+                          <td>
+                            <?php
+                              $admissionDate = $student['enrollment_date'] ?? $student['created_at'] ?? null;
+                              echo $admissionDate ? date('M d, Y', strtotime((string) $admissionDate)) : 'N/A';
+                            ?>
+                          </td>
                         </tr>
                       </table>
                     </div>
@@ -852,7 +843,7 @@ $gradeAverage = student_grade_average($studentId);
 
           // Populate hidden fields
           $('#modal_fee_id').val(feeId);
-          $('#modal_academic_session').val('<?php echo $sessions[0]['id'] ?? ''; ?>'); // Use current session
+          $('#modal_academic_session').val('<?php echo (int) ($student['academic_session_link'] ?? 0); ?>');
           $('#modal_term').val(term);
 
           // Show and populate fee summary
@@ -1052,6 +1043,3 @@ $gradeAverage = student_grade_average($studentId);
 </body>
 
 </html>
-
-
-

@@ -13,29 +13,110 @@ if (!isset($_SESSION['adid'])) {
     exit;
 }
 
+if (!function_exists('admin_student_term_context')) {
+    function admin_student_term_context(?int $sessionId = null): array
+    {
+        $academicTerm = get_current_academic_term($sessionId);
+        $academicTermId = $academicTerm ? (int) $academicTerm['id'] : null;
+        $currentTermId = null;
+
+        if (schema_has_table('terms')) {
+            $currentTermId = QueryDB(
+                'SELECT id FROM terms WHERE is_active = 1 ORDER BY term_number ASC, id DESC LIMIT 1'
+            )->fetchColumn();
+
+            if (!$currentTermId && $academicTerm) {
+                $termCode = normalize_term_code($academicTerm['term_code'] ?? ($academicTerm['term_name'] ?? ''));
+
+                if ($termCode !== null) {
+                    $currentTermId = QueryDB(
+                        'SELECT id FROM terms WHERE term_number = ? ORDER BY id DESC LIMIT 1',
+                        [(int) $termCode]
+                    )->fetchColumn();
+                }
+            }
+        }
+
+        return [
+            'current_term_id' => $currentTermId ? (int) $currentTermId : null,
+            'academic_term_id' => $academicTermId,
+        ];
+    }
+}
+
+if (!function_exists('admin_build_student_insert_data')) {
+    function admin_build_student_insert_data(array $studentData): array
+    {
+        $studentColumns = schema_table_column_details('students');
+        $insertData = [];
+
+        $setValue = static function (string $column, $value) use (&$insertData, $studentColumns): void {
+            if (!isset($studentColumns[$column]) || schema_column_is_generated('students', $column)) {
+                return;
+            }
+
+            $insertData[$column] = $value;
+        };
+
+        $setValue('user_link', $studentData['user_link'] ?? null);
+        $setValue('admission_no', $studentData['admission_no'] ?? null);
+        $setValue('student_number', $studentData['student_number'] ?? null);
+        $setValue('first_name', $studentData['first_name'] ?? '');
+        $setValue('last_name', $studentData['last_name'] ?? '');
+        $setValue('other_names', $studentData['other_names'] ?? '');
+        $setValue('email', $studentData['email'] ?? '');
+        $setValue('phone', $studentData['phone'] ?? null);
+        $setValue('address', $studentData['address'] ?? null);
+        $setValue('home_address', $studentData['address'] ?? null);
+        $setValue('date_of_birth', $studentData['date_of_birth'] ?? null);
+        $setValue('gender', $studentData['gender'] ?? null);
+        $setValue('enrollment_date', $studentData['enrollment_date'] ?? null);
+        $setValue('admission_date', $studentData['enrollment_date'] ?? null);
+        $setValue('status', $studentData['status'] ?? 'active');
+        $setValue('admission_status', $studentData['admission_status'] ?? 'admitted');
+        $setValue('category', $studentData['category'] ?? 'NI');
+        $setValue('passport', $studentData['passport'] ?? null);
+        $setValue('state_of_origin', $studentData['state_of_origin'] ?? '');
+        $setValue('lga', $studentData['lga'] ?? '');
+        $setValue('student_type', $studentData['student_type'] ?? 'day');
+        $setValue('blood_group', $studentData['blood_group'] ?? null);
+        $setValue('genotype', $studentData['genotype'] ?? null);
+        $setValue('current_class_id', $studentData['current_class_id'] ?? null);
+        $setValue('class_link', $studentData['class_link'] ?? null);
+        $setValue('current_session_id', $studentData['current_session_id'] ?? null);
+        $setValue('academic_session_link', $studentData['academic_session_link'] ?? null);
+        $setValue('current_term_id', $studentData['current_term_id'] ?? null);
+        $setValue('term_link', $studentData['term_link'] ?? null);
+        $setValue('created_at', $studentData['timestamp'] ?? null);
+        $setValue('updated_at', $studentData['timestamp'] ?? null);
+
+        return $insertData;
+    }
+}
+
 // Add Student
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Sanitize and validate inputs
-    $first_name = validate($_POST['first_name'] ?? '');
-    $last_name = validate($_POST['last_name'] ?? '');
-    $other_names = validate($_POST['other_names'] ?? '');
-    $student_email = validate($_POST['student_email'] ?? '');
-    $date_of_birth = validate($_POST['date_of_birth'] ?? '');
-    $gender = validate($_POST['gender'] ?? '');
-    $state_of_origin = validate($_POST['state_of_origin'] ?? '');
-    $lga = validate($_POST['lga'] ?? '');
-    $home_address = validate($_POST['home_address'] ?? '');
+    $first_name = validate((string) ($_POST['first_name'] ?? ''));
+    $last_name = validate((string) ($_POST['last_name'] ?? ''));
+    $other_names = validate((string) ($_POST['other_names'] ?? ''));
+    $student_email = validate((string) ($_POST['student_email'] ?? ''));
+    $date_of_birth = validate((string) ($_POST['date_of_birth'] ?? ''));
+    $gender = validate((string) ($_POST['gender'] ?? ''));
+    $state_of_origin = validate((string) ($_POST['state_of_origin'] ?? ''));
+    $lga = validate((string) ($_POST['lga'] ?? ''));
+    $home_address = validate((string) ($_POST['home_address'] ?? ''));
     $class_link = filter_input(INPUT_POST, 'class_link', FILTER_VALIDATE_INT);
     $academic_session_link = filter_input(INPUT_POST, 'academic_session_link', FILTER_VALIDATE_INT);
-    $admission_date = validate($_POST['admission_date'] ?? '');
-    $student_type = validate($_POST['student_type'] ?? 'day');
-    $blood_group = validate($_POST['blood_group'] ?? null);
-    $genotype = validate($_POST['genotype'] ?? null);
-    $status = validate($_POST['status'] ?? 'active');
-    $parent_name = validate($_POST['parent_name'] ?? '');
-    $parent_phone = validate($_POST['parent_phone'] ?? '');
-    $parent_email = validate($_POST['parent_email'] ?? '');
-    $parent_relationship = validate($_POST['parent_relationship'] ?? 'guardian');
+    $admission_date = validate((string) ($_POST['admission_date'] ?? ''));
+    $student_type = validate((string) ($_POST['student_type'] ?? 'day'));
+    $blood_group = validate((string) ($_POST['blood_group'] ?? ''));
+    $genotype = validate((string) ($_POST['genotype'] ?? ''));
+    $status = validate((string) ($_POST['status'] ?? 'active'));
+    $parent_name = validate((string) ($_POST['parent_name'] ?? ''));
+    $parent_phone = validate((string) ($_POST['parent_phone'] ?? ''));
+    $parent_email = validate((string) ($_POST['parent_email'] ?? ''));
+    $parent_relationship = validate((string) ($_POST['parent_relationship'] ?? 'guardian'));
 
     // Basic validation
     if (
@@ -52,30 +133,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            // 1. Generate a unique admission number
             $admission_no = generate_student_admission_no();
+            $student_number = schema_has_column('students', 'student_number') ? generate_student_id() : $admission_no;
+            $display_name = trim($first_name . ' ' . $last_name . ' ' . $other_names);
 
-            // 2. Create a user account for the student
             $username = $admission_no;
             $email = $student_email !== '' ? $student_email : strtolower(str_replace('/', '.', $admission_no)) . '@student.fimocol.edu.ng';
             $password = password_hash('password', PASSWORD_DEFAULT); // Default password
-            $role = 'student';
+            $roleId = get_role_id_by_name('student') ?? 4;
 
-            $user_stmt = $pdo->prepare("INSERT INTO users (username, password, email, role, status) VALUES (?, ?, ?, ?, ?)");
-            $user_stmt->execute([$username, $password, $email, $role, $status]);
-            $user_id = $pdo->lastInsertId();
+            $existingUser = QueryDB(
+                'SELECT COUNT(*) FROM users WHERE username = ? OR email = ?',
+                [$username, $email]
+            )->fetchColumn();
 
-            // Insert into database
-            $stmt = $pdo->prepare(
-                'INSERT INTO students (user_link, admission_no, first_name, last_name, other_names, email, date_of_birth, gender, state_of_origin, lga, home_address, class_link, academic_session_link, admission_date, student_type, blood_group, genotype, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $stmt->execute([
-                $user_id, $admission_no, $first_name, $last_name, $other_names, $email, $date_of_birth, $gender, $state_of_origin, $lga, $home_address, $class_link, $academic_session_link, $admission_date, $student_type, $blood_group, $genotype, $status
+            if ((int) $existingUser > 0) {
+                throw new Exception('That admission number or email address is already in use.');
+            }
+
+            if (schema_has_column('students', 'email')) {
+                $existingStudentEmail = QueryDB(
+                    'SELECT COUNT(*) FROM students WHERE email = ?',
+                    [$email]
+                )->fetchColumn();
+
+                if ((int) $existingStudentEmail > 0) {
+                    throw new Exception('That student email address is already in use.');
+                }
+            }
+
+            $user_id = create_portal_user([
+                'username' => $username,
+                'name' => $display_name,
+                'email' => $email,
+                'password' => $password,
+                'role_name' => 'student',
+                'role_id' => $roleId,
+                'status' => $status,
             ]);
 
-            $student_id = (int) $pdo->lastInsertId();
+            $termContext = admin_student_term_context($academic_session_link ?: null);
+            $studentInsertData = admin_build_student_insert_data([
+                'user_link' => $user_id,
+                'admission_no' => $admission_no,
+                'student_number' => $student_number,
+                'first_name' => $first_name,
+                'last_name' => $last_name,
+                'other_names' => $other_names,
+                'email' => $email,
+                'phone' => $parent_phone !== '' ? $parent_phone : null,
+                'address' => $home_address !== '' ? $home_address : null,
+                'date_of_birth' => $date_of_birth,
+                'gender' => $gender,
+                'enrollment_date' => $admission_date,
+                'status' => $status,
+                'admission_status' => 'admitted',
+                'category' => 'NI',
+                'state_of_origin' => $state_of_origin,
+                'lga' => $lga,
+                'student_type' => $student_type,
+                'blood_group' => $blood_group !== '' ? $blood_group : null,
+                'genotype' => $genotype !== '' ? $genotype : null,
+                'current_class_id' => $class_link ?: null,
+                'class_link' => $class_link ?: null,
+                'current_session_id' => $academic_session_link ?: null,
+                'academic_session_link' => $academic_session_link ?: null,
+                'current_term_id' => $termContext['current_term_id'],
+                'term_link' => $termContext['academic_term_id'],
+                'timestamp' => date('Y-m-d H:i:s'),
+            ]);
 
+            if ($studentInsertData === []) {
+                throw new Exception('Student table does not contain any writable columns for this form.');
+            }
+
+            $studentColumns = implode(', ', array_keys($studentInsertData));
+            $studentPlaceholders = implode(', ', array_fill(0, count($studentInsertData), '?'));
+            $stmt = $pdo->prepare("INSERT INTO students ({$studentColumns}) VALUES ({$studentPlaceholders})");
+            $stmt->execute(array_values($studentInsertData));
+
+            $student_id = (int) $pdo->lastInsertId();
             $pdo->commit();
 
             save_primary_parent_contact($student_id, [
@@ -98,8 +235,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Fetch data for dropdowns
-$classes = QueryDB("SELECT id, class_name, class_arm FROM classes ORDER BY class_level, class_arm")->fetchAll();
-$sessions = QueryDB("SELECT id, session_name, is_current FROM academic_sessions ORDER BY is_current DESC, start_date DESC")->fetchAll();
+$classes = schema_has_column('students', 'current_class_id') && schema_has_table('school_classes')
+    ? QueryDB(
+        "SELECT id, class_name, COALESCE(section, '') AS class_arm, grade_level AS class_level
+         FROM school_classes
+         WHERE status = 'active'
+         ORDER BY grade_level, class_name, section"
+    )->fetchAll()
+    : QueryDB("SELECT id, class_name, class_arm, class_level FROM classes ORDER BY class_level, class_arm")->fetchAll();
+$sessions = QueryDB("SELECT id, session_name, is_active FROM academic_sessions ORDER BY is_active DESC, start_date DESC")->fetchAll();
 $states = QueryDB("SELECT id, name FROM state ORDER BY name ASC")->fetchAll();
 
 ?>
@@ -275,7 +419,7 @@ $states = QueryDB("SELECT id, name FROM state ORDER BY name ASC")->fetchAll();
                           <label for="academic_session_link">Academic Session <span class="text-danger">*</span></label>
                           <select class="form-control" name="academic_session_link" id="academic_session_link" required>
                             <?php foreach ($sessions as $session): ?>
-                            <option value="<?php echo $session['id']; ?>" <?php echo ((int) ($session['is_current'] ?? 0) === 1) ? 'selected' : ''; ?>>
+                            <option value="<?php echo $session['id']; ?>" <?php echo ((int) ($session['is_active'] ?? 0) === 1) ? 'selected' : ''; ?>>
                               <?php echo htmlspecialchars($session['session_name']); ?></option>
                             <?php endforeach; ?>
                           </select>
@@ -378,6 +522,5 @@ $states = QueryDB("SELECT id, name FROM state ORDER BY name ASC")->fetchAll();
 </body>
 
 </html>
-
 
 

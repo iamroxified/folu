@@ -59,7 +59,7 @@ if ($resultCount > 0) {
                   <select class="form-control" id="academic_session_link" name="academic_session_link">
                     <?php foreach ($sessions as $session): ?>
                       <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars((string) ($session['session_name'] . ' - ' . session_term_label($session['session_term'] ?? ''))); ?>
+                        <?php echo htmlspecialchars((string) $session['session_name']); ?>
                       </option>
                     <?php endforeach; ?>
                   </select>
@@ -130,10 +130,10 @@ if ($resultCount > 0) {
                           <tr>
                             <td><?php echo htmlspecialchars((string) ($result['subject_name'] ?? 'Subject')); ?></td>
                             <td><?php echo htmlspecialchars(session_term_label($result['term'] ?? '')); ?></td>
-                            <td><?php echo htmlspecialchars(ucfirst((string) ($result['exam_type'] ?? 'assessment'))); ?></td>
+                            <td><?php echo htmlspecialchars(ucfirst((string) ($result['exam_type'] ?? $result['assessment_type'] ?? 'assessment'))); ?></td>
                             <td><?php echo number_format((float) ($result['score'] ?? 0), 2); ?></td>
-                            <td><?php echo htmlspecialchars((string) ($result['grade'] ?? '')); ?></td>
-                            <td><?php echo htmlspecialchars((string) ($result['remarks'] ?? '')); ?></td>
+                            <td><?php echo htmlspecialchars((string) ($result['grade'] ?? $result['letter_grade'] ?? '')); ?></td>
+                            <td><?php echo htmlspecialchars((string) ($result['remarks'] ?? $result['comments'] ?? '')); ?></td>
                           </tr>
                         <?php endforeach; ?>
                       </tbody>

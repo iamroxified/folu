@@ -14,18 +14,39 @@ if (!isset($_SESSION['adid'])) {
 $studentColumns = QueryDB("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN);
 $studentIdentifierField = in_array('admission_no', $studentColumns, true) ? 'admission_no' : 'student_number';
 $studentIdentifierLabel = $studentIdentifierField === 'admission_no' ? 'Admission No' : 'Student Number';
-$attendanceColumns = QueryDB("SHOW COLUMNS FROM attendance")->fetchAll(PDO::FETCH_COLUMN);
-$timeInSelect = in_array('time_in', $attendanceColumns, true) ? 'a.time_in' : 'NULL AS time_in';
-$timeOutSelect = in_array('time_out', $attendanceColumns, true) ? 'a.time_out' : 'NULL AS time_out';
+$attendance = [];
 
-// Fetch recent attendance data with student information
-$attendance = QueryDB("
-    SELECT a.date, a.status, {$timeInSelect}, {$timeOutSelect}, s.first_name, s.last_name, s.{$studentIdentifierField} AS student_identifier
-    FROM attendance a
-    LEFT JOIN students s ON a.student_link = s.id
-    ORDER BY a.date DESC
-    LIMIT 50
-")->fetchAll();
+if (schema_has_table('student_attendance')) {
+    $attendanceColumns = QueryDB("SHOW COLUMNS FROM student_attendance")->fetchAll(PDO::FETCH_COLUMN);
+    $timeInSelect = in_array('arrival_time', $attendanceColumns, true) ? 'a.arrival_time AS time_in' : 'NULL AS time_in';
+    $timeOutSelect = in_array('departure_time', $attendanceColumns, true) ? 'a.departure_time AS time_out' : 'NULL AS time_out';
+
+    $attendance = QueryDB("
+        SELECT COALESCE(a.date, a.attendance_date) AS date,
+               a.status,
+               {$timeInSelect},
+               {$timeOutSelect},
+               s.first_name,
+               s.last_name,
+               s.{$studentIdentifierField} AS student_identifier
+        FROM student_attendance a
+        LEFT JOIN students s ON a.student_id = s.id
+        ORDER BY COALESCE(a.date, a.attendance_date) DESC, a.id DESC
+        LIMIT 50
+    ")->fetchAll();
+} elseif (schema_has_table('attendance')) {
+    $attendanceColumns = QueryDB("SHOW COLUMNS FROM attendance")->fetchAll(PDO::FETCH_COLUMN);
+    $timeInSelect = in_array('time_in', $attendanceColumns, true) ? 'a.time_in' : 'NULL AS time_in';
+    $timeOutSelect = in_array('time_out', $attendanceColumns, true) ? 'a.time_out' : 'NULL AS time_out';
+
+    $attendance = QueryDB("
+        SELECT a.date, a.status, {$timeInSelect}, {$timeOutSelect}, s.first_name, s.last_name, s.{$studentIdentifierField} AS student_identifier
+        FROM attendance a
+        LEFT JOIN students s ON a.student_link = s.id
+        ORDER BY a.date DESC
+        LIMIT 50
+    ")->fetchAll();
+}
 
 ?>
 <!DOCTYPE html>
@@ -102,7 +123,6 @@ $attendance = QueryDB("
 </body>
 
 </html>
-
 
 
 

@@ -47,7 +47,7 @@ $outstandingFees = array_values(array_filter($feeRecords, static fn ($row) => (f
                   <select class="form-control" id="academic_session_link" name="academic_session_link">
                     <?php foreach ($sessions as $session): ?>
                       <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars((string) ($session['session_name'] . ' - ' . session_term_label($session['session_term'] ?? ''))); ?>
+                        <?php echo htmlspecialchars((string) $session['session_name']); ?>
                       </option>
                     <?php endforeach; ?>
                   </select>

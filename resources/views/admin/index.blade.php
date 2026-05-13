@@ -1,1 +1,1 @@
-@include('admin.pages.dashboard.index')
+@include('admin.dashboard.index')

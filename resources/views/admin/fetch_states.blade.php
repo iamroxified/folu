@@ -1,1 +1,1 @@
-@include('admin.pages.students.ajax.fetch-states')
+@include('admin.students.ajax.fetch-states')

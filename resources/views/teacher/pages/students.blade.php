@@ -18,6 +18,7 @@ $currentSessionId = get_teacher_default_session_id((int) $teacher['id']) ?? 0;
 $currentSession = $currentSessionId > 0
     ? QueryDB('SELECT * FROM academic_sessions WHERE id = ? LIMIT 1', [$currentSessionId])->fetch(PDO::FETCH_ASSOC)
     : null;
+$currentTerm = get_current_academic_term($currentSessionId);
 $accessibleClasses = get_teacher_accessible_classes((int) $teacher['id'], $currentSessionId);
 $selectedClassId = (int) ($_GET['class_link'] ?? ($accessibleClasses[0]['id'] ?? 0));
 
@@ -48,7 +49,7 @@ $subjectAssignments = $selectedClassId > 0 ? get_teacher_accessible_subjects((in
 
           <?php if ($currentSession): ?>
             <div class="alert alert-info">
-              Working session: <?php echo htmlspecialchars((string) ($currentSession['session_name'] . ' - ' . session_term_label($currentSession['session_term'] ?? ''))); ?>
+              Working session: <?php echo htmlspecialchars(session_term_context_label($currentSession, $currentTerm)); ?>
             </div>
           <?php endif; ?>
 

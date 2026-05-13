@@ -106,7 +106,15 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
                           <td><?php echo htmlspecialchars($student['admission_no']); ?></td>
                           <td><?php echo htmlspecialchars($student['first_name']).' '.htmlspecialchars($student['last_name']); ?></td>
                           <td><?php echo htmlspecialchars($student['class_name'] . ' ' . $student['class_arm']); ?></td>
-                          <td> <?php echo htmlspecialchars($student['session_name']).' (' . $student['session_term'].' Term)'; ?></td>
+                          <td>
+                            <?php
+                              $sessionTerm = trim((string) ($student['session_term'] ?? ''));
+                              echo htmlspecialchars((string) ($student['session_name'] ?? 'N/A'));
+                              if ($sessionTerm !== '') {
+                                  echo ' (' . htmlspecialchars($sessionTerm) . ')';
+                              }
+                            ?>
+                          </td>
 
                           <td><?php echo htmlspecialchars($student['email']); ?></td>
                           <td><?php echo $student['status']; ?></td>
@@ -199,18 +207,32 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
 </html>
 <?php
 function getStudents($searchParam = '', $class_filter = '', $session_filter = '') {
-    global $pdo;
+    $sessionColumn = schema_has_column('students', 'current_session_id')
+        ? 'current_session_id'
+        : (schema_has_column('students', 'academic_session_link') ? 'academic_session_link' : null);
+    $termColumn = schema_has_column('students', 'current_term_id')
+        ? 'current_term_id'
+        : (schema_has_column('students', 'term_link') ? 'term_link' : null);
+    $termJoin = schema_has_table('terms')
+        ? 'LEFT JOIN terms ON students.' . $termColumn . ' = terms.id'
+        : (schema_has_table('academic_terms')
+            ? 'LEFT JOIN academic_terms ON students.' . $termColumn . ' = academic_terms.id'
+            : '');
+    $termSelect = schema_has_table('terms')
+        ? 'terms.term_name'
+        : (schema_has_table('academic_terms') ? 'academic_terms.term_name' : 'NULL');
 
     $sql = "SELECT
                 students.*,
-                classes.class_name, classes.class_arm,
+                classes.class_name,
+                classes.class_arm,
                 academic_sessions.session_name,
-                academic_terms.term_name AS session_term
+                {$termSelect} AS session_term
             FROM students
-            JOIN classes ON students.class_link = classes.id
-            JOIN academic_sessions ON students.academic_session_link = academic_sessions.id
-            LEFT JOIN academic_terms ON students.term_link = academic_terms.id
-            WHERE (students.first_name LIKE ? OR students.last_name LIKE ?) ORDER BY students.id DESC";
+            LEFT JOIN classes ON students.class_link = classes.id
+            LEFT JOIN academic_sessions ON students.{$sessionColumn} = academic_sessions.id
+            {$termJoin}
+            WHERE (students.first_name LIKE ? OR students.last_name LIKE ?)";
 
     $params = [$searchParam, $searchParam];
 
@@ -220,13 +242,14 @@ function getStudents($searchParam = '', $class_filter = '', $session_filter = ''
     }
 
     if (!empty($session_filter)) {
-        $sql .= " AND students.academic_session_link = ?";
+        $sql .= " AND students.{$sessionColumn} = ?";
         $params[] = $session_filter;
     }
+
+    $sql .= " ORDER BY students.id DESC";
 
     return QueryDB($sql, $params)->fetchAll();
 }
 ?>
-
 
 

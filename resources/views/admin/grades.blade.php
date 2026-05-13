@@ -1,1 +1,1 @@
-@include('admin.pages.grades.index')
+@include('admin.grades.index')

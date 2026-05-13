@@ -1,1 +1,1 @@
-@include('admin.pages.sessions.index')
+@include('admin.sessions.index')

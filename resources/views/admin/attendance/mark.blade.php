@@ -70,13 +70,26 @@ $subjectFilter = $selectedSubjectId > 0 ? $selectedSubjectId : null;
 $existingAttendance = [];
 
 if ($selectedClassId > 0) {
-    foreach (
-        QueryDB(
-            'SELECT * FROM attendance WHERE class_link = ? AND date = ? AND ((subject_link IS NULL AND ? IS NULL) OR subject_link = ?) AND (? = 0 OR academic_session_link IS NULL OR academic_session_link = ?)',
-            [$selectedClassId, $selectedDate, $subjectFilter, $subjectFilter, $selectedSessionId, $selectedSessionId]
-        )->fetchAll() as $row
-    ) {
-        $existingAttendance[(int) $row['student_link']] = $row;
+    if (schema_has_table('student_attendance')) {
+        foreach (
+            QueryDB(
+                'SELECT student_id AS student_link, status, COALESCE(remarks, reason) AS remarks
+                 FROM student_attendance
+                 WHERE class_id = ? AND COALESCE(date, attendance_date) = ? AND ((subject_id IS NULL AND ? IS NULL) OR subject_id = ?) AND (? = 0 OR session_id IS NULL OR session_id = ?)',
+                [$selectedClassId, $selectedDate, $subjectFilter, $subjectFilter, $selectedSessionId, $selectedSessionId]
+            )->fetchAll() as $row
+        ) {
+            $existingAttendance[(int) $row['student_link']] = $row;
+        }
+    } elseif (schema_has_table('attendance')) {
+        foreach (
+            QueryDB(
+                'SELECT * FROM attendance WHERE class_link = ? AND date = ? AND ((subject_link IS NULL AND ? IS NULL) OR subject_link = ?) AND (? = 0 OR academic_session_link IS NULL OR academic_session_link = ?)',
+                [$selectedClassId, $selectedDate, $subjectFilter, $subjectFilter, $selectedSessionId, $selectedSessionId]
+            )->fetchAll() as $row
+        ) {
+            $existingAttendance[(int) $row['student_link']] = $row;
+        }
     }
 }
 ?>

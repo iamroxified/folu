@@ -1,1 +1,1 @@
-@include('admin.pages.subjects.index')
+@include('admin.subjects.index')
