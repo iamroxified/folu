@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payment'])) {
     } else {
         try {
             $pdo->beginTransaction();
-            $receipt_number = 'RCP' . date('Y') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+            $receipt_number = 'RCP' . date('Y') . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
 
             if ($fee_id) {
                 // Direct fee payment from modal - update existing fee record

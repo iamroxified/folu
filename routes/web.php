@@ -8,6 +8,7 @@ use App\Http\Controllers\LegacyFrontendController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\StudentPortalController;
 use App\Http\Controllers\TeacherPortalController;
+use App\Http\Controllers\BlogController;
 use Illuminate\Support\Facades\Route;
 
 // Authentication Routes
@@ -142,6 +143,9 @@ Route::get('/', [LegacyFrontendController::class, 'show'])
     ->defaults('', 'index')
     ->name('home');
 
-Route::get('/', [LegacyFrontendController::class, 'show'])
+Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
+Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
+
+Route::get('/{page}', [LegacyFrontendController::class, 'show'])
     ->where('page', '[^/]+')
     ->name('frontend.page');

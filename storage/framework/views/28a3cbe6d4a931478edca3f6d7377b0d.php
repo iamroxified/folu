@@ -19,9 +19,9 @@
 </head>
 
 <body class="home page-template-default page page-id-2039 gdlr-core-body woocommerce-no-js tribe-no-js kingster-body kingster-body-front kingster-full  kingster-with-sticky-navigation  kingster-blockquote-style-1 gdlr-core-link-to-lightbox">
-  @include('frontend.partials.mobile-header')
+  <?php echo $__env->make('frontend.partials.mobile-header', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
   <div class="kingster-body-outer-wrapper ">
-    @include('frontend.partials.header')
+    <?php echo $__env->make('frontend.partials.header', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
 
             <div class="kingster-page-title-wrap  kingster-style-medium kingster-left-align">
@@ -358,3 +358,4 @@
     <script type='text/javascript' src='js/plugins.min.js'></script>
 </body>
 </html>
+<?php /**PATH C:\laragon\www\folu\resources\views/frontend/pages/blog.blade.php ENDPATH**/ ?>
