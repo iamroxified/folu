@@ -10,27 +10,41 @@ class Student extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_link',
+        'admission_no',
         'student_number',
         'first_name',
         'last_name',
+        'other_names',
         'email',
         'phone',
         'address',
+        'home_address',
         'date_of_birth',
         'gender',
         'enrollment_date',
+        'admission_date',
         'status',
         'admission_status',
         'category',
         'passport',
+        'state_of_origin',
+        'lga',
+        'student_type',
+        'blood_group',
+        'genotype',
         'current_class_id',
         'current_session_id',
         'current_term_id',
+        'class_link',
+        'academic_session_link',
+        'term_link',
     ];
 
     protected $casts = [
         'date_of_birth' => 'date',
         'enrollment_date' => 'date',
+        'admission_date' => 'date',
     ];
 
     public function currentClass()

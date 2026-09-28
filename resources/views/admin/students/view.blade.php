@@ -466,6 +466,14 @@ $gradeAverage = student_grade_average($studentId);
                             <?php echo $student['date_of_birth'] ? date('M d, Y', strtotime($student['date_of_birth'])) : 'N/A'; ?>
                           </td>
                         </tr>
+                        <tr>
+                          <td><strong>Blood Group:</strong></td>
+                          <td><?php echo htmlspecialchars($student['blood_group'] ?? 'N/A'); ?></td>
+                        </tr>
+                        <tr>
+                          <td><strong>Genotype:</strong></td>
+                          <td><?php echo htmlspecialchars($student['genotype'] ?? 'N/A'); ?></td>
+                        </tr>
                       </table>
                     </div>
                     <div class="col-md-6">

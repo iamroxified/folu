@@ -16,7 +16,7 @@ if (!isset($_SESSION['adid'])) {
 // Fetch student information
 $studentId = $_GET['id'] ?? null;
 if ($studentId) {
-    $student_stmt = $pdo->prepare("SELECT s.*, u.status as user_status FROM students s JOIN users u ON s.user_link = u.id WHERE s.id = ?");
+    $student_stmt = $pdo->prepare("SELECT s.*, u.status as user_status FROM students s LEFT JOIN users u ON s.user_link = u.id WHERE s.id = ?");
     $student_stmt->execute([$studentId]);
     $student = $student_stmt->fetch();
 
@@ -68,8 +68,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
 
             // Also update the status in the users table to keep it in sync
-            $user_stmt = $pdo->prepare("UPDATE users SET status = ? WHERE id = ?");
-            $user_stmt->execute([$status, $student['user_link']]);
+            if (!empty($student['user_link'])) {
+                $user_stmt = $pdo->prepare("UPDATE users SET status = ? WHERE id = ?");
+                $user_stmt->execute([$status, $student['user_link']]);
+            }
 
             $pdo->commit();
             $success = 'Student updated successfully';
