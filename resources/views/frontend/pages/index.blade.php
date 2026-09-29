@@ -408,6 +408,62 @@
     </div>
   </section>
 
+  <!-- 6.5 DYNAMIC FOLU STORIES & CAMPUS HIGHLIGHTS -->
+  @php
+    $homePosts = \App\Models\Post::where('is_published', true)->latest('published_at')->take(3)->get();
+  @endphp
+  @if($homePosts->count() > 0)
+  <section class="folu-section" id="stories">
+    <div class="folu-container">
+      <div class="folu-section-header text-center">
+        <span class="folu-badge-pill">
+          <i class="fa fa-newspaper-o"></i> Latest Highlights
+        </span>
+        <h2 class="folu-section-title">Folu Stories &amp; School News</h2>
+        <p class="folu-section-subtitle">
+          Discover recent announcements, student milestones, and life on campus in Itedo-Ijowa, Isanlu.
+        </p>
+      </div>
+
+      <div class="folu-activities-grid" style="grid-template-columns: repeat(3, 1fr);">
+        @foreach($homePosts as $post)
+        <div class="folu-value-card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column;">
+          @if($post->image_path)
+          <div style="height: 200px; overflow: hidden;">
+            <a href="{{ url('/blog/' . $post->slug) }}">
+              <img src="{{ asset($post->image_path) }}" alt="{{ $post->title }}" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease;" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
+            </a>
+          </div>
+          @endif
+          <div style="padding: 24px; display: flex; flex-direction: column; flex-grow: 1;">
+            <span style="font-size: 12px; color: var(--folu-gold); font-weight: 600; text-transform: uppercase; margin-bottom: 6px;">
+              {{ $post->published_at ? $post->published_at->format('M d, Y') : $post->created_at->format('M d, Y') }}
+            </span>
+            <h3 style="font-size: 18px; font-weight: 700; color: var(--folu-navy); margin-bottom: 10px; line-height: 1.35;">
+              <a href="{{ url('/blog/' . $post->slug) }}" style="color: var(--folu-navy); text-decoration: none;">
+                {{ $post->title }}
+              </a>
+            </h3>
+            <p style="font-size: 13.5px; color: var(--folu-text-muted); line-height: 1.55; margin-bottom: 16px; flex-grow: 1;">
+              {{ $post->excerpt ?? Str::limit(strip_tags($post->content), 100) }}
+            </p>
+            <a href="{{ url('/blog/' . $post->slug) }}" style="font-size: 13.5px; font-weight: 600; color: var(--folu-blue); text-decoration: none;">
+              Read Story &rarr;
+            </a>
+          </div>
+        </div>
+        @endforeach
+      </div>
+
+      <div style="text-align: center; margin-top: 36px;">
+        <a href="{{ url('/blog') }}" class="folu-btn folu-btn-secondary">
+          <span>View All Stories &amp; News &rarr;</span>
+        </a>
+      </div>
+    </div>
+  </section>
+  @endif
+
   <!-- 7. ADMISSION ROADMAP SECTION -->
   <section class="folu-section" id="admission-steps">
     <div class="folu-container">
