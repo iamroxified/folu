@@ -860,7 +860,7 @@ body.folu-theme {
   font-size: 52px;
   font-weight: 800;
   line-height: 1.12;
-  color: #ffffff;
+  color: #fff !important  ;
   letter-spacing: -0.03em;
   margin-bottom: 22px;
 }
@@ -1408,6 +1408,7 @@ body.folu-theme {
     gap: 40px;
   }
   .folu-hero-title {
+    color: #fff !important;
     font-size: 42px;
   }
   .folu-quick-actions-grid,
@@ -1527,7 +1528,7 @@ body.folu-theme {
 .folu-page-title {
   font-size: 42px;
   font-weight: 800;
-  color: #ffffff;
+  color: #fff !important;
   line-height: 1.2;
   margin-bottom: 14px;
   letter-spacing: -0.025em;

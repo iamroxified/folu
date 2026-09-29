@@ -27,7 +27,7 @@
 </div>
 
 <header class="folu-navbar-wrap">
-  <div class="kingster-container clearfix" style="max-width: 1240px; margin: 0 auto; padding: 0 20px;">
+  <div class="kingster-container clearfix" style="margin: 0 auto; padding: 0 20px;">
     <nav class="folu-navbar">
       <!-- School Brand -->
       <a href="{{ url('/') }}" class="folu-brand">
@@ -87,7 +87,7 @@
           </ul>
         </li>
         <li class="folu-nav-item {{ request()->is('blog*') ? 'active' : '' }}">
-          <a href="{{ url('/blog') }}" class="folu-nav-link">Stories &amp; News</a>
+          <a href="{{ url('/blog') }}" class="folu-nav-link">News</a>
         </li>
         <li class="folu-nav-item {{ request()->is('contact*') ? 'active' : '' }}">
           <a href="{{ url('/contact') }}" class="folu-nav-link">Contact</a>
@@ -178,8 +178,8 @@
 
 <!-- Floating Quick Actions (WhatsApp & Call) -->
 <div class="folu-floating-contact" id="foluFloatingContact">
-  <a href="https://wa.me/2348165354191?text=Hello%2C%20I%20am%20inquiring%20about%20admission%20at%20Folu%20International%20Schools" 
-     target="_blank" rel="noopener noreferrer" class="folu-float-btn folu-float-whatsapp" title="Chat on WhatsApp">
+  <a href="https://wa.me/2348165354191?text=Hello%2C%20I%20am%20inquiring%20about%20admission%20at%20Folu%20International%20Schools"
+    target="_blank" rel="noopener noreferrer" class="folu-float-btn folu-float-whatsapp" title="Chat on WhatsApp">
     <i class="fa fa-whatsapp"></i>
     <span class="folu-float-tooltip">Chat with Admissions</span>
   </a>
