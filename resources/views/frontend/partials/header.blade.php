@@ -34,7 +34,7 @@
         <img src="{{ asset('images/folu-logo.png') }}" alt="Folu International Schools Logo" class="folu-brand-logo">
         <div class="folu-brand-text">
           <span class="folu-brand-name">Folu International Schools</span>
-          <span class="folu-brand-motto">Knowledge &amp; Discipline</span>
+          <!-- <span class="folu-brand-motto">Knowledge &amp; Discipline</span> -->
         </div>
       </a>
 
