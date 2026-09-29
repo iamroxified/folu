@@ -1757,6 +1757,58 @@ img, video, iframe {
   margin-bottom: 28px;
 }
 
+.folu-apply-layout {
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 36px;
+  align-items: start;
+}
+
+.folu-apply-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.folu-form-section {
+  background: var(--folu-milk-subtle);
+  border: 1px solid var(--folu-milk-border);
+  border-radius: var(--folu-radius-md);
+  padding: 24px 22px;
+  margin-bottom: 24px;
+}
+
+.folu-form-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1.5px solid var(--folu-milk-border);
+}
+
+.folu-form-section-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--folu-wine);
+  color: #ffffff;
+  font-family: var(--folu-font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.folu-form-section-title {
+  font-size: 16.5px;
+  font-weight: 700;
+  color: var(--folu-wine);
+  margin: 0;
+}
+
 .folu-form-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -2228,6 +2280,10 @@ img, video, iframe {
     grid-template-columns: repeat(2, 1fr);
     gap: 32px;
   }
+  .folu-apply-layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
 }
 
 /* 3. Small Tablets & Phablets (<= 768px) */
@@ -2365,9 +2421,16 @@ img, video, iframe {
   .folu-page-subtitle {
     font-size: 14.5px;
   }
-  /* Forms: 16px font size to prevent iOS zoom */
+  /* Forms: 16px font size to prevent iOS zoom & prevent lumping */
   .folu-form-card {
-    padding: 24px 16px;
+    padding: 22px 16px;
+  }
+  .folu-form-section {
+    padding: 18px 14px;
+    margin-bottom: 20px;
+  }
+  .folu-form-section-title {
+    font-size: 15.5px;
   }
   .folu-form-control,
   .folu-form-select,
@@ -2375,9 +2438,20 @@ img, video, iframe {
     font-size: 16px !important;
     padding: 11px 14px;
   }
-  .folu-form-grid-2,
-  .folu-form-radio-group {
+  .folu-form-grid-2 {
     grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .folu-form-group {
+    margin-bottom: 16px;
+  }
+  .folu-form-radio-group {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .folu-form-radio-label {
+    padding: 12px 8px;
+    font-size: 13px;
   }
   .folu-leadership-card {
     flex-direction: column;

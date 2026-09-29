@@ -115,7 +115,7 @@
     <div class="folu-brand">
       <img src="{{ asset('images/folu-logo.png') }}" alt="Folu Logo" style="height: 38px;">
       <div class="folu-brand-text">
-        <span class="folu-brand-name" style="font-size: 14px;">Folu Schools</span>
+        <span class="folu-brand-name" style="font-size: 14px;">Folu International Schools</span>
         <span class="folu-brand-motto" style="font-size: 9.5px;">Knowledge &amp; Discipline</span>
       </div>
     </div>
