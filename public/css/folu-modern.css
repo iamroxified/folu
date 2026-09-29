@@ -53,10 +53,17 @@
 }
 
 /* Base resets & typography */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  max-width: 100vw;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 body.folu-theme {
@@ -66,6 +73,16 @@ body.folu-theme {
   line-height: 1.65;
   margin: 0;
   padding: 0;
+  max-width: 100vw;
+  overflow-x: hidden;
+  width: 100%;
+  position: relative;
+  -webkit-text-size-adjust: 100%;
+}
+
+img, video, iframe {
+  max-width: 100%;
+  height: auto;
 }
 
 .folu-theme h1,
@@ -382,54 +399,77 @@ body.folu-theme {
 /* Mobile Toggle */
 .folu-mobile-toggle {
   display: none;
-  background: none;
-  border: none;
-  font-size: 22px;
+  background: var(--folu-surface-subtle);
+  border: 1.5px solid var(--folu-border);
+  font-size: 20px;
   color: var(--folu-navy);
   cursor: pointer;
-  padding: 8px;
+  padding: 0;
+  width: 42px;
+  height: 42px;
   border-radius: var(--folu-radius-sm);
+  align-items: center;
+  justify-content: center;
+  transition: var(--folu-transition);
+}
+
+.folu-mobile-toggle:hover,
+.folu-mobile-toggle:active {
+  background: var(--folu-navy);
+  color: #ffffff;
+  border-color: var(--folu-navy);
 }
 
 /* Mobile Drawer */
 .folu-mobile-drawer {
-  display: none;
+  display: block;
   position: fixed;
   top: 0;
   right: -100%;
   width: 320px;
-  max-width: 85vw;
+  max-width: 86vw;
   height: 100vh;
   background: #ffffff;
-  box-shadow: -5px 0 25px rgba(0, 0, 0, 0.15);
+  box-shadow: -6px 0 25px rgba(0, 0, 0, 0.2);
   z-index: 2000;
   transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  padding: 24px;
+  padding: 22px 18px;
   overflow-y: auto;
   box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
 }
 
 .folu-mobile-drawer.open {
-  right: 0;
+  right: 0 !important;
 }
 
 .folu-drawer-backdrop {
-  display: none;
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(15, 23, 42, 0.65);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 1999;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .folu-drawer-backdrop.active {
-  display: block;
-  opacity: 1;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+@media (min-width: 992px) {
+  .folu-mobile-drawer,
+  .folu-drawer-backdrop {
+    display: none !important;
+  }
 }
 
 .folu-drawer-header {
@@ -648,6 +688,43 @@ body.folu-theme {
   color: #ffffff;
 }
 
+/* Footer Grid & Elements */
+.folu-footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr 0.9fr 1.1fr;
+  gap: 36px;
+}
+
+.folu-footer-col {
+  box-sizing: border-box;
+}
+
+.folu-footer-brand-title {
+  color: #ffffff;
+  font-size: 19px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.folu-footer-brand-desc {
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+
+.folu-footer-proprietors {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.folu-footer-proprietors p {
+  margin: 0 0 4px 0;
+}
+
 .folu-footer-bottom {
   margin-top: 60px;
   padding: 24px 0;
@@ -663,46 +740,18 @@ body.folu-theme {
   gap: 16px;
 }
 
-/* Responsive Breakpoints */
-@media (max-width: 991px) {
-  .folu-topbar-info {
-    font-size: 12px;
-    gap: 12px;
-  }
-  .folu-nav-menu,
-  .folu-nav-cta .folu-btn-outline {
-    display: none;
-  }
-  .folu-mobile-toggle,
-  .folu-mobile-drawer {
-    display: block;
-  }
-  .folu-navbar {
-    height: 72px;
-  }
-  .folu-brand-name {
-    font-size: 15px;
-  }
-  .folu-brand-logo {
-    height: 48px;
-  }
+.folu-footer-copy {
+  color: #94a3b8;
 }
 
-@media (max-width: 576px) {
-  .folu-topbar {
-    display: none;
-  }
-  .folu-floating-contact {
-    bottom: 16px;
-    right: 16px;
-  }
-  .folu-float-btn {
-    width: 48px;
-    height: 48px;
-  }
-  .folu-float-btn i {
-    font-size: 20px;
-  }
+.folu-footer-motto {
+  color: #cbd5e1;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.folu-footer-gold {
+  color: var(--folu-gold-accent);
 }
 
 /* ==========================================================================
@@ -737,7 +786,7 @@ body.folu-theme {
 
 .folu-container {
   width: 100%;
-  max-width: 1240px;
+  /* max-width: 1240px; */
   margin: 0 auto;
   padding: 0 20px;
   box-sizing: border-box;
@@ -1401,68 +1450,7 @@ body.folu-theme {
   flex-wrap: wrap;
 }
 
-/* Responsive Media Queries */
-@media (max-width: 1024px) {
-  .folu-hero-grid {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
-  .folu-hero-title {
-    color: #fff !important;
-    font-size: 42px;
-  }
-  .folu-quick-actions-grid,
-  .folu-pillars-grid,
-  .folu-journey-grid,
-  .folu-roadmap-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .folu-alive-grid,
-  .folu-activities-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .folu-cta-card {
-    flex-direction: column;
-    text-align: center;
-    padding: 44px 28px;
-  }
-  .folu-cta-buttons {
-    justify-content: center;
-  }
-}
 
-@media (max-width: 640px) {
-  .folu-hero {
-    padding: 48px 0 64px 0;
-  }
-  .folu-hero-title {
-    font-size: 32px;
-  }
-  .folu-hero-description {
-    font-size: 15px;
-  }
-  .folu-hero-floating-badge {
-    position: static;
-    margin-top: 14px;
-  }
-  .folu-quick-actions-bar {
-    margin-top: -20px;
-  }
-  .folu-quick-actions-grid,
-  .folu-pillars-grid,
-  .folu-journey-grid,
-  .folu-alive-grid,
-  .folu-activities-grid,
-  .folu-roadmap-grid {
-    grid-template-columns: 1fr;
-  }
-  .folu-section {
-    padding: 60px 0;
-  }
-  .folu-section-title {
-    font-size: 28px;
-  }
-}
 
 /* ==========================================================================
    INNER PAGE COMPONENTS & SUB-PAGE DESIGN PATTERNS
@@ -2131,17 +2119,33 @@ body.folu-theme {
   flex-shrink: 0;
 }
 
-/* Responsive updates for inner components */
+/* ==========================================================================
+   CONSOLIDATED RESPONSIVE MEDIA QUERIES (Mobile-First Polish)
+   ========================================================================== */
+
+/* 1. Large Tablets & Small Laptops (<= 1024px) */
 @media (max-width: 1024px) {
+  .folu-hero-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .folu-hero-title {
+    font-size: 42px;
+  }
   .folu-editorial-grid,
   .folu-editorial-grid.reverse {
     grid-template-columns: 1fr;
-    gap: 40px;
+    gap: 36px;
   }
   .folu-editorial-grid.reverse .folu-editorial-visual,
   .folu-editorial-grid.reverse .folu-editorial-text {
     order: initial;
   }
+  .folu-pillars-grid,
+  .folu-journey-grid,
+  .folu-roadmap-grid,
+  .folu-alive-grid,
+  .folu-activities-grid,
   .folu-leadership-grid,
   .folu-values-grid,
   .folu-gallery-grid,
@@ -2151,35 +2155,327 @@ body.folu-theme {
   .folu-form-radio-group {
     grid-template-columns: repeat(2, 1fr);
   }
+  .folu-cta-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 44px 28px;
+    gap: 24px;
+  }
+  .folu-cta-buttons {
+    justify-content: center;
+  }
 }
 
-@media (max-width: 640px) {
-  .folu-page-title {
+/* 2. Tablets & Mobile Landscape (<= 991px) */
+@media (max-width: 991px) {
+  .folu-topbar-info {
+    font-size: 12px;
+    gap: 12px;
+  }
+  .folu-topbar-email {
+    display: none;
+  }
+  .folu-nav-menu,
+  .folu-nav-cta .folu-btn-outline {
+    display: none !important;
+  }
+  .folu-mobile-toggle {
+    display: inline-flex !important;
+  }
+  .folu-navbar {
+    height: 72px;
+  }
+  .folu-brand-name {
+    font-size: 16px;
+  }
+  .folu-brand-logo {
+    height: 48px;
+  }
+  /* Eliminate badge overflow horizontally */
+  .folu-hero-floating-badge {
+    position: static !important;
+    margin-top: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .folu-editorial-badge {
+    position: static !important;
+    margin-top: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .folu-footer-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+  }
+}
+
+/* 3. Small Tablets & Phablets (<= 768px) */
+@media (max-width: 768px) {
+  .folu-topbar {
+    display: none !important;
+  }
+  .folu-hero {
+    padding: 50px 0 60px 0;
+  }
+  .folu-hero-title {
+    font-size: 34px;
+    line-height: 1.22;
+  }
+  .folu-hero-image-card img {
+    height: 300px;
+  }
+  .folu-section {
+    padding: 54px 0;
+  }
+  .folu-section-title {
     font-size: 30px;
   }
-  .folu-page-header {
-    padding: 44px 0 38px 0;
+  .folu-page-title {
+    font-size: 32px;
   }
+  .folu-quick-actions-bar {
+    margin-top: 20px;
+    margin-bottom: 24px;
+  }
+  .folu-quick-actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .folu-quick-card {
+    padding: 16px;
+  }
+  .folu-quick-card-desc {
+    display: none;
+  }
+  .folu-pillars-grid,
+  .folu-journey-grid,
+  .folu-alive-grid,
+  .folu-activities-grid,
+  .folu-roadmap-grid,
   .folu-leadership-grid,
   .folu-values-grid,
   .folu-gallery-grid,
-  .folu-contact-grid,
+  .folu-contact-grid {
+    grid-template-columns: 1fr;
+  }
+  .folu-gallery-filters {
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .folu-gallery-filters::-webkit-scrollbar {
+    display: none;
+  }
+  .folu-filter-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .folu-cta-card {
+    padding: 36px 22px;
+  }
+  .folu-cta-title {
+    font-size: 26px;
+  }
+  .folu-cta-buttons {
+    width: 100%;
+    flex-direction: column;
+  }
+  .folu-cta-buttons .folu-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* 4. Standard Mobile Phones (<= 640px) */
+@media (max-width: 640px) {
+  .folu-container {
+    padding: 0 16px !important;
+  }
+  .folu-brand-name {
+    font-size: 14.5px;
+  }
+  .folu-brand-motto {
+    font-size: 9.5px;
+  }
+  .folu-nav-apply-btn {
+    padding: 7px 12px;
+    font-size: 12.5px;
+  }
+  .folu-nav-apply-btn span {
+    display: none;
+  }
+  .folu-hero {
+    padding: 36px 0 46px 0;
+  }
+  .folu-hero-title {
+    font-size: 28px;
+    line-height: 1.25;
+  }
+  .folu-hero-description {
+    font-size: 14.5px;
+  }
+  .folu-hero-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+  }
+  .folu-hero-actions .folu-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .folu-hero-image-card img {
+    height: 220px;
+  }
+  .folu-section {
+    padding: 48px 0;
+  }
+  .folu-section-title {
+    font-size: 26px;
+  }
+  .folu-page-header {
+    padding: 36px 0 30px 0;
+  }
+  .folu-page-title {
+    font-size: 26px;
+  }
+  .folu-page-subtitle {
+    font-size: 14.5px;
+  }
+  /* Forms: 16px font size to prevent iOS zoom */
+  .folu-form-card {
+    padding: 24px 16px;
+  }
+  .folu-form-control,
+  .folu-form-select,
+  .folu-form-textarea {
+    font-size: 16px !important;
+    padding: 11px 14px;
+  }
   .folu-form-grid-2,
   .folu-form-radio-group {
     grid-template-columns: 1fr;
   }
   .folu-leadership-card {
     flex-direction: column;
-    padding: 24px;
+    padding: 22px 18px;
+    align-items: center;
+    text-align: center;
   }
-  .folu-form-card {
-    padding: 26px 20px;
+  .folu-leadership-avatar {
+    margin-bottom: 12px;
   }
-  .folu-editorial-badge {
-    position: static;
-    margin-top: 14px;
-    max-width: none;
+  .folu-cta-card {
+    padding: 30px 18px;
+    border-radius: var(--folu-radius-lg);
+  }
+  .folu-cta-title {
+    font-size: 23px;
+  }
+  .folu-cta-text {
+    font-size: 14px;
+  }
+  .folu-cta-buttons {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .folu-cta-buttons .folu-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .folu-footer {
+    padding: 48px 0 0 0;
+  }
+  .folu-footer-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .folu-footer-bottom {
+    margin-top: 40px;
+    padding: 20px 0;
+  }
+  .folu-footer-bottom-inner {
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+  }
+  .folu-floating-contact {
+    bottom: 16px;
+    right: 14px;
+    gap: 10px;
+  }
+  .folu-float-btn {
+    width: 46px;
+    height: 46px;
+  }
+  .folu-float-btn i {
+    font-size: 20px;
+  }
+  .folu-float-tooltip {
+    display: none !important;
   }
 }
+
+/* 5. Narrow Mobile Phones (<= 480px) */
+@media (max-width: 480px) {
+  .folu-nav-apply-btn {
+    display: none !important;
+  }
+  .folu-navbar {
+    height: 64px;
+  }
+  .folu-brand {
+    gap: 10px;
+  }
+  .folu-brand-logo {
+    height: 38px;
+  }
+  .folu-brand-name {
+    font-size: 13px;
+    line-height: 1.15;
+  }
+  .folu-brand-motto {
+    display: none;
+  }
+  .folu-hero-title {
+    font-size: 24px;
+  }
+  .folu-section-title {
+    font-size: 24px;
+  }
+  .folu-page-title {
+    font-size: 23px;
+  }
+  .folu-mobile-drawer {
+    width: 280px;
+    max-width: 86vw;
+    padding: 18px 14px;
+  }
+}
+
+/* 6. Ultra-Compact Screens (<= 360px) */
+@media (max-width: 360px) {
+  .folu-brand-name {
+    font-size: 11.5px;
+  }
+  .folu-quick-actions-grid {
+    grid-template-columns: 1fr;
+  }
+  .folu-hero-title {
+    font-size: 22px;
+  }
+  .folu-hero-image-card img {
+    height: 190px;
+  }
+  .folu-filter-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
+
 
 
