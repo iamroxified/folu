@@ -1,1 +1,0 @@
-<?php /**PATH C:\laragon\www\folu\resources\views/frontend/partials/mobile-header.blade.php ENDPATH**/ ?>
