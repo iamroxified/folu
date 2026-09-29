@@ -12,28 +12,28 @@
   <!-- OpenGraph / Social Metadata -->
   <meta property="og:title" content="About Us | Folu International Group of Schools">
   <meta property="og:description" content="Knowledge &amp; Discipline: Nurturing tomorrow's leaders through academic excellence and godly character in Isanlu, Kogi State.">
-  <meta property="og:image" content="{{ asset('images/folu-logo.png') }}">
+  <meta property="og:image" content="<?php echo e(asset('images/folu-logo.png')); ?>">
   <meta property="og:type" content="website">
 
   <!-- Favicon & Icons -->
-  <link rel="icon" href="{{ asset('images/folu-logo.png') }}" type="image/x-icon">
+  <link rel="icon" href="<?php echo e(asset('images/folu-logo.png')); ?>" type="image/x-icon">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
   
   <!-- Modern Folu 2026 Stylesheet -->
-  <link rel="stylesheet" href="{{ asset('css/folu-modern.css') }}" type="text/css" media="all">
+  <link rel="stylesheet" href="<?php echo e(asset('css/folu-modern.css')); ?>" type="text/css" media="all">
 </head>
 
 <body class="folu-theme">
 
-  {{-- Header with verified info & navigation --}}
-  @include('frontend.partials.header')
+  
+  <?php echo $__env->make('frontend.partials.header', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
   <!-- 1. PAGE HEADER BANNER -->
   <header class="folu-page-header">
     <div class="folu-container">
       <div class="folu-page-header-content">
         <nav class="folu-breadcrumb" aria-label="Breadcrumb">
-          <a href="{{ url('/') }}">Home</a>
+          <a href="<?php echo e(url('/')); ?>">Home</a>
           <span class="sep">/</span>
           <span class="current">About Us</span>
         </nav>
@@ -70,14 +70,14 @@
           </div>
 
           <div style="display: flex; gap: 14px; flex-wrap: wrap;">
-            <a href="{{ url('/apply') }}" class="folu-btn folu-btn-primary">Apply for Admission</a>
-            <a href="{{ url('/contact') }}" class="folu-btn folu-btn-secondary">Visit Our Campus</a>
+            <a href="<?php echo e(url('/apply')); ?>" class="folu-btn folu-btn-primary">Apply for Admission</a>
+            <a href="<?php echo e(url('/contact')); ?>" class="folu-btn folu-btn-secondary">Visit Our Campus</a>
           </div>
         </div>
 
         <div class="folu-editorial-visual">
           <div class="folu-editorial-img-frame">
-            <img src="{{ asset('images/assembly.jpg') }}" alt="Students at Morning Assembly - Folu International Group of Schools" loading="lazy">
+            <img src="<?php echo e(asset('images/assembly.jpg')); ?>" alt="Students at Morning Assembly - Folu International Group of Schools" loading="lazy">
           </div>
           <div class="folu-editorial-badge">
             <div class="folu-editorial-badge-number">4 Levels</div>
@@ -183,7 +183,7 @@
         <div class="folu-editorial-grid reverse">
           <div class="folu-editorial-visual">
             <div class="folu-editorial-img-frame">
-              <img src="{{ asset('images/staff.jpg') }}" alt="Academic and Support Staff of Folu International Group of Schools" loading="lazy">
+              <img src="<?php echo e(asset('images/staff.jpg')); ?>" alt="Academic and Support Staff of Folu International Group of Schools" loading="lazy">
             </div>
           </div>
           <div class="folu-editorial-text">
@@ -195,7 +195,7 @@
             <p style="font-size: 14.5px; color: var(--folu-text-muted); line-height: 1.6; margin-bottom: 22px;">
               Our teachers undergo regular pedagogical training, fostering an encouraging classroom where curiosity is rewarded, disciplined study habits are formed, and academic rigor is upheld.
             </p>
-            <a href="{{ url('/overview-academics') }}" class="folu-btn folu-btn-outline" style="border-color: var(--folu-navy); color: var(--folu-navy);">Explore Our Academics</a>
+            <a href="<?php echo e(url('/overview-academics')); ?>" class="folu-btn folu-btn-outline" style="border-color: var(--folu-navy); color: var(--folu-navy);">Explore Our Academics</a>
           </div>
         </div>
       </div>
@@ -262,7 +262,7 @@
           </p>
         </div>
         <div class="folu-cta-buttons">
-          <a href="{{ url('/apply') }}" class="folu-btn folu-btn-primary" style="padding: 16px 32px; font-size: 15px;">
+          <a href="<?php echo e(url('/apply')); ?>" class="folu-btn folu-btn-primary" style="padding: 16px 32px; font-size: 15px;">
             Apply for Admission
           </a>
           <a href="https://wa.me/2348165354191?text=Hello%20Folu%20International%20Schools,%20I%20would%20like%20to%20enquire%20about%20admissions." target="_blank" rel="noopener noreferrer" class="folu-btn folu-btn-outline" style="border-color: #22c55e; color: #22c55e;">
@@ -273,8 +273,9 @@
     </div>
   </section>
 
-  {{-- Verified Footer --}}
-  @include('frontend.partials.footer')
+  
+  <?php echo $__env->make('frontend.partials.footer', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
 
 </body>
 </html>
+<?php /**PATH C:\laragon\www\folu\resources\views/frontend/pages/about-us.blade.php ENDPATH**/ ?>

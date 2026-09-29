@@ -1,248 +1,230 @@
-          <div class="kingster-body-wrapper clearfix  kingster-with-frame">
-            <div class="kingster-top-bar">
-              <div class="kingster-top-bar-background"></div>
-              <div class="kingster-top-bar-container kingster-container ">
-                <div class="kingster-top-bar-container-inner clearfix">
-                  <div class="kingster-top-bar-left kingster-item-pdlr"><i class="fa fa-envelope-open-o"
-                      id="i_fd84_0"></i>
-                    contact@foluinternationalschools.org.ng <i class="fa fa-phone" id="i_fd84_1"></i> +2349024945875</div>
-                  <div class="kingster-top-bar-right kingster-item-pdlr">
-                    <ul id="kingster-top-bar-menu" class="sf-menu kingster-top-bar-menu kingster-top-bar-right-menu">
-                      <li class="menu-item kingster-normal-menu"><a href="#">Alumni</a></li>
-                      <li class="menu-item kingster-normal-menu"><a href="#">Calendar</a></li>
-                      <li class="menu-item kingster-normal-menu"><a href="admin">Portal</a></li>
-                    </ul>
-                    <div class="kingster-top-bar-right-social"></div><a class="kingster-top-bar-right-button" href="#"
-                      target="_blank">Support FIS</a>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <header
-              class="kingster-header-wrap kingster-header-style-plain  kingster-style-menu-right kingster-sticky-navigation kingster-style-fixed"
-              data-navigation-offset="75px">
-              <div class="kingster-header-background"></div>
-              <div class="kingster-header-container  kingster-container">
-                <div class="kingster-header-container-inner clearfix">
-                  <div class="kingster-logo  kingster-item-pdlr">
-                    <div class="kingster-logo-inner">
-                      <a class="" href="index"><img src="images/folu-banner.png" alt="" /></a>
-                    </div>
-                  </div>
-                  <div class="kingster-navigation kingster-item-pdlr clearfix ">
-                    <div class="kingster-main-menu" id="kingster-main-menu">
-                      <ul id="menu-main-navigation-1" class="sf-menu">
-                        <li
-                          class="menu-item menu-item-home current-menu-item menu-item-has-children kingster-normal-menu">
-                          <a href="index" class="sf-with-ul-pre">Home</a>
 
-                        </li>
-                        <li class="menu-item menu-item-has-children kingster-normal-menu"><a href="#"
-                            class="sf-with-ul-pre">Pages</a>
-                          <ul class="sub-menu">
-                            <li class="menu-item" data-size="60"><a href="about-us.html">About KU</a></li>
-                            <li class="menu-item menu-item-has-children" data-size="60"><a
-                                href="blog-full-right-sidebar-with-frame.html" class="sf-with-ul-pre">Blog</a>
-                              <ul class="sub-menu">
-                                <li class="menu-item menu-item-has-children"><a
-                                    href="blog-full-right-sidebar-with-frame.html" class="sf-with-ul-pre">Blog Full</a>
-                                  <ul class="sub-menu">
-                                    <li class="menu-item"><a href="blog-full-right-sidebar-with-frame.html">Blog Full
-                                        Right Sidebar With Frame</a></li>
-                                    <li class="menu-item"><a href="blog-full-left-sidebar-with-frame.html">Blog Full
-                                        Left Sidebar With Frame</a></li>
-                                    <li class="menu-item"><a href="blog-full-both-sidebar-with-frame.html">Blog Full
-                                        Both Sidebar With Frame</a></li>
-                                    <li class="menu-item"><a href="blog-full-right-sidebar.html">Blog Full Right
-                                        Sidebar</a></li>
-                                    <li class="menu-item"><a href="blog-full-left-sidebar.html">Blog Full Left
-                                        Sidebar</a></li>
-                                    <li class="menu-item"><a href="blog-full-both-sidebar.html">Blog Full Both
-                                        Sidebar</a></li>
-                                  </ul>
-                                </li>
-                                <li class="menu-item menu-item-has-children"><a href="blog-grid-3-columns-no-space.html"
-                                    class="sf-with-ul-pre">Blog Grid</a>
-                                  <ul class="sub-menu">
-                                    <li class="menu-item"><a href="blog-grid-2-columns.html">Blog Grid 2 Columns</a>
-                                    </li>
-                                    <li class="menu-item"><a href="blog-grid-3-columns.html">Blog Grid 3 Columns</a>
-                                    </li>
-                                    <li class="menu-item"><a href="blog-grid-4-columns.html">Blog Grid 4 Columns</a>
-                                    </li>
-                                    <li class="menu-item"><a href="blog-grid-2-columns-no-space.html">Blog Grid 2
-                                        Columns No Space</a></li>
-                                    <li class="menu-item"><a href="blog-grid-3-columns-no-space.html">Blog Grid 3
-                                        Columns No Space</a></li>
-                                    <li class="menu-item"><a href="blog-grid-4-columns-no-space.html">Blog Grid 4
-                                        Columns No Space</a></li>
-                                  </ul>
-                                </li>
+<div class="folu-topbar">
+  <div class="kingster-container clearfix" style="max-width: 1240px; margin: 0 auto; padding: 0 20px;">
+    <div class="folu-topbar-inner">
+      <div class="folu-topbar-info">
+        <span class="folu-topbar-item">
+          <i class="fa fa-map-marker"></i>
+          <span>P.O. Box 37, Itedo-Ijowa, Isanlu, Kogi State</span>
+        </span>
+        <span class="folu-topbar-item">
+          <i class="fa fa-phone"></i>
+          <a href="tel:08165354191">08165354191</a> / <a href="tel:08057421037">08057421037</a>
+        </span>
+        <span class="folu-topbar-item d-none d-md-inline-flex">
+          <i class="fa fa-envelope-o"></i>
+          <a href="mailto:info@foluinternationalschools.sch.ng">info@foluinternationalschools.sch.ng</a>
+        </span>
+      </div>
+      <div class="folu-topbar-actions">
+        <a href="<?php echo e(url('/admin/login')); ?>" class="folu-portal-link">
+          <i class="fa fa-lock"></i>
+          <span>Portal Login</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
 
-                                <li class="menu-item"><a href="standard-post-type.html">Single Post</a></li>
-                              </ul>
-                            </li>
-                            <li class="menu-item menu-item-has-children" data-size="60"><a href="#"
-                                class="sf-with-ul-pre">Contact</a>
-                              <ul class="sub-menu">
-                                <li class="menu-item"><a href="contact.html">Contact</a></li>
-                                <li class="menu-item"><a href="contact-2.html">Contact 2</a></li>
-                                <li class="menu-item"><a href="contact-3.html">Contact 3</a></li>
-                              </ul>
-                            </li>
-                            <li class="menu-item menu-item-has-children" data-size="60"><a
-                                href="portfolio-3-columns.html" class="sf-with-ul-pre">Portfolio</a>
-                              <ul class="sub-menu">
-                                <li class="menu-item menu-item-has-children"><a class="sf-with-ul-pre">Portfolio
-                                    Grid</a>
-                                  <ul class="sub-menu">
-                                    <li class="menu-item"><a href="portfolio-2-columns.html">Portfolio 2 Columns</a>
-                                    </li>
-                                    <li class="menu-item"><a href="portfolio-3-columns.html">Portfolio 3 Columns</a>
-                                    </li>
-                                    <li class="menu-item"><a href="portfolio-4-columns.html">Portfolio 4 Columns</a>
-                                    </li>
-                                    <li class="menu-item"><a href="portfolio-5-columns.html">Portfolio 5 Columns</a>
-                                    </li>
-                                    <li class="menu-item"><a href="portfolio-2-columns-with-frame.html">Portfolio 2
-                                        Columns With Frame</a></li>
-                                    <li class="menu-item"><a href="portfolio-3-columns-with-frame.html">Portfolio 3
-                                        Columns With Frame</a></li>
-                                    <li class="menu-item"><a href="portfolio-4-columns-with-frame.html">Portfolio 4
-                                        Columns With Frame</a></li>
-                                    <li class="menu-item"><a href="portfolio-2-columns-no-space.html">Portfolio 2
-                                        Columns No Space</a></li>
-                                    <li class="menu-item"><a href="portfolio-3-columns-no-space.html">Portfolio 3
-                                        Columns No Space</a></li>
-                                    <li class="menu-item"><a href="portfolio-4-columns-no-space.html">Portfolio 4
-                                        Columns No Space</a></li>
-                                    <li class="menu-item"><a href="portfolio-5-columns-no-space.html">Portfolio 5
-                                        Columns No Space</a></li>
-                                  </ul>
-                                </li>
-                                <li class="menu-item menu-item-has-children"><a class="sf-with-ul-pre">Portfolio
-                                    Masonry</a>
-                                  <ul class="sub-menu">
-                                    <li class="menu-item"><a href="portfolio-masonry-4-columns.html">Masonry 4
-                                        Columns</a></li>
-                                    <li class="menu-item"><a href="portfolio-masonry-3-columns.html">Masonry 3
-                                        Columns</a></li>
-                                    <li class="menu-item"><a href="portfolio-masonry-2-columns.html">Masonry 2
-                                        Columns</a></li>
-                                    <li class="menu-item"><a href="portfolio-masonry-4-columns-no-space.html">Masonry 4
-                                        Columns No Space</a></li>
-                                    <li class="menu-item"><a href="portfolio-masonry-3-columns-no-space.html">Masonry 3
-                                        Columns No Space</a></li>
-                                    <li class="menu-item"><a href="portfolio-masonry-2-columns-no-space.html">Masonry 2
-                                        Columns No Space</a></li>
-                                  </ul>
-                                </li>
+<header class="folu-navbar-wrap">
+  <div class="kingster-container clearfix" style="max-width: 1240px; margin: 0 auto; padding: 0 20px;">
+    <nav class="folu-navbar">
+      <!-- School Brand -->
+      <a href="<?php echo e(url('/')); ?>" class="folu-brand">
+        <img src="<?php echo e(asset('images/folu-logo.png')); ?>" alt="Folu International Schools Logo" class="folu-brand-logo">
+        <div class="folu-brand-text">
+          <span class="folu-brand-name">Folu International Schools</span>
+          <span class="folu-brand-motto">Knowledge &amp; Discipline</span>
+        </div>
+      </a>
 
-                                <li class="menu-item menu-item-has-children"><a class="sf-with-ul-pre"
-                                    href="singleportfolio.html">Single Portfolio</a></li>
-                              </ul>
-                            </li>
-                            <li class="menu-item" data-size="60"><a href="gallery.html">Gallery</a></li>
-                            <li class="menu-item" data-size="60"><a href="price-table.html">Price Table</a></li>
-                            <li class="menu-item" data-size="60"><a href="maintenance.html">Maintenance</a></li>
-                            <li class="menu-item" data-size="60"><a href="coming-soon.html">Coming Soon</a></li>
-                            <li class="menu-item" data-size="60"><a href="404.html">404 Page</a></li>
-                          </ul>
-                        </li>
-                        <li class="menu-item menu-item-has-children kingster-mega-menu"><a
-                            href="bachelor-of-science-in-business-administration.html"
-                            class="sf-with-ul-pre">Academics</a>
-                          <div class="sf-mega sf-mega-full megaimg">
-                            <ul class="sub-menu">
-                              <li class="menu-item menu-item-has-children" data-size="15"><a
-                                  class="sf-with-ul-pre">Undergraduate</a>
-                                <ul class="sub-menu">
-                                  <li class="menu-item"><a
-                                      href="bachelor-of-science-in-business-administration.html">Business
-                                      Administration</a></li>
-                                  <li class="menu-item"><a href="school-of-law.html">School Of Law</a></li>
-                                  <li class="menu-item"><a href="engineering.html">Engineering</a></li>
-                                  <li class="menu-item"><a href="medicine.html">Medicine</a></li>
-                                  <li class="menu-item"><a href="art-science.html">Art &#038; Science</a></li>
-                                </ul>
-                              </li>
-                              <li class="menu-item menu-item-has-children" data-size="15"><a href="#"
-                                  class="sf-with-ul-pre">Graduate Program</a>
-                                <ul class="sub-menu">
-                                  <li class="menu-item"><a href="hospitality-management.html">Hospitality Management</a>
-                                  </li>
-                                  <li class="menu-item"><a href="physics.html">Physics</a></li>
-                                  <li class="menu-item"><a href="#">Chemistry</a></li>
-                                  <li class="menu-item"><a href="#">Music</a></li>
-                                  <li class="menu-item"><a href="#">Computer Science</a></li>
-                                </ul>
-                              </li>
-                              <li class="menu-item menu-item-has-children" data-size="15"><a href="#"
-                                  class="sf-with-ul-pre">Resources</a>
-                                <ul class="sub-menu">
-                                  <li class="menu-item"><a
-                                      href="bachelor-of-science-in-business-administration.html">Department Page</a>
-                                  </li>
-                                  <li class="menu-item"><a href="finance.html">Major Page</a></li>
-                                  <li class="menu-item"><a href="finance-faculty.html">Faculty Page</a></li>
-                                  <li class="menu-item"><a href="john-hagensy-phd.html">Single Instructor</a></li>
-                                  <li class="menu-item"><a href="introduction-to-financial-accounting.html">Single
-                                      Course</a></li>
-                                </ul>
-                              </li>
-                              <li class="menu-item" data-size="15">
-                                <div class="kingster-mega-menu-section-content"><img src="upload/mega-menu-logo.png"
-                                    id="img_fd84_0" alt="" /> <span id="span_fd84_0">Academic offerings include 95
-                                    majors, 86 minors, and more than 100 in-major specializations</span></div>
-                              </li>
-                            </ul>
-                          </div>
-                        </li>
-                        <li class="menu-item menu-item-has-children kingster-normal-menu"><a
-                            href="apply-to-kingster.html" class="sf-with-ul-pre">Admissions</a>
-                          <ul class="sub-menu">
-                            <li class="menu-item" data-size="60"><a href="apply-to-kingster.html">Apply To Kingster</a>
-                            </li>
-                            <li class="menu-item" data-size="60"><a href="campus-tour.html">Campus Tour</a></li>
-                            <li class="menu-item" data-size="60"><a href="scholarships.html">Scholarships</a></li>
-                            <li class="menu-item" data-size="60"><a href="athletics.html">Athletics</a></li>
-                            <li class="menu-item" data-size="60"><a href="give-to-kingster.html">Give To Kingster</a>
-                            </li>
-                            <li class="menu-item" data-size="60"><a href="alumni.html">Alumni</a></li>
-                            <li class="menu-item" data-size="60"><a href="event-calendar.html">Event Calendar</a></li>
-                          </ul>
-                        </li>
-                        <li class="menu-item menu-item-has-children kingster-normal-menu"><a href="#"
-                            class="sf-with-ul-pre">Courses</a>
-                          <ul class="sub-menu">
-                            <li class="menu-item" data-size="60"><a href="course-list-1.html">Course List 1</a></li>
-                            <li class="menu-item" data-size="60"><a href="course-list-2.html">Course List 2</a></li>
-                          </ul>
-                        </li>
-                        <li class="menu-item kingster-normal-menu"><a href="athletics.html">Athletics</a></li>
-                        <li class="menu-item kingster-normal-menu"><a href="university-life.html">University Life</a>
-                        </li>
-                      </ul>
-                      <div class="kingster-navigation-slide-bar" id="kingster-navigation-slide-bar"></div>
-                    </div>
-                    <div class="kingster-main-menu-right-wrap clearfix ">
-                      <div class="kingster-main-menu-search" id="kingster-top-search"><i class="icon_search"></i></div>
-                      <div class="kingster-top-search-wrap">
-                        <div class="kingster-top-search-close"></div>
-                        <div class="kingster-top-search-row">
-                          <div class="kingster-top-search-cell">
-                            <form role="search" method="get" class="search-form" action="#">
-                              <input type="text" class="search-field kingster-title-font" placeholder="Search..."
-                                value="" name="s">
-                              <div class="kingster-top-search-submit"><i class="fa fa-search"></i></div>
-                              <input type="submit" class="search-submit" value="Search">
-                              <div class="kingster-top-search-close"><i class="icon_close"></i></div>
-                            </form>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </header><?php /**PATH C:\laragon\www\folu\resources\views/frontend/partials/header.blade.php ENDPATH**/ ?>
+      <!-- Desktop Navigation Menu -->
+      <ul class="folu-nav-menu">
+        <li class="folu-nav-item <?php echo e(request()->is('/') ? 'active' : ''); ?>">
+          <a href="<?php echo e(url('/')); ?>" class="folu-nav-link">Home</a>
+        </li>
+        <li class="folu-nav-item <?php echo e(request()->is('about*') ? 'active' : ''); ?>">
+          <a href="<?php echo e(url('/about-us')); ?>" class="folu-nav-link">
+            About Us <i class="fa fa-angle-down"></i>
+          </a>
+          <ul class="folu-dropdown">
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/about-us#story')); ?>" class="folu-dropdown-link">Our Story &amp; Founders</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/about-us#vision')); ?>" class="folu-dropdown-link">Vision &amp; Mission</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/about-us#values')); ?>" class="folu-dropdown-link">Core Values</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/our-staffs')); ?>" class="folu-dropdown-link">Leadership &amp; Faculty</a></li>
+          </ul>
+        </li>
+        <li class="folu-nav-item <?php echo e(request()->is('academics*', 'creche*', 'primary*', 'secondary*') ? 'active' : ''); ?>">
+          <a href="<?php echo e(url('/overview-academics')); ?>" class="folu-nav-link">
+            Academics <i class="fa fa-angle-down"></i>
+          </a>
+          <ul class="folu-dropdown">
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/overview-academics')); ?>" class="folu-dropdown-link">Overview &amp; Curriculum</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/creche')); ?>" class="folu-dropdown-link">Creche &amp; Early Years</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/creche#nursery')); ?>" class="folu-dropdown-link">Nursery School</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/primary')); ?>" class="folu-dropdown-link">Primary School</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/secondary')); ?>" class="folu-dropdown-link">Secondary College</a></li>
+          </ul>
+        </li>
+        <li class="folu-nav-item <?php echo e(request()->is('student-life*', 'gallery*') ? 'active' : ''); ?>">
+          <a href="<?php echo e(url('/gallery')); ?>" class="folu-nav-link">
+            Student Life <i class="fa fa-angle-down"></i>
+          </a>
+          <ul class="folu-dropdown">
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/gallery')); ?>" class="folu-dropdown-link">School Gallery</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/#activities')); ?>" class="folu-dropdown-link">Clubs &amp; Competitions</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/#journey')); ?>" class="folu-dropdown-link">Sports &amp; Culture</a></li>
+          </ul>
+        </li>
+        <li class="folu-nav-item <?php echo e(request()->is('admission*', 'apply*') ? 'active' : ''); ?>">
+          <a href="<?php echo e(url('/apply')); ?>" class="folu-nav-link">
+            Admissions <i class="fa fa-angle-down"></i>
+          </a>
+          <ul class="folu-dropdown">
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/apply')); ?>" class="folu-dropdown-link">Apply for Admission</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/admission-process')); ?>" class="folu-dropdown-link">Admission Process</a></li>
+            <li class="folu-dropdown-item"><a href="<?php echo e(url('/admission-policy')); ?>" class="folu-dropdown-link">Admission Policy</a></li>
+          </ul>
+        </li>
+        <li class="folu-nav-item <?php echo e(request()->is('blog*') ? 'active' : ''); ?>">
+          <a href="<?php echo e(url('/blog')); ?>" class="folu-nav-link">Stories &amp; News</a>
+        </li>
+        <li class="folu-nav-item <?php echo e(request()->is('contact*') ? 'active' : ''); ?>">
+          <a href="<?php echo e(url('/contact')); ?>" class="folu-nav-link">Contact</a>
+        </li>
+      </ul>
+
+      <!-- CTA Buttons & Mobile Toggle -->
+      <div class="folu-nav-cta">
+        <a href="<?php echo e(url('/apply')); ?>" class="folu-btn folu-btn-primary">
+          <i class="fa fa-graduation-cap"></i>
+          <span>Apply Now</span>
+        </a>
+        <button type="button" class="folu-mobile-toggle" id="foluMobileMenuBtn" aria-label="Toggle navigation">
+          <i class="fa fa-bars"></i>
+        </button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<!-- Mobile Navigation Drawer -->
+<div class="folu-drawer-backdrop" id="foluDrawerBackdrop"></div>
+<div class="folu-mobile-drawer" id="foluMobileDrawer">
+  <div class="folu-drawer-header">
+    <div class="folu-brand">
+      <img src="<?php echo e(asset('images/folu-logo.png')); ?>" alt="Folu Logo" style="height: 44px;">
+      <div class="folu-brand-text">
+        <span class="folu-brand-name" style="font-size: 15px;">Folu Schools</span>
+        <span class="folu-brand-motto" style="font-size: 10px;">Isanlu, Kogi State</span>
+      </div>
+    </div>
+    <button type="button" class="folu-drawer-close" id="foluDrawerCloseBtn">&times;</button>
+  </div>
+
+  <ul class="folu-mobile-nav">
+    <li><a href="<?php echo e(url('/')); ?>" class="folu-mobile-nav-link">Home</a></li>
+    <li>
+      <a href="javascript:void(0)" class="folu-mobile-nav-link has-submenu">
+        About Us <i class="fa fa-angle-down"></i>
+      </a>
+      <ul class="folu-mobile-submenu">
+        <li><a href="<?php echo e(url('/about-us')); ?>">Overview &amp; Story</a></li>
+        <li><a href="<?php echo e(url('/about-us#vision')); ?>">Vision &amp; Mission</a></li>
+        <li><a href="<?php echo e(url('/our-staffs')); ?>">Faculty &amp; Staff</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="javascript:void(0)" class="folu-mobile-nav-link has-submenu">
+        Academics <i class="fa fa-angle-down"></i>
+      </a>
+      <ul class="folu-mobile-submenu">
+        <li><a href="<?php echo e(url('/overview-academics')); ?>">Overview</a></li>
+        <li><a href="<?php echo e(url('/creche')); ?>">Creche &amp; Nursery</a></li>
+        <li><a href="<?php echo e(url('/primary')); ?>">Primary School</a></li>
+        <li><a href="<?php echo e(url('/secondary')); ?>">Secondary College</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="javascript:void(0)" class="folu-mobile-nav-link has-submenu">
+        Admissions <i class="fa fa-angle-down"></i>
+      </a>
+      <ul class="folu-mobile-submenu">
+        <li><a href="<?php echo e(url('/apply')); ?>">Apply Now</a></li>
+        <li><a href="<?php echo e(url('/admission-process')); ?>">Admission Process</a></li>
+        <li><a href="<?php echo e(url('/admission-policy')); ?>">Admission Policy</a></li>
+      </ul>
+    </li>
+    <li><a href="<?php echo e(url('/gallery')); ?>" class="folu-mobile-nav-link">Gallery &amp; Life</a></li>
+    <li><a href="<?php echo e(url('/blog')); ?>" class="folu-mobile-nav-link">News &amp; Events</a></li>
+    <li><a href="<?php echo e(url('/contact')); ?>" class="folu-mobile-nav-link">Contact</a></li>
+  </ul>
+
+  <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+    <a href="<?php echo e(url('/apply')); ?>" class="folu-btn folu-btn-primary" style="width: 100%; text-align: center;">
+      Apply for Admission
+    </a>
+    <a href="<?php echo e(url('/admin/login')); ?>" class="folu-btn folu-btn-outline" style="width: 100%; text-align: center;">
+      <i class="fa fa-lock"></i> Portal Login
+    </a>
+  </div>
+
+  <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--folu-border); font-size: 13px; color: var(--folu-text-muted);">
+    <div style="margin-bottom: 8px;"><i class="fa fa-phone text-warning me-2"></i> 08165354191</div>
+    <div style="margin-bottom: 8px;"><i class="fa fa-whatsapp text-success me-2"></i> 08057421037</div>
+    <div><i class="fa fa-map-marker text-danger me-2"></i> Itedo-Ijowa, Isanlu, Kogi State</div>
+  </div>
+</div>
+
+<!-- Floating Quick Actions (WhatsApp & Call) -->
+<div class="folu-floating-contact" id="foluFloatingContact">
+  <a href="https://wa.me/2348165354191?text=Hello%2C%20I%20am%20inquiring%20about%20admission%20at%20Folu%20International%20Schools" 
+     target="_blank" rel="noopener noreferrer" class="folu-float-btn folu-float-whatsapp" title="Chat on WhatsApp">
+    <i class="fa fa-whatsapp"></i>
+    <span class="folu-float-tooltip">Chat with Admissions</span>
+  </a>
+  <a href="tel:08165354191" class="folu-float-btn folu-float-phone" title="Call Us Directly">
+    <i class="fa fa-phone"></i>
+    <span class="folu-float-tooltip">Call School Office</span>
+  </a>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const mobileBtn = document.getElementById('foluMobileMenuBtn');
+    const drawer = document.getElementById('foluMobileDrawer');
+    const backdrop = document.getElementById('foluDrawerBackdrop');
+    const closeBtn = document.getElementById('foluDrawerCloseBtn');
+
+    function openDrawer() {
+      drawer.classList.add('open');
+      backdrop.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeDrawer() {
+      drawer.classList.remove('open');
+      backdrop.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    if (mobileBtn) mobileBtn.addEventListener('click', openDrawer);
+    if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+    if (backdrop) backdrop.addEventListener('click', closeDrawer);
+
+    // Mobile submenu toggles
+    document.querySelectorAll('.folu-mobile-nav-link.has-submenu').forEach(function(link) {
+      link.addEventListener('click', function() {
+        const submenu = this.nextElementSibling;
+        if (submenu) {
+          submenu.classList.toggle('open');
+          const icon = this.querySelector('i');
+          if (icon) {
+            icon.classList.toggle('fa-angle-up');
+            icon.classList.toggle('fa-angle-down');
+          }
+        }
+      });
+    });
+  });
+</script><?php /**PATH C:\laragon\www\folu\resources\views/frontend/partials/header.blade.php ENDPATH**/ ?>

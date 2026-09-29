@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>Folu International Group of Schools &#8211; Creche</title>
+    <title>Folu International Group of Schools &#8211; Apply</title>
 
     <link rel='stylesheet' href='plugins/goodlayers-core/plugins/combine/style.css' type='text/css' media='all' />
     <link rel='stylesheet' href='plugins/goodlayers-core/include/css/page-builder.css' type='text/css' media='all' />
@@ -28,7 +28,7 @@
         <div class="kingster-page-title-overlay"></div>
         <div class="kingster-page-title-container kingster-container">
             <div class="kingster-page-title-content kingster-item-pdlr">
-                <h1 class="kingster-page-title">Creche</h1>
+                <h1 class="kingster-page-title">Apply</h1>
             </div>
         </div>
     </div>
@@ -40,7 +40,7 @@
                         <div class="gdlr-core-pbf-element">
                             <div class="gdlr-core-text-box-item gdlr-core-item-pdlr gdlr-core-item-pdb gdlr-core-left-align">
                                 <div class="gdlr-core-text-box-item-content" style="font-size: 18px ;text-transform: none ;">
-                                    <p>Content for Creche goes here...</p>
+                                    <p>Content for Apply goes here...</p>
                                 </div>
                             </div>
                         </div>
@@ -50,4 +50,4 @@
         </div>
     </div>
     <?php echo $__env->make('frontend.partials.footer', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-<?php /**PATH C:\laragon\www\folu\resources\views/frontend/pages/creche.blade.php ENDPATH**/ ?>
+<?php /**PATH C:\laragon\www\folu\resources\views/frontend/pages/apply.blade.php ENDPATH**/ ?>
