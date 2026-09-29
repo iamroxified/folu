@@ -18,7 +18,7 @@
   <!-- Favicon & Icons -->
   <link rel="icon" href="{{ asset('images/folu-logo.png') }}" type="image/x-icon">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-  
+
   <!-- Modern Folu 2026 Stylesheet -->
   <link rel="stylesheet" href="{{ asset('css/folu-modern.css') }}" type="text/css" media="all">
 
@@ -39,6 +39,7 @@
       box-sizing: border-box;
       backdrop-filter: blur(8px);
     }
+
     .folu-lightbox-content {
       max-width: 900px;
       width: 100%;
@@ -49,6 +50,7 @@
       position: relative;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     }
+
     .folu-lightbox-img {
       width: 100%;
       max-height: 70vh;
@@ -56,6 +58,7 @@
       display: block;
       background: #000;
     }
+
     .folu-lightbox-footer {
       padding: 16px 24px;
       color: #fff;
@@ -63,6 +66,7 @@
       justify-content: space-between;
       align-items: center;
     }
+
     .folu-lightbox-close {
       position: absolute;
       top: 14px;
@@ -80,6 +84,7 @@
       border: 1px solid rgba(255, 255, 255, 0.3);
       transition: var(--folu-transition);
     }
+
     .folu-lightbox-close:hover {
       background: #dc2626;
     }
@@ -111,7 +116,7 @@
   <!-- 2. GALLERY SECTION WITH CATEGORY FILTER -->
   <section class="folu-section">
     <div class="folu-container">
-      
+
       <!-- Filter Tabs -->
       <div class="folu-gallery-filters">
         <button class="folu-filter-btn active" onclick="filterGallery('all', this)">All Moments</button>
@@ -123,7 +128,7 @@
 
       <!-- Gallery Grid -->
       <div class="folu-gallery-grid" id="foluGalleryGrid">
-        
+
         <!-- 1. Assembly -->
         <div class="folu-gallery-item" data-category="academics" onclick="openLightbox('{{ asset('images/assembly.jpg') }}', 'Morning Devotional &amp; School Assembly', 'Academics &amp; Discipline')">
           <img src="{{ asset('images/assembly.jpg') }}" alt="Morning Assembly at Folu International Group of Schools" class="folu-gallery-img" loading="lazy">
@@ -215,15 +220,15 @@
     <div class="folu-container">
       <div class="folu-cta-card">
         <div class="folu-cta-content">
-          <span class="folu-section-badge" style="background: rgba(217, 119, 6, 0.2); color: var(--folu-gold-accent);">Be Part of the Story</span>
-          <h2 class="folu-cta-title">Give Your Child Memories That Build Leadership</h2>
+          <span class="folu-section-badge" style="background: rgba(231, 111, 81, 0.2); color: var(--folu-peach-accent);">Be Part of the Story</span>
+          <h2 class="folu-cta-title" style="color:#fff">Give Your Child Memories That Build Leadership</h2>
           <p class="folu-cta-text">
             Every day at Folu International Group of Schools offers a meaningful opportunity to learn, discover, compete, create, lead, and grow.
           </p>
         </div>
         <div class="folu-cta-buttons">
-          <a href="{{ url('/apply') }}" class="folu-btn folu-btn-primary">Apply for Admission</a>
-          <a href="{{ url('/contact') }}" class="folu-btn folu-btn-outline" style="border-color: rgba(255, 255, 255, 0.4); color: #ffffff;">Contact Campus</a>
+          <a href="{{ url('/apply') }}" class="folu-btn folu-btn-peach">Apply for Admission</a>
+          <a href="{{ url('/contact') }}" class="folu-btn folu-btn-white">Contact Campus</a>
         </div>
       </div>
     </div>
@@ -250,7 +255,9 @@
     function filterGallery(category, btn) {
       // Toggle active class on filter buttons
       var buttons = document.querySelectorAll('.folu-filter-btn');
-      buttons.forEach(function(b) { b.classList.remove('active'); });
+      buttons.forEach(function(b) {
+        b.classList.remove('active');
+      });
       btn.classList.add('active');
 
       // Filter gallery cards
@@ -286,4 +293,5 @@
   </script>
 
 </body>
+
 </html>

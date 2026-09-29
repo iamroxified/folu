@@ -18,7 +18,7 @@
   <!-- Fonts & Icons -->
   <link rel="icon" href="{{ asset('images/folu-logo.png') }}" type="image/x-icon">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-  
+
   <!-- Modern Folu 2026 Stylesheet -->
   <link rel="stylesheet" href="{{ asset('css/folu-modern.css') }}" type="text/css" media="all">
 </head>
@@ -32,14 +32,14 @@
   <section class="folu-hero">
     <div class="folu-container">
       <div class="folu-hero-grid">
-        
+
         <!-- Left: Headline & Positioning Statement -->
         <div class="folu-hero-content">
           <div class="folu-hero-lead-pill">
             <span class="dot"></span>
             <span>Itedo-Ijowa, Isanlu, Kogi State &bull; Creche to Secondary</span>
           </div>
-          
+
           <h1 class="folu-hero-title">
             KNOWLEDGE THAT BUILDS.
             <span class="folu-gold-text">DISCIPLINE THAT LEADS.</span>
@@ -82,7 +82,7 @@
           <div class="folu-hero-image-card">
             <img src="{{ asset('images/assembly.jpg') }}" alt="Folu International School Students Assembly">
           </div>
-          
+
           <!-- Floating Admission Notice Badge -->
           <div class="folu-hero-floating-badge">
             <i class="fa fa-id-card-o"></i>
@@ -101,7 +101,7 @@
   <section class="folu-quick-actions-bar">
     <div class="folu-container">
       <div class="folu-quick-actions-grid">
-        
+
         <a href="{{ url('/apply') }}" class="folu-quick-card">
           <div>
             <div class="folu-quick-card-icon"><i class="fa fa-pencil-square-o"></i></div>
@@ -145,7 +145,7 @@
   <!-- 3. "WHY FOLU" SECTION -->
   <section class="folu-section" id="why-folu">
     <div class="folu-container">
-      
+
       <div class="folu-section-header text-center">
         <span class="folu-badge-pill">
           <i class="fa fa-check-circle"></i> Why Choose Folu
@@ -157,7 +157,7 @@
       </div>
 
       <div class="folu-pillars-grid">
-        
+
         <div class="folu-pillar-card">
           <div class="folu-pillar-icon"><i class="fa fa-graduation-cap"></i></div>
           <h3 class="folu-pillar-title">Academic Excellence</h3>
@@ -198,7 +198,7 @@
   <!-- 4. OUR SCHOOL JOURNEY -->
   <section class="folu-section folu-section-subtle" id="journey">
     <div class="folu-container">
-      
+
       <div class="folu-section-header text-center">
         <span class="folu-badge-pill">
           <i class="fa fa-road"></i> Educational Pathways
@@ -210,7 +210,7 @@
       </div>
 
       <div class="folu-journey-grid">
-        
+
         <!-- Creche -->
         <div class="folu-journey-card">
           <div class="folu-journey-image-wrap">
@@ -287,7 +287,7 @@
   <!-- 5. "LEARNING THAT COMES ALIVE" -->
   <section class="folu-section" id="learning-alive">
     <div class="folu-container">
-      
+
       <div class="folu-section-header text-center">
         <span class="folu-badge-pill">
           <i class="fa fa-star"></i> Interactive Learning
@@ -299,7 +299,7 @@
       </div>
 
       <div class="folu-alive-grid">
-        
+
         <div class="folu-alive-card">
           <div class="folu-alive-num">01</div>
           <div>
@@ -356,7 +356,7 @@
   <!-- 6. STUDENT LIFE & ACTIVITIES SHOWCASE -->
   <section class="folu-section folu-section-subtle" id="activities">
     <div class="folu-container">
-      
+
       <div class="folu-section-header text-center">
         <span class="folu-badge-pill">
           <i class="fa fa-users"></i> Experience &amp; Community
@@ -368,7 +368,7 @@
       </div>
 
       <div class="folu-activities-grid">
-        
+
         <div class="folu-activity-card">
           <img src="{{ asset('images/studentsport.jpg') }}" alt="Student Sports and Athletics">
           <div class="folu-activity-overlay">
@@ -410,7 +410,7 @@
 
   <!-- 6.5 DYNAMIC FOLU STORIES & CAMPUS HIGHLIGHTS -->
   @php
-    $homePosts = \App\Models\Post::where('is_published', true)->latest('published_at')->take(3)->get();
+  $homePosts = \App\Models\Post::where('is_published', true)->latest('published_at')->take(3)->get();
   @endphp
   @if($homePosts->count() > 0)
   <section class="folu-section" id="stories">
@@ -467,7 +467,7 @@
   <!-- 7. ADMISSION ROADMAP SECTION -->
   <section class="folu-section" id="admission-steps">
     <div class="folu-container">
-      
+
       <div class="folu-section-header text-center">
         <span class="folu-badge-pill">
           <i class="fa fa-id-card"></i> Admission Process
@@ -479,7 +479,7 @@
       </div>
 
       <div class="folu-roadmap-grid">
-        
+
         <div class="folu-roadmap-card">
           <span class="folu-roadmap-step">Step 01</span>
           <h3 class="folu-roadmap-title">Enquire &amp; Connect</h3>
@@ -532,7 +532,7 @@
           <span class="folu-badge-pill folu-badge-pill-dark" style="margin-bottom: 12px;">
             <i class="fa fa-graduation-cap"></i> Join Our School Community
           </span>
-          <h2 class="folu-cta-title">Give Your Child an Education Grounded in Knowledge &amp; Discipline</h2>
+          <h2 class="folu-cta-title" style="color: #FDFFF5">Give Your Child an Education Grounded in Knowledge &amp; Discipline</h2>
           <p class="folu-cta-text">
             Admissions are currently welcoming new pupils and students across Creche, Nursery, Primary, and Secondary College. Visit our campus in Itedo-Ijowa, Isanlu, or apply online today.
           </p>
@@ -555,4 +555,5 @@
   @include('frontend.partials.footer')
 
 </body>
+
 </html>

@@ -6,39 +6,57 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 
 :root {
-  /* Brand Core Colors */
-  --folu-navy: #0e1d3e;
-  --folu-navy-dark: #081226;
-  --folu-navy-light: #182e5c;
-  --folu-blue: #1d4ed8;
-  --folu-blue-soft: #eff6ff;
-  --folu-gold: #d97706;
-  --folu-gold-accent: #f59e0b;
-  --folu-gold-light: #fef3c7;
+  /* Brand Core Colors: Wine, Peach, Milk */
+  --folu-wine: #720922;          /* Rich Regal Wine */
+  --folu-wine-dark: #38040f;     /* Deep Velveteen Wine for footers, topbar & dark headers */
+  --folu-wine-light: #8e1532;    /* Luminous Wine for hover & accents */
+  --folu-wine-soft: #fcf1f3;     /* Whisper of wine for tags & soft highlights */
+  
+  --folu-peach: #e76f51;         /* Warm Signature Peach / Terracotta */
+  --folu-peach-accent: #f4845f;  /* Radiant Peach Highlight */
+  --folu-peach-light: #ffece5;   /* Delicate Creamy Peach tint for pills & cards */
+  --folu-peach-hover: #d95d3f;   /* Deep Peach hover */
+
+  --folu-milk: #ffffff;          /* Pure Milk Surface */
+  --folu-milk-page: #faf6ee;     /* Creamy Milk Page Background */
+  --folu-milk-subtle: #f4ece1;   /* Warm Milk Accent Surface */
+  --folu-milk-border: #e6d7c3;   /* Soft Cream Border */
+  --folu-milk-card: #fffdfa;     /* Luminous Milk Card Surface */
+
+  /* Aliases & Semantic Compatibility */
+  --folu-navy: var(--folu-wine);
+  --folu-navy-dark: var(--folu-wine-dark);
+  --folu-navy-light: var(--folu-wine-light);
+  --folu-blue: var(--folu-wine);
+  --folu-blue-soft: var(--folu-wine-soft);
+  --folu-gold: var(--folu-peach);
+  --folu-gold-accent: var(--folu-peach-accent);
+  --folu-gold-light: var(--folu-peach-light);
   --folu-green: #15803d;
   --folu-green-light: #dcfce7;
 
   /* Neutrals & Surfaces */
-  --folu-bg-page: #f8fafc;
-  --folu-surface: #ffffff;
-  --folu-surface-subtle: #f1f5f9;
-  --folu-border: #e2e8f0;
-  --folu-border-subtle: #f1f5f9;
-  --folu-text-heading: #0f172a;
-  --folu-text-body: #334155;
-  --folu-text-muted: #64748b;
+  --folu-bg-page: var(--folu-milk-page);
+  --folu-surface: var(--folu-milk-card);
+  --folu-surface-subtle: var(--folu-milk-subtle);
+  --folu-border: var(--folu-milk-border);
+  --folu-border-subtle: #ede3d4;
+  --folu-text-heading: #38040f;
+  --folu-text-body: #443733;
+  --folu-text-muted: #78665f;
   --folu-text-inverse: #ffffff;
 
   /* Typography */
   --folu-font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --folu-font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-  /* Shadows & Elevation */
-  --folu-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --folu-shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
-  --folu-shadow-lg: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
-  --folu-shadow-xl: 0 20px 30px -10px rgba(15, 23, 42, 0.12);
-  --folu-shadow-colored: 0 10px 25px -5px rgba(14, 29, 62, 0.25);
+  /* Shadows & Elevation (Warm Wine tinted elevation) */
+  --folu-shadow-sm: 0 1px 3px rgba(56, 4, 15, 0.05), 0 1px 2px rgba(56, 4, 15, 0.03);
+  --folu-shadow-md: 0 4px 6px -1px rgba(56, 4, 15, 0.07), 0 2px 4px -2px rgba(56, 4, 15, 0.04);
+  --folu-shadow-lg: 0 10px 25px -5px rgba(56, 4, 15, 0.09), 0 8px 10px -6px rgba(56, 4, 15, 0.04);
+  --folu-shadow-xl: 0 20px 30px -10px rgba(56, 4, 15, 0.15);
+  --folu-shadow-colored: 0 10px 25px -5px rgba(114, 9, 34, 0.28);
+  --folu-shadow-peach: 0 10px 25px -5px rgba(231, 111, 81, 0.35);
 
   /* Border Radii */
   --folu-radius-sm: 8px;
@@ -349,27 +367,29 @@ img, video, iframe {
 }
 
 .folu-btn-primary {
-  background: var(--folu-navy);
+  background: var(--folu-wine);
   color: #ffffff !important;
-  box-shadow: 0 4px 14px rgba(14, 29, 62, 0.25);
+  box-shadow: 0 4px 14px rgba(114, 9, 34, 0.28);
 }
 
 .folu-btn-primary:hover {
-  background: var(--folu-navy-light);
+  background: var(--folu-wine-light);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(14, 29, 62, 0.35);
+  box-shadow: 0 6px 20px rgba(114, 9, 34, 0.38);
 }
 
-.folu-btn-gold {
-  background: var(--folu-gold);
+.folu-btn-gold,
+.folu-btn-peach {
+  background: var(--folu-peach);
   color: #ffffff !important;
-  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.28);
+  box-shadow: 0 4px 14px rgba(231, 111, 81, 0.32);
 }
 
-.folu-btn-gold:hover {
-  background: #b45309;
+.folu-btn-gold:hover,
+.folu-btn-peach:hover {
+  background: var(--folu-peach-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(217, 119, 6, 0.38);
+  box-shadow: 0 6px 20px rgba(231, 111, 81, 0.42);
 }
 
 .folu-btn-outline {
@@ -379,19 +399,19 @@ img, video, iframe {
 }
 
 .folu-btn-outline:hover {
-  border-color: var(--folu-navy);
-  color: var(--folu-navy) !important;
+  border-color: var(--folu-wine);
+  color: var(--folu-wine) !important;
   background: var(--folu-surface-subtle);
 }
 
 .folu-btn-white {
   background: #ffffff;
-  color: var(--folu-navy) !important;
+  color: var(--folu-wine) !important;
   box-shadow: var(--folu-shadow-md);
 }
 
 .folu-btn-white:hover {
-  background: #f8fafc;
+  background: var(--folu-milk-subtle);
   transform: translateY(-2px);
   box-shadow: var(--folu-shadow-lg);
 }
@@ -596,9 +616,9 @@ img, video, iframe {
    ========================================================================== */
 .folu-footer {
   background: var(--folu-navy-dark);
-  color: #94a3b8;
+  color: #d1c0bb;
   padding: 72px 0 0 0;
-  border-top: 4px solid var(--folu-gold);
+  border-top: 4px solid var(--folu-peach);
   font-size: 14.5px;
 }
 
@@ -623,8 +643,8 @@ img, video, iframe {
 
 .folu-footer-motto-tag {
   display: inline-block;
-  background: rgba(217, 119, 6, 0.2);
-  color: var(--folu-gold-accent);
+  background: rgba(231, 111, 81, 0.2);
+  color: var(--folu-peach-accent);
   padding: 4px 12px;
   border-radius: var(--folu-radius-full);
   font-size: 12px;
@@ -645,7 +665,7 @@ img, video, iframe {
 }
 
 .folu-footer-links a {
-  color: #cbd5e1;
+  color: #e2d5cf;
   text-decoration: none;
   transition: var(--folu-transition);
   display: inline-flex;
@@ -654,7 +674,7 @@ img, video, iframe {
 }
 
 .folu-footer-links a:hover {
-  color: var(--folu-gold-accent);
+  color: var(--folu-peach-accent);
   padding-left: 4px;
 }
 
@@ -669,7 +689,7 @@ img, video, iframe {
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 14px;
-  color: #cbd5e1;
+  color: #e2d5cf;
 }
 
 .folu-footer-contact-item i {
@@ -845,7 +865,7 @@ img, video, iframe {
 /* 1. HERO SECTION */
 .folu-hero {
   position: relative;
-  background: linear-gradient(135deg, #091329 0%, #0e1d3e 60%, #16284f 100%);
+  background: linear-gradient(135deg, #30030d 0%, #560719 50%, #750a24 100%);
   color: #ffffff;
   padding: 80px 0 100px 0;
   overflow: hidden;
@@ -859,7 +879,7 @@ img, video, iframe {
   width: 500px;
   height: 500px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(217, 119, 6, 0.15) 0%, rgba(217, 119, 6, 0) 70%);
+  background: radial-gradient(circle, rgba(231, 111, 81, 0.22) 0%, rgba(231, 111, 81, 0) 70%);
   pointer-events: none;
 }
 
@@ -997,10 +1017,10 @@ img, video, iframe {
   position: absolute;
   bottom: 24px;
   left: -20px;
-  background: rgba(14, 29, 62, 0.95);
+  background: rgba(48, 3, 13, 0.94);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(231, 111, 81, 0.35);
   border-radius: var(--folu-radius-md);
   padding: 16px 20px;
   box-shadow: var(--folu-shadow-xl);
@@ -1330,7 +1350,7 @@ img, video, iframe {
 .folu-activity-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(9, 19, 41, 0.95) 0%, rgba(9, 19, 41, 0.4) 60%, transparent 100%);
+  background: linear-gradient(to top, rgba(48, 3, 13, 0.96) 0%, rgba(48, 3, 13, 0.45) 60%, transparent 100%);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -1411,7 +1431,7 @@ img, video, iframe {
 
 /* 8. CTA BANNER CARD */
 .folu-cta-card {
-  background: linear-gradient(135deg, #091329 0%, #0e1d3e 70%, #172b53 100%);
+  background: linear-gradient(135deg, #30030d 0%, #560719 65%, #720922 100%);
   border-radius: var(--folu-radius-xl);
   padding: 60px 48px;
   color: #ffffff;
@@ -1419,7 +1439,7 @@ img, video, iframe {
   align-items: center;
   justify-content: space-between;
   gap: 40px;
-  border: 2px solid rgba(217, 119, 6, 0.3);
+  border: 2px solid rgba(231, 111, 81, 0.4);
   box-shadow: var(--folu-shadow-xl);
 }
 
@@ -1430,7 +1450,7 @@ img, video, iframe {
 .folu-cta-title {
   font-size: 34px;
   font-weight: 800;
-  color: #ffffff;
+  color: #FDFFF5 !important;
   margin-bottom: 14px;
   line-height: 1.2;
 }
@@ -1458,7 +1478,7 @@ img, video, iframe {
 
 /* 1. Page Header Banner */
 .folu-page-header {
-  background: linear-gradient(135deg, #070e1e 0%, #0e1d3e 60%, #152b57 100%);
+  background: linear-gradient(135deg, #2b020b 0%, #4e0616 55%, #6e0921 100%);
   padding: 64px 0 54px 0;
   color: #ffffff;
   position: relative;
@@ -1474,7 +1494,7 @@ img, video, iframe {
   width: 500px;
   height: 500px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(217, 119, 6, 0.15) 0%, rgba(217, 119, 6, 0) 70%);
+  background: radial-gradient(circle, rgba(231, 111, 81, 0.2) 0%, rgba(231, 111, 81, 0) 70%);
   pointer-events: none;
 }
 
@@ -1625,7 +1645,7 @@ img, video, iframe {
 .folu-leadership-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--folu-shadow-lg);
-  border-color: rgba(14, 29, 62, 0.2);
+  border-color: rgba(114, 9, 34, 0.25);
 }
 
 .folu-leadership-avatar {
@@ -1779,8 +1799,8 @@ img, video, iframe {
 .folu-form-control:focus,
 .folu-form-select:focus,
 .folu-form-textarea:focus {
-  border-color: var(--folu-blue);
-  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15);
+  border-color: var(--folu-wine);
+  box-shadow: 0 0 0 3px rgba(114, 9, 34, 0.15);
   background: #ffffff;
 }
 
@@ -1970,14 +1990,14 @@ img, video, iframe {
   left: 0;
   right: 0;
   padding: 24px 18px 14px 18px;
-  background: linear-gradient(to top, rgba(14, 29, 62, 0.95) 0%, rgba(14, 29, 62, 0.4) 70%, transparent 100%);
+  background: linear-gradient(to top, rgba(48, 3, 13, 0.96) 0%, rgba(48, 3, 13, 0.45) 70%, transparent 100%);
   color: #ffffff;
 }
 
 .folu-gallery-caption {
   font-size: 15px;
   font-weight: 700;
-  color: #ffffff;
+  color: #ffffff !important;
   margin-bottom: 2px;
 }
 
