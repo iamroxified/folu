@@ -373,10 +373,10 @@ $gradeAverage = student_grade_average($studentId);
               </div>
               <div class="col-md-4 text-end">
                 <div class="btn-group-vertical" role="group">
-                  <a href="edit_students.php?id=<?php echo (int) $student['id']; ?>" class="btn btn-light action-btn">
+                  <a href="/admin/edit_students.php?id=<?php echo (int) $student['id']; ?>" class="btn btn-light action-btn">
                     <i class="fas fa-edit me-2"></i>Edit Student
                   </a>
-                  <a href="list_students.php" class="btn btn-light action-btn">
+                  <a href="/admin/list_students.php" class="btn btn-light action-btn">
                     <i class="fas fa-arrow-left me-2"></i>Back to List
                   </a>
                 </div>
@@ -556,7 +556,7 @@ $gradeAverage = student_grade_average($studentId);
                                 <code><?php echo htmlspecialchars((string) $payment['receipt_number']); ?></code>
                                 <br>
                                 <div class="d-flex gap-1 mt-1">
-                                   <a href="print_receipt.php?receipt=<?php echo urlencode((string) $payment['receipt_number']); ?>" 
+                                   <a href="/admin/print_receipt.php?receipt=<?php echo urlencode((string) $payment['receipt_number']); ?>" 
                                       target="_blank" 
                                       class="btn btn-sm btn-outline-primary">
                                        <i class="fas fa-print me-1"></i> Print
@@ -612,7 +612,7 @@ $gradeAverage = student_grade_average($studentId);
                     <button type="button" class="btn btn-light text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#paymentModal">
                       <i class="fas fa-credit-card me-2"></i>Make Payment
                     </button>
-                    <a href="fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-outline-light text-white">
+                    <a href="/admin/fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-outline-light text-white">
                       <i class="fas fa-plus-circle me-1"></i> Allocate Fee Structure
                     </a>
                   </div>
@@ -670,13 +670,13 @@ $gradeAverage = student_grade_average($studentId);
                     <button type="button" class="btn btn-make-payment action-btn" data-bs-toggle="modal" data-bs-target="#paymentModal">
                       <i class="fas fa-credit-card me-2"></i>Make Payment
                     </button>
-                    <a href="fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-info action-btn text-white">
+                    <a href="/admin/fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-info action-btn text-white">
                       <i class="fas fa-file-invoice me-2"></i>Allocate Fee Structure
                     </a>
-                    <a href="edit_students.php?id=<?php echo (int) $student['id']; ?>" class="btn btn-warning action-btn text-dark">
+                    <a href="/admin/edit_students.php?id=<?php echo (int) $student['id']; ?>" class="btn btn-warning action-btn text-dark">
                       <i class="fas fa-edit me-2"></i>Edit Student Profile
                     </a>
-                    <a href="print_profile.php?id=<?php echo (int) $student['id']; ?>" target="_blank" class="btn btn-secondary action-btn">
+                    <a href="/admin/print_profile.php?id=<?php echo (int) $student['id']; ?>" target="_blank" class="btn btn-secondary action-btn">
                       <i class="fas fa-print me-2"></i>Print Full Profile
                     </a>
                   </div>
@@ -808,7 +808,7 @@ $gradeAverage = student_grade_average($studentId);
                     <h4 class="text-success mt-3">No Outstanding Allocated Fees</h4>
                     <p class="text-muted">This student has no outstanding fee balances at the moment.</p>
                     <div class="d-flex justify-content-center gap-2 mt-3">
-                      <a href="fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-primary">
+                      <a href="/admin/fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-primary">
                         <i class="fas fa-plus-circle me-1"></i> Allocate Fee Structure
                       </a>
                       <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
