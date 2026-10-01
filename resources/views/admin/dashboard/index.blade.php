@@ -604,7 +604,5 @@ $overview = get_admin_dashboard_overview($selectedSessionId, $selectedTermId);
     </div>
   </div>
 
-  <script src="/admin/assets/js/core/jquery-3.7.1.min.js"></script>
-  <script src="/admin/assets/js/core/bootstrap.min.js"></script>
-</body>
+    </body>
 </html>

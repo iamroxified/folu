@@ -637,9 +637,7 @@ $sessionsList = schema_has_table('academic_sessions')
         </div>
     </div>
 
-    <script src="/admin/assets/js/core/jquery-3.7.1.min.js"></script>
-    <script src="/admin/assets/js/core/bootstrap.min.js"></script>
-    <script>
+            <script>
         function openEditPaymentModal(fee) {
             document.getElementById('edit_fee_id').value = fee.id;
             document.getElementById('edit_student_name').value = (fee.last_name || '') + ' ' + (fee.first_name || '') + ' ' + (fee.other_names || '');

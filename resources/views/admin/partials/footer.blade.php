@@ -64,6 +64,13 @@
   <!-- Sweet Alert -->
   <script src="/admin/assets/js/plugin/sweetalert/sweetalert.min.js"></script>
 
+  <!-- Defensive jQuery scrollbar plugin fallback -->
+  <script>
+    if (typeof jQuery !== 'undefined' && typeof jQuery.fn.scrollbar !== 'function') {
+      jQuery.fn.scrollbar = function() { return this; };
+    }
+  </script>
+
   <!-- Kaiadmin JS -->
   <script src="/admin/assets/js/kaiadmin.min.js"></script>
 
