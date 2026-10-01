@@ -209,27 +209,86 @@ function ausername($user_id) {
 function generate_student_admission_no() {
     global $pdo;
 
-    $year = date('Y');
-    $prefix = "FIMOCOL/{$year}/";
-
-    // Find the last admission number for the current year
-    $stmt = $pdo->prepare("SELECT admission_no FROM students WHERE admission_no LIKE ? ORDER BY admission_no DESC LIMIT 1");
-    $stmt->execute([$prefix . '%']);
-    $last_admission_no = $stmt->fetchColumn();
-
-    if ($last_admission_no) {
-        // Extract the numeric part and increment it
-        $last_number_str = substr($last_admission_no, strlen($prefix));
-        $new_number = intval($last_number_str) + 1;
-    } else {
-        // If no admission number for this year, start from 1
-        $new_number = 1;
+    if (!isset($pdo) || !($pdo instanceof PDO)) {
+        if (class_exists('\Illuminate\Support\Facades\DB')) {
+            try {
+                $pdo = \Illuminate\Support\Facades\DB::connection()->getPdo();
+            } catch (\Throwable $t) {
+                // ignore
+            }
+        }
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            if (file_exists(__DIR__ . '/config.php')) {
+                require_once __DIR__ . '/config.php';
+                $pdo = $GLOBALS['pdo'] ?? null;
+            }
+        }
     }
 
-    // Format the new number with leading zeros. The user example FIMOCOL/2025/001 has 3 digits.
-    $new_admission_no = $prefix . str_pad($new_number, 3, '0', STR_PAD_LEFT);
+    $year = date('Y');
+    $prefix = "FIMOCOL/{$year}/";
+    $maxNum = 0;
 
-    return $new_admission_no;
+    // Check students table for highest numerical suffix
+    if (schema_has_table('students')) {
+        $stmt = $pdo->prepare("SELECT admission_no FROM students WHERE admission_no LIKE ?");
+        $stmt->execute([$prefix . '%']);
+        $studentAdmissions = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($studentAdmissions as $adm) {
+            $numStr = substr($adm, strlen($prefix));
+            if (is_numeric($numStr)) {
+                $num = intval($numStr);
+                if ($num > $maxNum) {
+                    $maxNum = $num;
+                }
+            }
+        }
+    }
+
+    // Check users table for highest numerical suffix in username
+    if (schema_has_table('users')) {
+        $stmtUser = $pdo->prepare("SELECT username FROM users WHERE username LIKE ?");
+        $stmtUser->execute([$prefix . '%']);
+        $userNames = $stmtUser->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($userNames as $uName) {
+            $numStr = substr($uName, strlen($prefix));
+            if (is_numeric($numStr)) {
+                $num = intval($numStr);
+                if ($num > $maxNum) {
+                    $maxNum = $num;
+                }
+            }
+        }
+    }
+
+    $candidateNum = $maxNum + 1;
+
+    // Double check candidate number is unique across both tables
+    do {
+        $candidate = $prefix . str_pad($candidateNum, 3, '0', STR_PAD_LEFT);
+
+        $studentCount = 0;
+        if (schema_has_table('students')) {
+            $checkStudent = $pdo->prepare("SELECT COUNT(*) FROM students WHERE admission_no = ?");
+            $checkStudent->execute([$candidate]);
+            $studentCount = (int) $checkStudent->fetchColumn();
+        }
+
+        $userCount = 0;
+        if (schema_has_table('users')) {
+            $checkUser = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = ?");
+            $checkUser->execute([$candidate]);
+            $userCount = (int) $checkUser->fetchColumn();
+        }
+
+        if ($studentCount === 0 && $userCount === 0) {
+            return $candidate;
+        }
+
+        $candidateNum++;
+    } while (true);
 }
 
 /**

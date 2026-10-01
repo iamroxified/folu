@@ -111,7 +111,9 @@
                   <li>
                     <a href="{{ url('/admin/fees.php') }}">All Fees</a>
                   </li>
-        
+                  <li>
+                    <a href="{{ url('/admin/fees/payments.php') }}">Student Payments</a>
+                  </li>
                   <li>
                     <a href="{{ url('/admin/add_fees.php') }}">Add Fees</a>
                   </li>

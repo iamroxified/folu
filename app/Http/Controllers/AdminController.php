@@ -370,9 +370,68 @@ class AdminController extends Controller
     // Students Import/Export
     public function importStudents(Request $request)
     {
-        $request->validate(['csv_file' => 'required|file|mimes:csv,txt']);
-        // Parse CSV logic here...
-        return redirect()->route('admin.students')->with('success', 'Students imported (simulation).');
+        $request->validate(['csv_file' => 'required|file']);
+
+        $file = $request->file('csv_file');
+        $handle = fopen($file->getRealPath(), 'r');
+        fgetcsv($handle); // Skip header row
+        $importedCount = 0;
+
+        while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
+            try {
+                $col0 = trim((string) ($data[0] ?? ''));
+                $col1 = trim((string) ($data[1] ?? ''));
+
+                if (is_numeric($col0) || empty($col1)) {
+                    $fullName = !empty($col1) ? $col1 : $col0;
+                    $status = trim((string) ($data[2] ?? 'active'));
+                } else {
+                    $fullName = $col0;
+                    $status = !empty($col1) ? $col1 : 'active';
+                }
+
+                if (empty($status)) {
+                    $status = 'active';
+                }
+
+                if (!empty($fullName)) {
+                    $splitNames = split_student_full_name($fullName);
+                    $firstName = $splitNames['first_name'];
+                    $lastName = $splitNames['last_name'];
+                    $otherNames = $splitNames['other_names'];
+
+                    $studentEmail = generate_student_school_email($firstName, $lastName);
+                    $admissionNo = generate_student_admission_no();
+
+                    $user = User::create([
+                        'username' => $admissionNo,
+                        'name' => trim("{$lastName} {$firstName} {$otherNames}"),
+                        'email' => $studentEmail,
+                        'password' => Hash::make('password'),
+                        'role_id' => 4,
+                        'status' => $status,
+                    ]);
+
+                    Student::create([
+                        'user_id' => $user->id,
+                        'admission_no' => $admissionNo,
+                        'student_number' => $admissionNo,
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                        'other_names' => $otherNames,
+                        'email' => $studentEmail,
+                        'status' => $status,
+                    ]);
+
+                    $importedCount++;
+                }
+            } catch (\Throwable $e) {
+                // Ignore row error and continue
+            }
+        }
+        fclose($handle);
+
+        return redirect()->route('admin.students')->with('success', "Successfully imported {$importedCount} students with auto-generated @foluinternationalschools.com.ng emails.");
     }
 
     public function exportStudents()

@@ -2183,3 +2183,230 @@ function create_announcement(string $title, string $body, string $audience = 'al
 
     return true;
 }
+
+function split_student_full_name(string $fullName): array
+{
+    $clean = trim(preg_replace('/\s+/', ' ', $fullName));
+    if ($clean === '') {
+        return ['last_name' => '', 'first_name' => '', 'other_names' => ''];
+    }
+
+    $parts = explode(' ', $clean);
+    $count = count($parts);
+
+    if ($count === 1) {
+        return [
+            'last_name' => $parts[0],
+            'first_name' => $parts[0],
+            'other_names' => '',
+        ];
+    }
+
+    if ($count === 2) {
+        return [
+            'last_name' => $parts[0],   // Surname
+            'first_name' => $parts[1],  // Firstname
+            'other_names' => '',
+        ];
+    }
+
+    return [
+        'last_name' => $parts[0],        // Surname
+        'first_name' => $parts[1],       // Firstname
+        'other_names' => implode(' ', array_slice($parts, 2)), // Other names
+    ];
+}
+
+function student_email_exists(string $email): bool
+{
+    $email = strtolower(trim($email));
+
+    $studentCount = (int) QueryDB(
+        'SELECT COUNT(*) FROM students WHERE LOWER(email) = ?',
+        [$email]
+    )->fetchColumn();
+
+    if ($studentCount > 0) {
+        return true;
+    }
+
+    if (schema_has_table('users')) {
+        $userCount = (int) QueryDB(
+            'SELECT COUNT(*) FROM users WHERE LOWER(email) = ?',
+            [$email]
+        )->fetchColumn();
+
+        if ($userCount > 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function generate_student_school_email(string $firstName, string $lastName): string
+{
+    $domain = 'foluinternationalschools.com.ng';
+
+    $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName));
+    $cleanLast = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $lastName));
+
+    if ($cleanFirst !== '' && $cleanLast !== '') {
+        $basePrefix = "{$cleanFirst}.{$cleanLast}";
+    } elseif ($cleanLast !== '') {
+        $basePrefix = $cleanLast;
+    } elseif ($cleanFirst !== '') {
+        $basePrefix = $cleanFirst;
+    } else {
+        $basePrefix = 'student';
+    }
+
+    $email = "{$basePrefix}@{$domain}";
+
+    $counter = 1;
+    while (student_email_exists($email)) {
+        $email = "{$basePrefix}{$counter}@{$domain}";
+        $counter++;
+    }
+
+    return $email;
+}
+
+function find_student_by_full_name(string $fullName): ?array
+{
+    $fullName = trim(preg_replace('/\s+/', ' ', $fullName));
+    if ($fullName === '') {
+        return null;
+    }
+
+    $nameParts = explode(' ', $fullName);
+    $lastName = $nameParts[0] ?? '';
+    $firstName = $nameParts[1] ?? '';
+
+    // 1. Exact match on CONCAT(last_name, ' ', first_name, ' ', other_names)
+    $student = QueryDB(
+        "SELECT * FROM students
+         WHERE LOWER(TRIM(CONCAT(last_name, ' ', first_name, ' ', COALESCE(other_names, '')))) = LOWER(?)
+            OR LOWER(TRIM(CONCAT(last_name, ' ', first_name))) = LOWER(?)
+            OR LOWER(TRIM(CONCAT(first_name, ' ', last_name, ' ', COALESCE(other_names, '')))) = LOWER(?)
+            OR LOWER(TRIM(CONCAT(first_name, ' ', last_name))) = LOWER(?)
+         LIMIT 1",
+        [$fullName, $fullName, $fullName, $fullName]
+    )->fetch(PDO::FETCH_ASSOC);
+
+    if ($student) {
+        return $student;
+    }
+
+    // 2. Match by surname and firstname explicitly
+    if ($lastName !== '' && $firstName !== '') {
+        $student = QueryDB(
+            "SELECT * FROM students
+             WHERE (LOWER(TRIM(last_name)) = LOWER(?) AND LOWER(TRIM(first_name)) = LOWER(?))
+                OR (LOWER(TRIM(first_name)) = LOWER(?) AND LOWER(TRIM(last_name)) = LOWER(?))
+             LIMIT 1",
+            [$lastName, $firstName, $lastName, $firstName]
+        )->fetch(PDO::FETCH_ASSOC);
+
+        if ($student) {
+            return $student;
+        }
+    }
+
+    // 3. LIKE match
+    $student = QueryDB(
+        "SELECT * FROM students
+         WHERE LOWER(CONCAT(last_name, ' ', first_name, ' ', COALESCE(other_names, ''))) LIKE LOWER(?)
+            OR LOWER(CONCAT(first_name, ' ', last_name, ' ', COALESCE(other_names, ''))) LIKE LOWER(?)
+         LIMIT 1",
+        ['%' . $fullName . '%', '%' . $fullName . '%']
+    )->fetch(PDO::FETCH_ASSOC);
+
+    return $student ?: null;
+}
+
+if (!function_exists('admin_student_term_context')) {
+    function admin_student_term_context(?int $sessionId = null): array
+    {
+        $academicTerm = function_exists('get_current_academic_term') ? get_current_academic_term($sessionId) : null;
+        $academicTermId = $academicTerm ? (int) $academicTerm['id'] : null;
+        $currentTermId = null;
+
+        if (schema_has_table('terms')) {
+            $currentTermId = QueryDB(
+                'SELECT id FROM terms WHERE is_active = 1 ORDER BY term_number ASC, id DESC LIMIT 1'
+            )->fetchColumn();
+
+            if (!$currentTermId && $academicTerm) {
+                $termCode = function_exists('normalize_term_code') ? normalize_term_code($academicTerm['term_code'] ?? ($academicTerm['term_name'] ?? '')) : null;
+
+                if ($termCode !== null) {
+                    $currentTermId = QueryDB(
+                        'SELECT id FROM terms WHERE term_number = ? ORDER BY id DESC LIMIT 1',
+                        [(int) $termCode]
+                    )->fetchColumn();
+                }
+            }
+        }
+
+        return [
+            'current_term_id' => $currentTermId ? (int) $currentTermId : null,
+            'academic_term_id' => $academicTermId,
+        ];
+    }
+}
+
+if (!function_exists('admin_build_student_insert_data')) {
+    function admin_build_student_insert_data(array $studentData): array
+    {
+        $studentColumns = schema_table_column_details('students');
+        $insertData = [];
+
+        $setValue = static function (string $column, $value) use (&$insertData, $studentColumns): void {
+            if (!isset($studentColumns[$column]) || schema_column_is_generated('students', $column)) {
+                return;
+            }
+
+            $insertData[$column] = $value;
+        };
+
+        $setValue('user_link', $studentData['user_link'] ?? null);
+        $setValue('user_id', $studentData['user_link'] ?? null);
+        $setValue('admission_no', $studentData['admission_no'] ?? null);
+        $setValue('student_number', $studentData['student_number'] ?? null);
+        $setValue('first_name', $studentData['first_name'] ?? '');
+        $setValue('last_name', $studentData['last_name'] ?? '');
+        $setValue('other_names', $studentData['other_names'] ?? '');
+        $setValue('email', $studentData['email'] ?? '');
+        $setValue('phone', $studentData['phone'] ?? null);
+        $setValue('address', $studentData['address'] ?? null);
+        $setValue('home_address', $studentData['address'] ?? null);
+        $setValue('date_of_birth', !empty($studentData['date_of_birth']) ? $studentData['date_of_birth'] : date('Y-m-d'));
+        $setValue('gender', !empty($studentData['gender']) ? $studentData['gender'] : 'male');
+        $setValue('enrollment_date', !empty($studentData['enrollment_date']) ? $studentData['enrollment_date'] : date('Y-m-d'));
+        $setValue('admission_date', !empty($studentData['enrollment_date']) ? $studentData['enrollment_date'] : date('Y-m-d'));
+        $setValue('status', $studentData['status'] ?? 'active');
+        $setValue('admission_status', $studentData['admission_status'] ?? 'admitted');
+        $setValue('category', $studentData['category'] ?? 'NI');
+        $setValue('passport', $studentData['passport'] ?? null);
+        $setValue('state_of_origin', $studentData['state_of_origin'] ?? '');
+        $setValue('lga', $studentData['lga'] ?? '');
+        $setValue('student_type', $studentData['student_type'] ?? 'day');
+        $setValue('blood_group', $studentData['blood_group'] ?? null);
+        $setValue('genotype', $studentData['genotype'] ?? null);
+        $setValue('current_class_id', $studentData['current_class_id'] ?? null);
+        $setValue('class_link', $studentData['class_link'] ?? null);
+        $setValue('class_id', $studentData['class_link'] ?? null);
+        $setValue('current_session_id', $studentData['current_session_id'] ?? null);
+        $setValue('academic_session_link', $studentData['academic_session_link'] ?? null);
+        $setValue('academic_session_id', $studentData['academic_session_link'] ?? null);
+        $setValue('current_term_id', $studentData['current_term_id'] ?? null);
+        $setValue('term_link', $studentData['term_link'] ?? null);
+        $setValue('created_at', $studentData['timestamp'] ?? date('Y-m-d H:i:s'));
+        $setValue('updated_at', $studentData['timestamp'] ?? date('Y-m-d H:i:s'));
+
+        return $insertData;
+    }
+}
+
+

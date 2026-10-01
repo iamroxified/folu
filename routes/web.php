@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountantController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Auth\AdminLoginController;
+use App\Http\Controllers\Auth\UnifiedLoginController;
 use App\Http\Controllers\LegacyAdminController;
 use App\Http\Controllers\LegacyFrontendController;
 use App\Http\Controllers\StudentController;
@@ -11,15 +12,18 @@ use App\Http\Controllers\TeacherPortalController;
 use App\Http\Controllers\BlogController;
 use Illuminate\Support\Facades\Route;
 
-// Authentication Routes
-Route::get('/admin/login', [AdminLoginController::class, 'showLoginForm'])->name('admin.login');
-Route::post('/admin/login', [AdminLoginController::class, 'login'])->name('admin.login.submit');
-Route::get('/logout', function (\Illuminate\Http\Request $request) {
-    \Illuminate\Support\Facades\Auth::logout();
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
-    return redirect('/');
-})->name('logout');
+// Unified Authentication Routes
+Route::get('/login', [UnifiedLoginController::class, 'showLoginForm'])->name('login');
+Route::post('/login', [UnifiedLoginController::class, 'login'])->name('login.submit');
+Route::get('/logout', [UnifiedLoginController::class, 'logout'])->name('logout');
+
+// Specialized login redirects
+Route::get('/admin/login', fn() => redirect()->route('login', ['role' => 'admin']))->name('admin.login');
+Route::post('/admin/login', [UnifiedLoginController::class, 'login'])->name('admin.login.submit');
+
+Route::get('/api/lgas', [LegacyFrontendController::class, 'getLgas'])->name('api.lgas');
+Route::get('/fetch_lgas.php', [LegacyFrontendController::class, 'getLgas']);
+Route::post('/apply', [LegacyFrontendController::class, 'submitApplication'])->name('apply.submit');
 
 // Placeholder for the password reset route referenced in the login view
 Route::get('/password/reset', function () { return 'Password reset page coming soon.'; })->name('password.request');

@@ -17,7 +17,7 @@
         </span>
       </div>
       <div class="folu-topbar-actions">
-        <a href="{{ url('/admin/login') }}" class="folu-portal-link">
+        <a href="{{ url('/login') }}" class="folu-portal-link">
           <i class="fa fa-lock"></i>
           <span>Portal Login</span>
         </a>
@@ -164,7 +164,7 @@
     <li><a href="{{ url('/gallery') }}" class="folu-mobile-nav-link {{ request()->is('gallery*') ? 'active' : '' }}">School Gallery</a></li>
     <li><a href="{{ url('/blog') }}" class="folu-mobile-nav-link {{ request()->is('blog*') ? 'active' : '' }}">News &amp; Stories</a></li>
     <li><a href="{{ url('/contact') }}" class="folu-mobile-nav-link {{ request()->is('contact*') ? 'active' : '' }}">Contact Us</a></li>
-    <li><a href="{{ url('/admin/login') }}" class="folu-mobile-nav-link" style="color: var(--folu-gold);"><i class="fa fa-lock" style="margin-right: 6px;"></i> Portal Login</a></li>
+    <li><a href="{{ url('/login') }}" class="folu-mobile-nav-link" style="color: var(--folu-gold);"><i class="fa fa-lock" style="margin-right: 6px;"></i> Portal Login</a></li>
   </ul>
 
   <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--folu-border); font-size: 13px; color: var(--folu-text-muted);">
