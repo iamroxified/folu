@@ -59,9 +59,75 @@ if ($studentId) {
     die('Student ID is required');
 }
 
-// Handle payment form submission
+// Handle payment form submission or deletion
 $isPost = (isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SERVER['REQUEST_METHOD']) === 'POST') || (function_exists('request') && request()->isMethod('post'));
 $hasProcessPayment = isset($_POST['process_payment']) || (function_exists('request') && request()->has('process_payment'));
+$hasDeletePayment = isset($_POST['delete_payment']) || (function_exists('request') && request()->has('delete_payment'));
+
+if ($isPost && $hasDeletePayment) {
+    $delete_payment_id = filter_input(INPUT_POST, 'payment_id', FILTER_VALIDATE_INT) ?: (int) ($_POST['payment_id'] ?? request('payment_id') ?? 0);
+
+    if (!$delete_payment_id) {
+        $error = 'Invalid payment transaction ID for deletion.';
+    } else {
+        try {
+            $pdo->beginTransaction();
+
+            // Fetch payment record
+            $payment_stmt = $pdo->prepare("SELECT * FROM payments WHERE id = ? FOR UPDATE");
+            $payment_stmt->execute([$delete_payment_id]);
+            $payment_to_delete = $payment_stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$payment_to_delete) {
+                throw new Exception('Payment record not found.');
+            }
+
+            $deleted_amount = (float) ($payment_to_delete['amount'] ?? 0);
+            $fee_id = (int) ($payment_to_delete['payable_id'] ?? 0);
+
+            if ($fee_id > 0) {
+                // Fetch existing fee record for lock and rollback
+                $fee_stmt = $pdo->prepare("SELECT * FROM student_fees WHERE id = ? FOR UPDATE");
+                $fee_stmt->execute([$fee_id]);
+                $fee_record = $fee_stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($fee_record) {
+                    $amount_due = (float) ($fee_record['amount_due'] ?? 0);
+                    $existing_paid = (float) ($fee_record['amount_paid'] ?? 0);
+
+                    // Revert paid amount
+                    $new_paid = max(0.00, $existing_paid - $deleted_amount);
+                    $new_balance = max(0.00, $amount_due - $new_paid);
+
+                    $new_status = 'partial';
+                    if ($new_balance >= ($amount_due - 0.001)) {
+                        $new_status = 'pending';
+                        $new_balance = $amount_due;
+                    } elseif ($new_balance <= 0.001) {
+                        $new_status = 'paid';
+                        $new_balance = 0.00;
+                    }
+
+                    $update_fee_stmt = $pdo->prepare("UPDATE student_fees SET amount_paid = ?, balance = ?, status = ?, updated_at = NOW() WHERE id = ?");
+                    $update_fee_stmt->execute([$new_paid, $new_balance, $new_status, $fee_id]);
+                }
+            }
+
+            // Delete transaction from payments table
+            $del_stmt = $pdo->prepare("DELETE FROM payments WHERE id = ?");
+            $del_stmt->execute([$delete_payment_id]);
+
+            $pdo->commit();
+            $message = "Payment transaction of ₦" . number_format($deleted_amount, 2) . " deleted successfully and fee balances updated.";
+
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $error = 'Failed to delete payment transaction: ' . $e->getMessage();
+        }
+    }
+}
 
 if ($isPost && $hasProcessPayment) {
     $fee_id = filter_input(INPUT_POST, 'fee_id', FILTER_VALIDATE_INT) ?: (int) ($_POST['fee_id'] ?? request('fee_id') ?? 0);
@@ -171,6 +237,7 @@ try {
     // Get recent payment history
     $payment_history_stmt = $pdo->prepare("
         SELECT 
+            p.id AS payment_id,
             p.payment_reference AS receipt_number,
             p.payment_date,
             p.amount AS transaction_amount,
@@ -488,11 +555,20 @@ $gradeAverage = student_grade_average($studentId);
                               <?php if (!empty($payment['receipt_number'])): ?>
                                 <code><?php echo htmlspecialchars((string) $payment['receipt_number']); ?></code>
                                 <br>
-                                <a href="print_receipt.php?receipt=<?php echo urlencode((string) $payment['receipt_number']); ?>" 
-                                   target="_blank" 
-                                   class="btn btn-sm btn-outline-primary mt-1">
-                                    <i class="fas fa-print me-1"></i> Print
-                                </a>
+                                <div class="d-flex gap-1 mt-1">
+                                   <a href="print_receipt.php?receipt=<?php echo urlencode((string) $payment['receipt_number']); ?>" 
+                                      target="_blank" 
+                                      class="btn btn-sm btn-outline-primary">
+                                       <i class="fas fa-print me-1"></i> Print
+                                   </a>
+                                   <form method="POST" action="" class="d-inline delete-payment-form" onsubmit="return confirmDeletePayment(event, this, '<?php echo htmlspecialchars((string)$payment['receipt_number']); ?>', '<?php echo number_format((float)($payment['transaction_amount'] ?? 0), 2); ?>');">
+                                     <input type="hidden" name="delete_payment" value="1">
+                                     <input type="hidden" name="payment_id" value="<?php echo (int)($payment['payment_id'] ?? 0); ?>">
+                                     <button type="submit" class="btn btn-sm btn-outline-danger">
+                                       <i class="fas fa-trash me-1"></i> Delete
+                                     </button>
+                                   </form>
+                                 </div>
                               <?php else: ?>
                                 <span class="text-muted">-</span>
                               <?php endif; ?>
@@ -600,9 +676,9 @@ $gradeAverage = student_grade_average($studentId);
                     <a href="edit_students.php?id=<?php echo (int) $student['id']; ?>" class="btn btn-warning action-btn text-dark">
                       <i class="fas fa-edit me-2"></i>Edit Student Profile
                     </a>
-                    <button type="button" class="btn btn-secondary action-btn" onclick="window.print()">
-                      <i class="fas fa-print me-2"></i>Print Profile
-                    </button>
+                    <a href="print_profile.php?id=<?php echo (int) $student['id']; ?>" target="_blank" class="btn btn-secondary action-btn">
+                      <i class="fas fa-print me-2"></i>Print Full Profile
+                    </a>
                   </div>
                 </div>
               </div>
@@ -896,7 +972,26 @@ $gradeAverage = student_grade_average($studentId);
         });
       });
     });
-  </script>
+  
+    function confirmDeletePayment(e, form, receiptNo, amountStr) {
+      e.preventDefault();
+      Swal.fire({
+        title: "Delete Payment Transaction?",
+        text: `Are you sure you want to delete payment receipt #${receiptNo} (₦${amountStr})? This action will reverse the payment on the student's fee balance.`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#d33",
+        cancelButtonColor: "#3085d6",
+        confirmButtonText: "Yes, Delete Payment",
+        cancelButtonText: "Cancel"
+      }).then((result) => {
+        if (result.isConfirmed) {
+          form.submit();
+        }
+      });
+      return false;
+    }
+</script>
 
 </body>
 

@@ -226,7 +226,7 @@ function generate_student_admission_no() {
     }
 
     $year = date('Y');
-    $prefix = "FIMOCOL/{$year}/";
+    $prefix = "FIS/{$year}/";
     $maxNum = 0;
 
     // Check students table for highest numerical suffix

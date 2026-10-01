@@ -521,7 +521,10 @@ $sessionsList = schema_has_table('academic_sessions')
                                                         <span class="badge bg-danger">Pending</span>
                                                     <?php endif; ?>
                                                 </td>
-                                                <td>
+                                                <td class="text-nowrap">
+                                                    <a href="/admin/view_students.php?id=<?php echo (int) $fee['student_id']; ?>" class="btn btn-sm btn-info text-white me-1" title="View student payments and details">
+                                                        <i class="fas fa-eye me-1"></i> View Payments
+                                                    </a>
                                                     <button type="button" class="btn btn-sm btn-outline-primary"
                                                             onclick="openEditPaymentModal(<?php echo htmlspecialchars(json_encode($fee)); ?>)">
                                                         <i class="fas fa-edit me-1"></i> Edit
