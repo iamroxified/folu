@@ -20,7 +20,7 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-sm-6">
-                                <p><strong>Fee Type:</strong><br>{{ $payment->payable->feeStructure->name }}</p>
+                                <p><strong>Fee Type:</strong><br>{{ $payment->payable?->feeStructure?->name ?? $payment->payable?->feeStructure?->description ?? $payment->description ?? 'School Fee' }}</p>
                             </div>
                             <div class="col-sm-6">
                                 <p><strong>Amount:</strong><br>₦{{ number_format($payment->amount, 2) }}</p>
@@ -28,10 +28,10 @@
                         </div>
                         <div class="row">
                             <div class="col-sm-6">
-                                <p><strong>Payment Date:</strong><br>{{ $payment->payment_date->format('d/m/Y') }}</p>
+                                <p><strong>Payment Date:</strong><br>{{ !empty($payment->payment_date) ? \Carbon\Carbon::parse($payment->payment_date)->format('d/m/Y') : $payment->created_at?->format('d/m/Y') }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <p><strong>Method:</strong><br>{{ ucfirst(str_replace('_', ' ', $payment->payment_method)) }}</p>
+                                <p><strong>Method:</strong><br>{{ ucfirst(str_replace('_', ' ', $payment->payment_method ?? 'N/A')) }}</p>
                             </div>
                         </div>
                         @if($payment->description)
@@ -39,7 +39,6 @@
                         @endif
                         <div class="mt-3">
                             <button class="btn btn-primary btn-sm" onclick="printReceipt('{{ $payment->id }}')">Print Receipt</button>
-                            <button class="btn btn-secondary btn-sm" onclick="downloadReceipt('{{ $payment->id }}')">Download PDF</button>
                         </div>
                     </div>
                 </div>
@@ -57,13 +56,7 @@
 
 <script>
 function printReceipt(paymentId) {
-    // In a real application, this would open a printable receipt
-    window.open('/student/receipt/' + paymentId + '/print', '_blank');
-}
-
-function downloadReceipt(paymentId) {
-    // In a real application, this would download a PDF receipt
-    window.open('/student/receipt/' + paymentId + '/download', '_blank');
+    window.open('/student/receipt.php?id=' + paymentId, '_blank');
 }
 </script>
 @endsection

@@ -30,7 +30,7 @@
                         <tbody>
                             @forelse($studentFees as $fee)
                                 <tr>
-                                    <td>{{ $fee->feeStructure->name }}</td>
+                                    <td>{{ $fee->feeStructure?->name ?? $fee->feeStructure?->description ?? 'School Fee' }}</td>
                                     <td>₦{{ number_format($fee->amount_due, 2) }}</td>
                                     <td>₦{{ number_format($fee->amount_paid, 2) }}</td>
                                     <td>₦{{ number_format($fee->balance, 2) }}</td>
@@ -74,10 +74,10 @@
                         <tbody>
                             @forelse($payments as $payment)
                                 <tr>
-                                    <td>{{ $payment->payable->feeStructure->name }}</td>
+                                    <td>{{ $payment->payable?->feeStructure?->name ?? $payment->payable?->feeStructure?->description ?? $payment->description ?? 'School Fee' }}</td>
                                     <td>₦{{ number_format($payment->amount, 2) }}</td>
-                                    <td>{{ $payment->payment_date->format('d/m/Y') }}</td>
-                                    <td>{{ ucfirst(str_replace('_', ' ', $payment->payment_method)) }}</td>
+                                    <td>{{ !empty($payment->payment_date) ? \Carbon\Carbon::parse($payment->payment_date)->format('d/m/Y') : $payment->created_at?->format('d/m/Y') }}</td>
+                                    <td>{{ ucfirst(str_replace('_', ' ', $payment->payment_method ?? 'N/A')) }}</td>
                                     <td>{{ $payment->payment_reference }}</td>
                                 </tr>
                             @empty

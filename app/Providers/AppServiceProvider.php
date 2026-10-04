@@ -19,6 +19,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \Illuminate\Database\Eloquent\Relations\Relation::morphMap([
+            'student_fee' => \App\Models\StudentFee::class,
+            'additional_charge' => \App\Models\AdditionalCharge::class,
+            'App\Models\StudentFee' => \App\Models\StudentFee::class,
+            'App\Models\AdditionalCharge' => \App\Models\AdditionalCharge::class,
+        ]);
+
         // Share school settings globally, but only if table exists
         try {
             view()->share('schoolSettings', \App\Models\SchoolSetting::first());
