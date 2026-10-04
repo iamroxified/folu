@@ -100,9 +100,10 @@ $classes = QueryDB(
      ORDER BY c.class_level, c.class_name, c.class_arm",
     [(int) ($currentSession['id'] ?? 0), (int) ($currentSession['id'] ?? 0)]
 )->fetchAll();
-$classLevels = [
+$defaultLevels = [
+    'CRC' => 'Creche',
+    'PNUR' => 'Pre-Nursery',
     'PNUR1' => 'Pre-Nursery 1',
-    'PNUR2' => 'Pre-Nursery 2',
     'NUR1' => 'Nursery 1',
     'NUR2' => 'Nursery 2',
     'PRI1' => 'Primary 1',
@@ -118,6 +119,35 @@ $classLevels = [
     'SSS2' => 'SSS2',
     'SSS3' => 'SSS3',
 ];
+
+$classLevels = $defaultLevels;
+
+try {
+    if (schema_has_table('school_classes')) {
+        $dbLevels = QueryDB("SELECT DISTINCT grade_level, class_name FROM school_classes WHERE grade_level IS NOT NULL AND grade_level != '' ORDER BY grade_level")->fetchAll();
+        foreach ($dbLevels as $lvl) {
+            $code = trim((string)$lvl['grade_level']);
+            $name = trim((string)$lvl['class_name']);
+            if (!isset($classLevels[$code])) {
+                $classLevels[$code] = !empty($name) ? $name : $code;
+            }
+        }
+    }
+    if (schema_has_table('classes')) {
+        $dbClasses = QueryDB("SELECT DISTINCT class_level, class_name FROM classes WHERE class_level IS NOT NULL AND class_level != '' ORDER BY class_level")->fetchAll();
+        foreach ($dbClasses as $lvl) {
+            $code = trim((string)$lvl['class_level']);
+            $name = trim((string)$lvl['class_name']);
+            if (!isset($classLevels[$code])) {
+                $classLevels[$code] = !empty($name) ? $name : $code;
+            }
+        }
+    }
+} catch (\Throwable $t) {}
+
+if (!empty($editingClass['class_level']) && !isset($classLevels[$editingClass['class_level']])) {
+    $classLevels[$editingClass['class_level']] = $editingClass['class_level'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -187,7 +217,7 @@ $classLevels = [
                                             <label for="class_level">Class Level Code</label>
                                             <select class="form-control" id="class_level" name="class_level" required>
                                                 <option value="">Select Level</option>
-                                                <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($classLevels as $value => $label): ?>
+                                                <?php foreach ($classLevels as $value => $label): ?>
                                                     <option value="<?php echo htmlspecialchars($value); ?>" <?php echo (($editingClass['class_level'] ?? '') === $value) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars($label . ' (' . $value . ')'); ?>
                                                     </option>
