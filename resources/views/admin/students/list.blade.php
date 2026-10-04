@@ -85,28 +85,26 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
                 </div>
                 <div class="card-body">
                   <div class="table-responsive">
-                    <table id="add-row" class="display table  table-hover datatable">
+                    <table id="add-row" class="display table table-striped table-hover datatable">
                       <thead>
                         <tr>
-                                                    <th style="width: 50px;">S/N</th>
-                          <th>SN</th>
+                          <th style="width: 50px;">S/N</th>
                           <th>Admission No</th>
                           <th>Full Name</th>
                           <th>Class</th>
                           <th>Session</th>
-
                           <th>Email</th>
                           <th>Status</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <?php $sn=1; foreach ($students as $student): ?>
+                        <?php $sn = 1; foreach ($students as $student): ?>
                         <tr>
-                          <td><?php echo $sn; ?></td>
-                          <td><?php echo htmlspecialchars($student['admission_no']); ?></td>
-                          <td><?php echo htmlspecialchars($student['first_name']).' '.htmlspecialchars($student['last_name']); ?></td>
-                          <td><?php echo htmlspecialchars($student['class_name'] . ' ' . $student['class_arm']); ?></td>
+                          <td><?php echo $sn++; ?></td>
+                          <td><?php echo htmlspecialchars((string) ($student['admission_no'] ?? '')); ?></td>
+                          <td><?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['other_names'] ?? '') . ' ' . ($student['last_name'] ?? ''))); ?></td>
+                          <td><?php echo htmlspecialchars(trim(($student['class_name'] ?? '') . ' ' . ($student['class_arm'] ?? ''))); ?></td>
                           <td>
                             <?php
                               $sessionTerm = trim((string) ($student['session_term'] ?? ''));
@@ -116,19 +114,19 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
                               }
                             ?>
                           </td>
-
-                          <td><?php echo htmlspecialchars($student['email']); ?></td>
-                          <td><?php echo $student['status']; ?></td>
+                          <td><?php echo htmlspecialchars((string) ($student['email'] ?? 'N/A')); ?></td>
                           <td>
-                            <a href="edit_students.php?id=<?php echo $student['id']; ?>"
-                              class="btn btn-warning btn-sm">Edit</a>
-                            <a href="view_students.php?id=<?php echo $student['id']; ?>"
-                              class="btn btn-info btn-sm">View</a>
-                            <a href="delete_students.php?id=<?php echo $student['id']; ?>"
-                              class="btn btn-danger btn-sm">Delete</a>
+                            <span class="badge bg-<?php echo ($student['status'] ?? '') === 'active' ? 'success' : 'warning'; ?>">
+                              <?php echo ucfirst((string) ($student['status'] ?? 'Active')); ?>
+                            </span>
+                          </td>
+                          <td>
+                            <a href="view_students.php?id=<?php echo $student['id']; ?>" class="btn btn-info btn-sm">View</a>
+                            <a href="edit_students.php?id=<?php echo $student['id']; ?>" class="btn btn-warning btn-sm">Edit</a>
+                            <a href="delete_students.php?id=<?php echo $student['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this student record?')">Delete</a>
                           </td>
                         </tr>
-                        <?php $sn++; endforeach; ?>
+                        <?php endforeach; ?>
                       </tbody>
                     </table>
                   </div>
@@ -141,67 +139,17 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
 
       @include('admin.partials.footer')
       <script>
-        function copyToClipboard2() {
-          const copyInput = document.getElementById("copyText2");
-          copyInput.select();
-          copyInput.setSelectionRange(0, 99999); // for mobile
-          document.execCommand("copy");
-          alert("Copied: " + copyInput.value);
-        }
-
-        function copyToClipboard() {
-          const copyInput = document.getElementById("copyText");
-          copyInput.select();
-          copyInput.setSelectionRange(0, 99999); // for mobile
-          document.execCommand("copy");
-          alert("Copied: " + copyInput.value);
-        }
-      </script>
-
-      <script>
         $(document).ready(function () {
-          $("#basic-datatables").DataTable({ retrieve: true });
-
-          $("#multi-filter-select").DataTable({
-            retrieve: true,
-            pageLength: 5,
-            initComplete: function () {
-              this.api()
-                .columns()
-                .every(function () {
-                  var column = this;
-                  var select = $(
-                      '<select class="form-select"><option value=""></option></select>'
-                    )
-                    .appendTo($(column.footer()).empty())
-                    .on("change", function () {
-                      var val = $.fn.dataTable.util.escapeRegex($(this).val());
-
-                      column
-                        .search(val ? "^" + val + "$" : "", true, false)
-                        .draw();
-                    ;
-
-                  column
-                    .data()
-                    .unique()
-                    .sort()
-                    .each(function (d, j) {
-                      select.append(
-                        '<option value="' + d + '">' + d + "</option>"
-                      );
-                    });
-                });
-            },
-          });
-
-          // Add Row
-          $("#add-row").DataTable({
-            retrieve: true,
-            pageLength: 10,
-          ;
-
-
+          if ($.fn.DataTable) {
+            $.fn.dataTable.ext.errMode = 'none';
+            if (!$.fn.DataTable.isDataTable('#add-row')) {
+              $('#add-row').DataTable({
+                retrieve: true,
+                pageLength: 10,
+                responsive: true
+              });
+            }
+          }
         });
       </script>
 
