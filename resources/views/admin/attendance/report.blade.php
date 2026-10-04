@@ -51,17 +51,19 @@ if (schema_has_table('student_attendance')) {
             <div class="container">
                 <div class="page-inner">
                     <div class="table-responsive">
-                        <table class="table table-bordered">
+                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered">
                             <thead>
-                                <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                     <th>Student</th>
                                     <th>Present Count</th>
                                     <th>Absent Count</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($attendanceSummary as $summary): ?>
+                                <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($attendanceSummary as $summary): ?>
                                     <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                         <td><?= $summary['first_name'] . ' ' . $summary['last_name'] ?></td>
                                         <td><?= $summary['present_count'] ?></td>
                                         <td><?= $summary['absent_count'] ?></td>

@@ -22,6 +22,7 @@ class FeeStructure extends Model
         'is_mandatory',
         'is_active',
         'additional_details',
+        'itemized_components',
         'category',
         'gender',
         'session_id',
@@ -36,6 +37,7 @@ class FeeStructure extends Model
         'is_mandatory' => 'boolean',
         'is_active' => 'boolean',
         'additional_details' => 'array',
+        'itemized_components' => 'array',
     ];
 
     public function session()

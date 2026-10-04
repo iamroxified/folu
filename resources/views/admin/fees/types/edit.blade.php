@@ -57,7 +57,7 @@ $usageCount = (int) QueryDB(
                     This fee type is defined by the `fee_structures.fee_type` enum in the live schema, so it is not editable from this legacy screen.
                   </div>
                   <div class="table-responsive">
-                    <table class="table table-bordered">
+                    <table class="datatable table table-bordered datatable">
                       <tr>
                         <th style="width: 220px;">Stored Value</th>
                         <td><code><?php echo htmlspecialchars($selectedType); ?></code></td>

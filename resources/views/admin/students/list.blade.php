@@ -85,9 +85,10 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
                 </div>
                 <div class="card-body">
                   <div class="table-responsive">
-                    <table id="add-row" class="display table  table-hover">
+                    <table id="add-row" class="display table  table-hover datatable">
                       <thead>
                         <tr>
+                                                    <th style="width: 50px;">S/N</th>
                           <th>SN</th>
                           <th>Admission No</th>
                           <th>Full Name</th>
@@ -159,9 +160,10 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
 
       <script>
         $(document).ready(function () {
-          $("#basic-datatables").DataTable({});
+          $("#basic-datatables").DataTable({ retrieve: true });
 
           $("#multi-filter-select").DataTable({
+            retrieve: true,
             pageLength: 5,
             initComplete: function () {
               this.api()
@@ -178,7 +180,7 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
                       column
                         .search(val ? "^" + val + "$" : "", true, false)
                         .draw();
-                    });
+                    ;
 
                   column
                     .data()
@@ -195,8 +197,9 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
 
           // Add Row
           $("#add-row").DataTable({
+            retrieve: true,
             pageLength: 10,
-          });
+          ;
 
 
         });

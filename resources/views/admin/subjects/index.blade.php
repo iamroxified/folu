@@ -63,9 +63,10 @@ $subjects = QueryDB($subjectsQuery)->fetchAll();
                                 </div>
                                 <div class="card-body">
                                     <div class="table-responsive">
-                                        <table class="table table-bordered">
+                                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered">
                                             <thead>
-                                                <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                     <th>Subject Code</th>
                                                     <th>Subject Name</th>
                                                     <th><?php echo htmlspecialchars($subjectContextLabel); ?></th>
@@ -80,7 +81,7 @@ $subjects = QueryDB($subjectsQuery)->fetchAll();
                                                         <td colspan="6" class="text-center">No subjects found.</td>
                                                     </tr>
                                                 <?php else: ?>
-                                                    <?php foreach ($subjects as $subject): ?>
+                                                    <?php $sn = 1; ?><?php foreach ($subjects as $subject): ?>
                                                         <?php
                                                             $subjectCode = $subject[$subjectCodeField] ?? 'N/A';
                                                             $subjectName = $subject[$subjectNameField] ?? 'N/A';
@@ -94,6 +95,7 @@ $subjects = QueryDB($subjectsQuery)->fetchAll();
                                                                 : 'Active';
                                                         ?>
                                                         <tr>
+                                                            <td><?php echo $sn++; ?></td>
                                                             <td><?php echo htmlspecialchars((string) $subjectCode); ?></td>
                                                             <td><?php echo htmlspecialchars((string) $subjectName); ?></td>
                                                             <td><?php echo htmlspecialchars((string) $subjectContext); ?></td>

@@ -168,7 +168,7 @@ $classLevels = ['ALL', 'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Prim
                                             <label for="class_level">Class Level</label>
                                             <select class="form-control" id="class_level" name="class_level" required>
                                                 <option value="">Select Class Level</option>
-                                                <?php foreach ($classLevels as $level): ?>
+                                                <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($classLevels as $level): ?>
                                                     <option value="<?php echo htmlspecialchars($level); ?>" <?php echo ($editingSubjectLevel === $level) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars($level); ?>
                                                     </option>
@@ -199,9 +199,10 @@ $classLevels = ['ALL', 'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Prim
                                 </div>
                                 <div class="card-body">
                                     <div class="table-responsive">
-                                        <table class="table table-bordered table-striped">
+                                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                             <thead>
-                                                <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                     <th>Code</th>
                                                     <th>Subject</th>
                                                     <th>Class Level</th>
@@ -213,10 +214,11 @@ $classLevels = ['ALL', 'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Prim
                                             <tbody>
                                                 <?php if (empty($subjects)): ?>
                                                     <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                         <td colspan="6" class="text-center">No subjects found.</td>
                                                     </tr>
                                                 <?php else: ?>
-                                                    <?php foreach ($subjects as $subject): ?>
+                                                    <?php $sn = 1; ?><?php foreach ($subjects as $subject): ?>
                                                         <?php
                                                             $subjectLevels = json_decode((string) ($subject['grade_levels'] ?? '[]'), true);
                                                             $subjectLevels = is_array($subjectLevels) ? $subjectLevels : [];

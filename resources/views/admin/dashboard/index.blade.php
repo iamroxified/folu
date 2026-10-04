@@ -232,7 +232,7 @@ $overview = get_admin_dashboard_overview($selectedSessionId, $selectedTermId);
                 <div class="input-group">
                   <span class="input-group-text bg-light"><i class="fas fa-calendar-alt text-primary"></i></span>
                   <select class="form-select" id="academic_session_link" name="academic_session_link">
-                    <?php foreach ($sessions as $session): ?>
+                    <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                       <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                         <?php echo htmlspecialchars((string) $session['session_name']); ?>
                       </option>
@@ -246,7 +246,7 @@ $overview = get_admin_dashboard_overview($selectedSessionId, $selectedTermId);
                   <span class="input-group-text bg-light"><i class="fas fa-layer-group text-info"></i></span>
                   <select class="form-select" id="term_link" name="term_link">
                     <option value="0">All / Current Term Context</option>
-                    <?php foreach ($terms as $term): ?>
+                    <?php $sn = 1; ?><?php foreach ($terms as $term): ?>
                       <option value="<?php echo (int) $term['id']; ?>" <?php echo $selectedTermId === (int) $term['id'] ? 'selected' : ''; ?>>
                         <?php echo htmlspecialchars(term_label($term)); ?>
                       </option>
@@ -425,9 +425,10 @@ $overview = get_admin_dashboard_overview($selectedSessionId, $selectedTermId);
                     </div>
                   <?php else: ?>
                     <div class="table-responsive">
-                      <table class="table table-hover table-custom align-middle mb-0">
+                      <table id="basic-datatables" class="display table-striped table-hover table table-hover table-custom align-middle mb-0">
                         <thead>
-                          <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                             <th>Date</th>
                             <th>Student</th>
                             <th>Fee Details</th>
@@ -437,8 +438,9 @@ $overview = get_admin_dashboard_overview($selectedSessionId, $selectedTermId);
                           </tr>
                         </thead>
                         <tbody>
-                          <?php foreach ($overview['recent_payments'] as $payment): ?>
+                          <?php $sn = 1; ?><?php foreach ($overview['recent_payments'] as $payment): ?>
                             <tr>
+                                                         <td><?php echo $sn++; ?></td>
                               <td>
                                 <small class="fw-semibold text-dark">
                                   <?php echo !empty($payment['payment_date']) ? date('M d, Y', strtotime((string)$payment['payment_date'])) : date('M d, Y', strtotime((string)($payment['created_at'] ?? 'now'))); ?>
@@ -495,7 +497,7 @@ $overview = get_admin_dashboard_overview($selectedSessionId, $selectedTermId);
                     </div>
                   <?php else: ?>
                     <div class="row g-3">
-                      <?php foreach ($overview['recent_admissions'] as $student): ?>
+                      <?php $sn = 1; ?><?php foreach ($overview['recent_admissions'] as $student): ?>
                         <div class="col-md-6">
                           <div class="d-flex align-items-center p-3 border rounded bg-light">
                             <div class="flex-shrink-0 me-3">

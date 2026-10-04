@@ -114,7 +114,7 @@ $assignments = QueryDB(
                                             <label for="student_id">Student</label>
                                             <select class="form-control" id="student_id" name="student_id" required>
                                                 <option value="">Choose a student...</option>
-                                                <?php foreach ($students as $student): ?>
+                                                <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($students as $student): ?>
                                                     <option value="<?php echo (int) $student['id']; ?>">
                                                         <?php echo htmlspecialchars((string) ($student['admission_no'] ?? 'N/A')); ?> - <?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''))); ?>
                                                     </option>
@@ -125,7 +125,7 @@ $assignments = QueryDB(
                                             <label for="class_id">Class</label>
                                             <select class="form-control" id="class_id" name="class_id" required>
                                                 <option value="">Choose a class...</option>
-                                                <?php foreach ($classes as $class): ?>
+                                                <?php $sn = 1; ?><?php foreach ($classes as $class): ?>
                                                     <option value="<?php echo (int) $class['id']; ?>">
                                                         <?php echo htmlspecialchars(trim(($class['class_name'] ?? '') . ' ' . ($class['class_arm'] ?? ''))); ?>
                                                     </option>
@@ -136,7 +136,7 @@ $assignments = QueryDB(
                                             <label for="academic_session_link">Session</label>
                                             <select class="form-control" id="academic_session_link" name="academic_session_link" required>
                                                 <option value="">Choose session...</option>
-                                                <?php foreach ($sessions as $session): ?>
+                                                <?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                                     <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                                     </option>
@@ -147,7 +147,7 @@ $assignments = QueryDB(
                                             <label for="term_link">Term</label>
                                             <select class="form-control" id="term_link" name="term_link" required>
                                                 <option value="">Choose term...</option>
-                                                <?php foreach ($terms as $term): ?>
+                                                <?php $sn = 1; ?><?php foreach ($terms as $term): ?>
                                                     <option value="<?php echo (int) $term['id']; ?>" <?php echo $selectedTermId === (int) $term['id'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars(term_label($term)); ?>
                                                     </option>
@@ -171,7 +171,7 @@ $assignments = QueryDB(
                                             <label for="filter_session">Session</label>
                                             <select class="form-control" id="filter_session" name="academic_session_link">
                                                 <option value="0">All Sessions</option>
-                                                <?php foreach ($sessions as $session): ?>
+                                                <?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                                     <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                                     </option>
@@ -182,7 +182,7 @@ $assignments = QueryDB(
                                             <label for="filter_term">Term</label>
                                             <select class="form-control" id="filter_term" name="term_link">
                                                 <option value="0">All Terms</option>
-                                                <?php foreach ($terms as $term): ?>
+                                                <?php $sn = 1; ?><?php foreach ($terms as $term): ?>
                                                     <option value="<?php echo (int) $term['id']; ?>" <?php echo $selectedTermId === (int) $term['id'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars(term_label($term)); ?>
                                                     </option>
@@ -205,9 +205,10 @@ $assignments = QueryDB(
                                         <div class="alert alert-info mb-0">No student placements were found for this filter.</div>
                                     <?php else: ?>
                                         <div class="table-responsive">
-                                            <table class="table table-bordered table-striped">
+                                            <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                                 <thead>
-                                                    <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                         <th>Admission No</th>
                                                         <th>Student</th>
                                                         <th>Class</th>
@@ -218,8 +219,9 @@ $assignments = QueryDB(
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <?php foreach ($assignments as $assignment): ?>
+                                                    <?php $sn = 1; ?><?php foreach ($assignments as $assignment): ?>
                                                         <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                             <td><?php echo htmlspecialchars((string) ($assignment['admission_no'] ?? 'N/A')); ?></td>
                                                             <td><?php echo htmlspecialchars(trim(($assignment['first_name'] ?? '') . ' ' . ($assignment['last_name'] ?? ''))); ?></td>
                                                             <td><?php echo htmlspecialchars(trim(($assignment['class_name'] ?? '') . ' ' . ($assignment['class_arm'] ?? ''))); ?></td>

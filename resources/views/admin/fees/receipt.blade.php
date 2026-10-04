@@ -43,17 +43,11 @@ try {
 }
 
 $schoolName = !empty($schoolSettings['school_name']) ? $schoolSettings['school_name'] : 'Folu International Schools';
-$schoolAddress = !empty($schoolSettings['school_address']) && $schoolSettings['school_address'] !== '123 School Street, City, Country'
-    ? $schoolSettings['school_address']
-    : 'Km 5, Folu Expressway, Victoria Island, Lagos, Nigeria';
-$schoolPhone = !empty($schoolSettings['school_phone']) && $schoolSettings['school_phone'] !== '+1 234 567 8900'
-    ? $schoolSettings['school_phone']
-    : '+234 803 123 4567, +234 805 987 6543';
-$schoolEmail = !empty($schoolSettings['school_email']) && $schoolSettings['school_email'] !== 'info@foluschool.com'
-    ? $schoolSettings['school_email']
-    : 'info@foluinternationalschools.com.ng';
+$schoolAddress = !empty($schoolSettings['school_address']) ? $schoolSettings['school_address'] : 'P.O Box 37, Itedo-Ijowa, Isanlu Kogi State Nigeria';
+$schoolPhone = !empty($schoolSettings['school_phone']) ? $schoolSettings['school_phone'] : '+234 816 535 4191';
+$schoolEmail = !empty($schoolSettings['school_email']) ? $schoolSettings['school_email'] : 'info@foluinternationalschools.com.ng';
 $schoolMotto = !empty($schoolSettings['school_motto']) ? $schoolSettings['school_motto'] : 'Excellence in Knowledge & Character';
-$logoUrl = !empty($schoolSettings['school_logo']) ? $schoolSettings['school_logo'] : '/images/folu-logo.png';
+$logoUrl = !empty($schoolSettings['school_logo']) ? (str_starts_with($schoolSettings['school_logo'], '/') ? $schoolSettings['school_logo'] : '/storage/' . $schoolSettings['school_logo']) : '/images/folu-logo.png';
 
 try {
     $hasClassTable = schema_has_table('classes');
@@ -419,9 +413,10 @@ try {
             </div>
 
             <!-- Payment Details Table -->
-            <table class="details-table">
+            <table class="datatable details-table datatable">
                 <thead>
                     <tr>
+                                                     <th style="width: 50px;">S/N</th>
                         <th>Description / Fee Item</th>
                         <th>Total Fee Due (₦)</th>
                         <th>Amount Paid (₦)</th>
@@ -429,7 +424,9 @@ try {
                     </tr>
                 </thead>
                 <tbody>
+                    <?php $sn = 1; ?>
                     <tr>
+                        <td><?php echo $sn++; ?></td>
                         <td>
                             <strong><?php echo htmlspecialchars($payment['type_name']); ?></strong>
                             <?php if (!empty($payment['payment_description'])): ?>

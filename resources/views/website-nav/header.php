@@ -1,3 +1,12 @@
+<?php
+try {
+    $nav_settings = \Illuminate\Support\Facades\DB::table('school_settings')->first();
+} catch (\Throwable $t) {
+    $nav_settings = null;
+}
+$navEmail = $nav_settings->school_email ?? 'contact@foluinternationalschools.com';
+$navPhone = $nav_settings->school_phone ?? '+2349024945875';
+?>
           <div class="kingster-body-wrapper clearfix  kingster-with-frame">
             <div class="kingster-top-bar">
               <div class="kingster-top-bar-background"></div>
@@ -5,7 +14,7 @@
                 <div class="kingster-top-bar-container-inner clearfix">
                   <div class="kingster-top-bar-left kingster-item-pdlr"><i class="fa fa-envelope-open-o"
                       id="i_fd84_0"></i>
-                    contact@foluinternationalschools.com <i class="fa fa-phone" id="i_fd84_1"></i> +2349024945875</div>
+                    <?php echo htmlspecialchars($navEmail); ?> <i class="fa fa-phone" id="i_fd84_1"></i> <?php echo htmlspecialchars($navPhone); ?></div>
                   <div class="kingster-top-bar-right kingster-item-pdlr">
                     <ul id="kingster-top-bar-menu" class="sf-menu kingster-top-bar-menu kingster-top-bar-right-menu">
                       <li class="menu-item kingster-normal-menu"><a href="#">Alumni</a></li>

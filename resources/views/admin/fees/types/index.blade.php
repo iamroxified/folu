@@ -59,9 +59,10 @@ foreach ($feeTypeOptions as $index => $feeType) {
                 </div>
                 <div class="card-body">
                   <div class="table-responsive">
-                    <table id="add-row" class="display table table-hover">
+                    <table id="add-row" class="display table table-hover datatable">
                       <thead>
-                        <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                           <th>SN</th>
                           <th>Fee Type</th>
                           <th>Display Name</th>
@@ -69,8 +70,9 @@ foreach ($feeTypeOptions as $index => $feeType) {
                         </tr>
                       </thead>
                       <tbody>
-                        <?php foreach ($feeTypes as $feeType): ?>
+                        <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($feeTypes as $feeType): ?>
                         <tr>
+                                                         <td><?php echo $sn++; ?></td>
                           <td><?php echo (int) $feeType['id']; ?></td>
                           <td><code><?php echo htmlspecialchars($feeType['fee_type']); ?></code></td>
                           <td><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $feeType['fee_type']))); ?></td>
@@ -91,8 +93,9 @@ foreach ($feeTypeOptions as $index => $feeType) {
       <script>
         $(document).ready(function () {
           $('#add-row').DataTable({
+            retrieve: true,
             pageLength: 10,
-          });
+          ;
         });
       </script>
 

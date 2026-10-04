@@ -10,6 +10,7 @@ class Student extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'user_link',
         'admission_no',
         'student_number',
@@ -80,6 +81,11 @@ class Student extends Model
     public function studentFees()
     {
         return $this->hasMany(StudentFee::class);
+    }
+
+    public function additionalCharges()
+    {
+        return $this->hasMany(AdditionalCharge::class);
     }
 
     public function payments()

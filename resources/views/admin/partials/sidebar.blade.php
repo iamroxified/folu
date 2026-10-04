@@ -142,8 +142,8 @@
                 <p>Announcements</p>
               </a>
             </li>
-            <li class="nav-item">
-              <a href="javascript:void(0)"> <i class="fas fa-cogs"></i>
+            <li class="nav-item {{ $isActive(['settings', 'settings/index']) }}">
+              <a href="{{ route('admin.settings') }}"> <i class="fas fa-cogs"></i>
                 <p>Settings</p>
               </a>
             </li>

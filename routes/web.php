@@ -44,7 +44,10 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/students/{student}', [AdminController::class, 'showStudent'])->name('students.show');
     Route::get('/students/{student}/admission-letter', [AdminController::class, 'admissionLetter'])->name('students.admission_letter');
 
-    // Settings
+    // Profile & Settings
+    Route::get('/profile', [AdminController::class, 'profile'])->name('profile');
+    Route::post('/profile', [AdminController::class, 'updateProfile'])->name('profile.update');
+    Route::post('/profile/password', [AdminController::class, 'updatePassword'])->name('profile.password');
     Route::get('/settings', [AdminController::class, 'settings'])->name('settings');
     Route::post('/settings', [AdminController::class, 'updateSettings'])->name('settings.update');
 
@@ -83,6 +86,11 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/fees', [AdminController::class, 'fees'])->name('fees');
     Route::get('/fees/create', [AdminController::class, 'createFee'])->name('fees.create');
     Route::post('/fees', [AdminController::class, 'storeFee'])->name('fees.store');
+    Route::get('/fees/{fee}/edit', [AdminController::class, 'editFee'])->name('fees.edit');
+    Route::put('/fees/{fee}', [AdminController::class, 'updateFee'])->name('fees.update');
+    Route::delete('/fees/{fee}', [AdminController::class, 'destroyFee'])->name('fees.destroy');
+    Route::post('/fees/additional-charge', [AdminController::class, 'storeAdditionalCharge'])->name('fees.additional_charge');
+    Route::get('/students/import-failed-download', [AdminController::class, 'downloadFailedImports'])->name('students.import_failed_download');
 
     // Staff
     Route::get('/staff', [AdminController::class, 'staff'])->name('staff');
@@ -105,12 +113,14 @@ Route::middleware(['auth', 'role:Teacher'])->prefix('teacher')->name('teacher.')
 Route::middleware(['auth', 'role:Accountant'])->prefix('accountant')->name('accountant.')->group(function () {
     Route::get('/dashboard', [AccountantController::class, 'dashboard'])->name('dashboard');
     Route::get('/fees', [AccountantController::class, 'fees'])->name('fees');
+    Route::post('/fees/additional-charge', [AccountantController::class, 'storeAdditionalCharge'])->name('fees.additional_charge');
     Route::get('/payments', [AccountantController::class, 'payments'])->name('payments');
     Route::post('/payments/record', [AccountantController::class, 'recordPayment'])->name('payments.record');
     Route::get('/get-student-fees/{studentId}', [AccountantController::class, 'getStudentFees'])->name('get-student-fees');
     Route::get('/payroll', [AccountantController::class, 'payroll'])->name('payroll');
     Route::post('/payroll/create', [AccountantController::class, 'createPayroll'])->name('payroll.create');
     Route::get('/reports', [AccountantController::class, 'reports'])->name('reports');
+    Route::get('/reports/export', [AccountantController::class, 'exportReport'])->name('reports.export');
 });
 
 Route::middleware(['auth', 'role:Student'])->prefix('student')->name('student.')->group(function () {

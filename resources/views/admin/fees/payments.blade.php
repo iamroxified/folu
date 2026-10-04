@@ -560,7 +560,7 @@ $sessionsList = schema_has_table('academic_sessions')
                         </div>
 
                         <p class="mb-2">Your CSV file should have the following headers:</p>
-                        <table class="table table-bordered table-sm mb-3">
+                        <table class="table table-bordered table-sm mb-3 no-datatable">
                             <thead class="table-light">
                                 <tr>
                                     <th>sn (Optional)</th>

@@ -78,3 +78,22 @@
   <script src="/admin/assets/js/setting-demo2.js"></script>
 
 
+
+  <!-- Auto-initialize all tables as DataTables safely -->
+  <script>
+    if (typeof $.fn.DataTable !== 'undefined') {
+      $.fn.dataTable.ext.errMode = 'none';
+      $(document).ready(function() {
+        $('table.table').not('.no-datatable').each(function() {
+          if (!$.fn.DataTable.isDataTable(this)) {
+            $(this).DataTable({
+              pageLength: 10,
+              responsive: true,
+              autoWidth: false,
+              retrieve: true
+            });
+          }
+        });
+      });
+    }
+  </script>

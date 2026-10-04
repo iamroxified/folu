@@ -141,7 +141,7 @@ if ($selectedClassId > 0 && $selectedSubjectId > 0 && $selectedSessionId > 0) {
                                     <div class="form-group">
                                         <label for="academic_session_link">Session</label>
                                         <select class="form-control" id="academic_session_link" name="academic_session_link">
-                                            <?php foreach ($sessions as $session): ?>
+                                            <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                                 <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                                                     <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                                 </option>
@@ -154,7 +154,7 @@ if ($selectedClassId > 0 && $selectedSubjectId > 0 && $selectedSessionId > 0) {
                                         <label for="class_link">Class</label>
                                         <select class="form-control" id="class_link" name="class_link">
                                             <option value="">Select Class</option>
-                                            <?php foreach ($classes as $class): ?>
+                                            <?php $sn = 1; ?><?php foreach ($classes as $class): ?>
                                                 <option value="<?php echo (int) $class['id']; ?>" <?php echo $selectedClassId === (int) $class['id'] ? 'selected' : ''; ?>>
                                                     <?php echo htmlspecialchars($class['class_name'] . ' ' . $class['class_arm']); ?>
                                                 </option>
@@ -171,7 +171,7 @@ if ($selectedClassId > 0 && $selectedSubjectId > 0 && $selectedSessionId > 0) {
                                                 <option value="2" <?php echo $selectedTerm === '2' ? 'selected' : ''; ?>>Second Term</option>
                                                 <option value="3" <?php echo $selectedTerm === '3' ? 'selected' : ''; ?>>Third Term</option>
                                             <?php else: ?>
-                                                <?php foreach ($terms as $term): ?>
+                                                <?php $sn = 1; ?><?php foreach ($terms as $term): ?>
                                                     <option value="<?php echo htmlspecialchars((string) $term['term_code']); ?>" <?php echo $selectedTerm === (string) $term['term_code'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars(term_label($term)); ?>
                                                     </option>
@@ -217,7 +217,7 @@ if ($selectedClassId > 0 && $selectedSubjectId > 0 && $selectedSessionId > 0) {
                                             <label for="subject_link">Subject</label>
                                             <select class="form-control" id="subject_link" name="subject_link" required>
                                                 <option value="">Select Subject</option>
-                                                <?php foreach ($subjects as $subject): ?>
+                                                <?php $sn = 1; ?><?php foreach ($subjects as $subject): ?>
                                                     <option value="<?php echo (int) $subject['id']; ?>" <?php echo $selectedSubjectId === (int) $subject['id'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars($subject['subject_name']); ?>
                                                     </option>
@@ -227,9 +227,10 @@ if ($selectedClassId > 0 && $selectedSubjectId > 0 && $selectedSessionId > 0) {
                                     </div>
 
                                     <div class="table-responsive">
-                                        <table class="table table-bordered table-striped">
+                                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                             <thead>
-                                                <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                     <th>Admission No</th>
                                                     <th>Student</th>
                                                     <th>Score</th>
@@ -238,13 +239,14 @@ if ($selectedClassId > 0 && $selectedSubjectId > 0 && $selectedSessionId > 0) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($students as $student): ?>
+                                                <?php $sn = 1; ?><?php foreach ($students as $student): ?>
                                                     <?php
                                                         $existing = $existingGrades[(int) $student['id']] ?? null;
                                                         $scoreValue = $existing['score'] ?? '';
                                                         $gradeValue = $existing['grade'] ?? ($scoreValue !== '' ? nigerian_grade_from_score($scoreValue) : '');
                                                     ?>
                                                     <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                         <td><?php echo htmlspecialchars($student['admission_no']); ?></td>
                                                         <td><?php echo htmlspecialchars(trim($student['first_name'] . ' ' . $student['last_name'])); ?></td>
                                                         <td>

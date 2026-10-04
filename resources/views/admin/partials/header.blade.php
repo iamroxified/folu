@@ -179,19 +179,19 @@
                      <div class="u-text">
                        <h4>{{ isset($_SESSION['username']) ? $_SESSION['username'] : (Auth::check() ? Auth::user()->name : 'Admin') }}</h4>
                        <!-- <p class="text-muted"><?php // echo $email; ?></p> -->
-                       <a href="#" class="btn btn-xs btn-primary btn-sm">View Profile</a>
+                       <a href="{{ route('admin.profile') }}" class="btn btn-xs btn-primary btn-sm">View Profile</a>
                      </div>
                    </div>
                  </li>
                  <li>
                    <div class="dropdown-divider"></div>
-                   <a class="dropdown-item" href="#">My Profile</a>
+                   <a class="dropdown-item" href="{{ route('admin.profile') }}">My Profile</a>
                    <a class="dropdown-item" href="#">My Balance</a>
                    <a class="dropdown-item" href="#">Inbox</a>
                    <div class="dropdown-divider"></div>
-                   <a class="dropdown-item" href="#">Account Setting</a>
+                   <a class="dropdown-item" href="{{ route('admin.profile') }}">Account Setting</a>
                    <div class="dropdown-divider"></div>
-                   <a class="dropdown-item" href="{{ url('/admin/logout.php') }}">Logout</a>
+                   <a class="dropdown-item" href="{{ route('logout') }}">Logout</a>
                  </li>
                </div>
              </ul>

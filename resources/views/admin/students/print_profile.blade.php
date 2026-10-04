@@ -30,6 +30,21 @@ if (!$studentId) {
     die('Student ID is required');
 }
 
+// Fetch school settings for header
+try {
+    $settings_stmt = $pdo->query("SELECT * FROM school_settings LIMIT 1");
+    $schoolSettings = $settings_stmt ? $settings_stmt->fetch(PDO::FETCH_ASSOC) : [];
+} catch (\Throwable $t) {
+    $schoolSettings = [];
+}
+
+$schoolName = !empty($schoolSettings['school_name']) ? $schoolSettings['school_name'] : 'FOLU INTERNATIONAL SCHOOLS';
+$schoolAddress = !empty($schoolSettings['school_address']) ? $schoolSettings['school_address'] : 'P.O Box 37, Itedo-Ijowa, Isanlu Kogi State Nigeria';
+$schoolPhone = !empty($schoolSettings['school_phone']) ? $schoolSettings['school_phone'] : '+234 816 535 4191';
+$schoolEmail = !empty($schoolSettings['school_email']) ? $schoolSettings['school_email'] : 'info@foluinternationalschools.com.ng';
+$schoolMotto = !empty($schoolSettings['school_motto']) ? $schoolSettings['school_motto'] : 'Excellence, Discipline & Integrity';
+$schoolLogo = !empty($schoolSettings['school_logo']) ? (str_starts_with($schoolSettings['school_logo'], '/') ? $schoolSettings['school_logo'] : '/storage/' . $schoolSettings['school_logo']) : '/images/folu-logo.png';
+
 // Fetch student details
 $student_stmt = $pdo->prepare(
     "SELECT s.*,
@@ -312,13 +327,13 @@ $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['other_
       <div class="school-header text-center">
         <div class="row align-items-center">
           <div class="col-3 text-start">
-            <img src="/images/folu-logo.png" alt="Folu International Schools Logo" class="school-logo" onerror="this.src='/admin/assets/img/logo.png'">
+            <img src="<?php echo htmlspecialchars($schoolLogo); ?>" alt="School Logo" class="school-logo" onerror="this.src='/images/folu-logo.png'">
           </div>
           <div class="col-6">
-            <h2 class="school-title mb-1">FOLU INTERNATIONAL SCHOOLS</h2>
-            <p class="mb-1 text-muted small">Km 4, Idiroko Road, Ota, Ogun State, Nigeria</p>
-            <p class="mb-1 text-muted small"><i class="fas fa-phone me-1"></i> +234 803 000 0000 | <i class="fas fa-envelope me-1"></i> info@foluinternationalschools.com.ng</p>
-            <small class="fst-italic text-secondary">Motto: Excellence, Discipline & Integrity</small>
+            <h2 class="school-title mb-1"><?php echo htmlspecialchars(strtoupper($schoolName)); ?></h2>
+            <p class="mb-1 text-muted small"><?php echo htmlspecialchars($schoolAddress); ?></p>
+            <p class="mb-1 text-muted small"><i class="fas fa-phone me-1"></i> <?php echo htmlspecialchars($schoolPhone); ?> | <i class="fas fa-envelope me-1"></i> <?php echo htmlspecialchars($schoolEmail); ?></p>
+            <small class="fst-italic text-secondary">Motto: <?php echo htmlspecialchars($schoolMotto); ?></small>
           </div>
           <div class="col-3 text-end">
             <span class="document-title">STUDENT RECORD</span>
@@ -357,7 +372,7 @@ $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['other_
       </div>
       <div class="row">
         <div class="col-md-6">
-          <table class="table table-borderless info-table">
+          <table class="datatable table table-borderless info-table datatable">
             <tr>
               <td class="info-label">Full Name:</td>
               <td class="info-value"><?php echo htmlspecialchars($studentFullName); ?></td>
@@ -384,7 +399,7 @@ $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['other_
           </table>
         </div>
         <div class="col-md-6">
-          <table class="table table-borderless info-table">
+          <table class="datatable table table-borderless info-table datatable">
             <tr>
               <td class="info-label">State of Origin:</td>
               <td class="info-value"><?php echo htmlspecialchars((string)($student['state_of_origin'] ?? 'N/A')); ?></td>
@@ -415,7 +430,7 @@ $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['other_
       </div>
       <div class="row">
         <div class="col-md-6">
-          <table class="table table-borderless info-table">
+          <table class="datatable table table-borderless info-table datatable">
             <tr>
               <td class="info-label">Current Class:</td>
               <td class="info-value"><?php echo htmlspecialchars((string)($student['class_name'] ?? 'Not Assigned')); ?></td>
@@ -431,7 +446,7 @@ $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['other_
           </table>
         </div>
         <div class="col-md-6">
-          <table class="table table-borderless info-table">
+          <table class="datatable table table-borderless info-table datatable">
             <tr>
               <td class="info-label">Enrollment Date:</td>
               <td class="info-value">
@@ -460,7 +475,7 @@ $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['other_
       </div>
       <div class="row">
         <div class="col-md-6">
-          <table class="table table-borderless info-table">
+          <table class="datatable table table-borderless info-table datatable">
             <tr>
               <td class="info-label">Guardian Name:</td>
               <td class="info-value"><?php echo htmlspecialchars(trim(($parent['first_name'] ?? '') . ' ' . ($parent['last_name'] ?? ''))); ?></td>
@@ -476,7 +491,7 @@ $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['other_
           </table>
         </div>
         <div class="col-md-6">
-          <table class="table table-borderless info-table">
+          <table class="datatable table table-borderless info-table datatable">
             <tr>
               <td class="info-label">Phone Number:</td>
               <td class="info-value"><?php echo htmlspecialchars((string)($parent['phone'] ?? 'N/A')); ?></td>
@@ -522,9 +537,10 @@ $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['other_
       <!-- Allocated Fee Breakdowns -->
       <?php if (!empty($allocated_fees)): ?>
       <div class="table-responsive mb-3">
-        <table class="table table-bordered align-middle small">
+        <table class="datatable table table-bordered align-middle small datatable">
           <thead class="table-light">
             <tr>
+              <th style="width: 40px;">S/N</th>
               <th>Fee Name</th>
               <th>Academic Session</th>
               <th>Amount Due (₦)</th>
@@ -534,8 +550,9 @@ $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['other_
             </tr>
           </thead>
           <tbody>
-            <?php foreach ($allocated_fees as $fee): ?>
+            <?php $sn = 1; ?><?php foreach ($allocated_fees as $fee): ?>
             <tr>
+                                                         <td><?php echo $sn++; ?></td>
               <td><strong><?php echo htmlspecialchars((string)($fee['fee_name'] ?? 'Fee')); ?></strong></td>
               <td><?php echo htmlspecialchars((string)($fee['academic_year'] ?? 'N/A')); ?></td>
               <td>₦<?php echo number_format((float)($fee['amount_due'] ?? 0), 2); ?></td>

@@ -346,9 +346,10 @@ try {
                 <div class="card-body">
                   <form method="POST" action="">
                     <div class="table-responsive">
-                      <table class="table table-hover">
+                      <table id="basic-datatables" class="display table-striped table-hover table table-hover">
                         <thead>
-                          <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                             <th>
                               <input type="checkbox" id="select_all_fees">
                             </th>
@@ -363,11 +364,12 @@ try {
                         <tbody>
                           <?php if ($feeStructures === []): ?>
                           <tr>
+                                                         <td><?php echo $sn++; ?></td>
                             <td colspan="7" class="text-center text-muted">No applicable fee structures were found for
                               this student's current session, term, and class.</td>
                           </tr>
                           <?php else: ?>
-                          <?php foreach ($feeStructures as $fee): ?>
+                          <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($feeStructures as $fee): ?>
                           <tr>
                             <td>
                               <input type="checkbox" name="fee_ids[]" value="<?php echo (int) $fee['id']; ?>"

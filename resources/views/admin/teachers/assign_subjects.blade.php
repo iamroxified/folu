@@ -193,7 +193,7 @@ $subjectAssignments = get_teacher_subject_assignments($teacherId, $selectedSessi
                                 <div class="col-md-10">
                                     <label for="academic_session_link">Academic Session</label>
                                     <select class="form-control" id="academic_session_link" name="academic_session_link">
-                                        <?php foreach ($sessions as $session): ?>
+                                        <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                             <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                             </option>
@@ -223,7 +223,7 @@ $subjectAssignments = get_teacher_subject_assignments($teacherId, $selectedSessi
                                             <label for="class_link">Class</label>
                                             <select class="form-control" id="class_link" name="class_link" required>
                                                 <option value="">Select Class</option>
-                                                <?php foreach ($classes as $class): ?>
+                                                <?php $sn = 1; ?><?php foreach ($classes as $class): ?>
                                                     <option value="<?php echo (int) $class['id']; ?>">
                                                         <?php echo htmlspecialchars(trim(($class['class_name'] ?? '') . ' ' . ($class['class_arm'] ?? ''))); ?>
                                                         <?php if (!empty($class['form_teacher_name'])): ?>
@@ -250,17 +250,19 @@ $subjectAssignments = get_teacher_subject_assignments($teacherId, $selectedSessi
                                         <div class="alert alert-info mb-0">No class assignments recorded for this session.</div>
                                     <?php else: ?>
                                         <div class="table-responsive">
-                                            <table class="table table-bordered table-sm">
+                                            <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-sm">
                                                 <thead>
-                                                    <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                         <th>Class</th>
                                                         <th>Role</th>
                                                         <th>Action</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <?php foreach ($classAssignments as $assignment): ?>
+                                                    <?php $sn = 1; ?><?php foreach ($classAssignments as $assignment): ?>
                                                         <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                             <td><?php echo htmlspecialchars(trim(($assignment['class_name'] ?? '') . ' ' . ($assignment['class_arm'] ?? ''))); ?></td>
                                                             <td><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) ($assignment['assignment_role'] ?? 'class_teacher')))); ?></td>
                                                             <td>
@@ -298,7 +300,7 @@ $subjectAssignments = get_teacher_subject_assignments($teacherId, $selectedSessi
                                             <label for="subject_class_link">Class</label>
                                             <select class="form-control" id="subject_class_link" name="class_link" required>
                                                 <option value="">Select Class</option>
-                                                <?php foreach ($classes as $class): ?>
+                                                <?php $sn = 1; ?><?php foreach ($classes as $class): ?>
                                                     <option value="<?php echo (int) $class['id']; ?>" data-class-level="<?php echo htmlspecialchars((string) ($class['class_level'] ?? '')); ?>">
                                                         <?php echo htmlspecialchars(trim(($class['class_name'] ?? '') . ' ' . ($class['class_arm'] ?? ''))); ?>
                                                     </option>
@@ -309,7 +311,7 @@ $subjectAssignments = get_teacher_subject_assignments($teacherId, $selectedSessi
                                             <label for="subject_link">Subject</label>
                                             <select class="form-control" id="subject_link" name="subject_link" required>
                                                 <option value="">Select Subject</option>
-                                                <?php foreach ($subjects as $subject): ?>
+                                                <?php $sn = 1; ?><?php foreach ($subjects as $subject): ?>
                                                     <option value="<?php echo (int) $subject['id']; ?>" data-class-level="<?php echo htmlspecialchars((string) ($subject['class_level'] ?? 'ALL')); ?>">
                                                         <?php echo htmlspecialchars((string) $subject['subject_name']); ?>
                                                         (<?php echo htmlspecialchars((string) ($subject['class_level'] ?? 'ALL')); ?>)
@@ -326,17 +328,19 @@ $subjectAssignments = get_teacher_subject_assignments($teacherId, $selectedSessi
                                         <div class="alert alert-info mb-0">No subject assignments recorded for this session.</div>
                                     <?php else: ?>
                                         <div class="table-responsive">
-                                            <table class="table table-bordered table-sm">
+                                            <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-sm">
                                                 <thead>
                                                     <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                         <th>Subject</th>
                                                         <th>Class</th>
                                                         <th>Action</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <?php foreach ($subjectAssignments as $assignment): ?>
+                                                    <?php $sn = 1; ?><?php foreach ($subjectAssignments as $assignment): ?>
                                                         <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                             <td><?php echo htmlspecialchars((string) ($assignment['subject_name'] ?? '')); ?></td>
                                                             <td><?php echo htmlspecialchars(trim(($assignment['class_name'] ?? '') . ' ' . ($assignment['class_arm'] ?? ''))); ?></td>
                                                             <td>

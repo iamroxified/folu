@@ -40,6 +40,20 @@ if (!$payment) {
     header('Location: /student/payments.php');
     exit;
 }
+
+try {
+    $settings_stmt = QueryDB("SELECT * FROM school_settings LIMIT 1");
+    $schoolSettings = $settings_stmt ? $settings_stmt->fetch(PDO::FETCH_ASSOC) : [];
+} catch (\Throwable $t) {
+    $schoolSettings = [];
+}
+
+$schoolName = !empty($schoolSettings['school_name']) ? $schoolSettings['school_name'] : 'Folu International Schools';
+$schoolAddress = !empty($schoolSettings['school_address']) ? $schoolSettings['school_address'] : 'P.O Box 37, Itedo-Ijowa, Isanlu Kogi State Nigeria';
+$schoolPhone = !empty($schoolSettings['school_phone']) ? $schoolSettings['school_phone'] : '+234 816 535 4191';
+$schoolEmail = !empty($schoolSettings['school_email']) ? $schoolSettings['school_email'] : 'info@foluinternationalschools.com.ng';
+$schoolMotto = !empty($schoolSettings['school_motto']) ? $schoolSettings['school_motto'] : 'Knowledge & Discipline';
+$schoolLogo = !empty($schoolSettings['school_logo']) ? (str_starts_with($schoolSettings['school_logo'], '/') ? $schoolSettings['school_logo'] : '/storage/' . $schoolSettings['school_logo']) : '/images/folu-logo.png';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -64,10 +78,13 @@ if (!$payment) {
       <div class="card-body p-4">
         <div class="d-flex justify-content-between align-items-start mb-4">
           <div>
-            <h3 class="mb-1">Fee Payment Receipt</h3>
-            <p class="mb-0 text-muted">FIMOCOL School Management System</p>
+            <h3 class="mb-1 text-primary font-weight-bold"><?php echo htmlspecialchars($schoolName); ?></h3>
+            <p class="mb-1 text-dark fw-bold">Official Fee Payment Receipt</p>
+            <p class="mb-0 text-muted small"><?php echo htmlspecialchars($schoolAddress); ?></p>
+            <p class="mb-0 text-muted small"><i class="fas fa-phone me-1"></i> <?php echo htmlspecialchars($schoolPhone); ?> | <i class="fas fa-envelope me-1"></i> <?php echo htmlspecialchars($schoolEmail); ?></p>
+            <small class="fst-italic text-secondary">Motto: <?php echo htmlspecialchars($schoolMotto); ?></small>
           </div>
-          <img src="/images/folu_logo.jpg" alt="school logo" style="width: 80px; height: 80px; object-fit: contain;">
+          <img src="<?php echo htmlspecialchars($schoolLogo); ?>" alt="school logo" style="max-width: 90px; max-height: 90px; object-fit: contain;" onerror="this.src='/images/folu-logo.png';">
         </div>
         <hr>
         <div class="row">

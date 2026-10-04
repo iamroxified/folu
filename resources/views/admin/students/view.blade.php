@@ -63,6 +63,27 @@ if ($studentId) {
 $isPost = (isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SERVER['REQUEST_METHOD']) === 'POST') || (function_exists('request') && request()->isMethod('post'));
 $hasProcessPayment = isset($_POST['process_payment']) || (function_exists('request') && request()->has('process_payment'));
 $hasDeletePayment = isset($_POST['delete_payment']) || (function_exists('request') && request()->has('delete_payment'));
+$hasAddCharge = isset($_POST['add_additional_charge']) || (function_exists('request') && request()->has('add_additional_charge'));
+
+if ($isPost && $hasAddCharge) {
+    $fee_name = trim((string) ($_POST['fee_name'] ?? request('fee_name') ?? ''));
+    $charge_amount = (float) ($_POST['charge_amount'] ?? request('charge_amount') ?? 0);
+    $reason = trim((string) ($_POST['reason'] ?? request('reason') ?? ''));
+
+    if ($fee_name === '' || $charge_amount <= 0) {
+        $error = 'Please enter a valid fee name and amount greater than 0.';
+    } else {
+        try {
+            $studentModel = \App\Models\Student::find($studentId);
+            if ($studentModel) {
+                \App\Services\FeeAllocationService::addAdditionalCharge($studentModel, $fee_name, $charge_amount, $reason);
+                $message = "Additional charge of ₦" . number_format($charge_amount, 2) . " ('{$fee_name}') added successfully to student profile.";
+            }
+        } catch (\Throwable $e) {
+            $error = 'Failed to add additional charge: ' . $e->getMessage();
+        }
+    }
+}
 
 if ($isPost && $hasDeletePayment) {
     $delete_payment_id = filter_input(INPUT_POST, 'payment_id', FILTER_VALIDATE_INT) ?: (int) ($_POST['payment_id'] ?? request('payment_id') ?? 0);
@@ -424,7 +445,7 @@ $gradeAverage = student_grade_average($studentId);
                   <div class="row">
                     <div class="col-md-6">
                       <h5>Basic Information</h5>
-                      <table class="table table-borderless">
+                      <table class="datatable table table-borderless datatable">
                         <tr>
                           <td><strong>Admission No:</strong></td>
                           <td><code><?php echo htmlspecialchars((string) ($student['admission_no'] ?? 'N/A')); ?></code></td>
@@ -461,7 +482,7 @@ $gradeAverage = student_grade_average($studentId);
                     </div>
                     <div class="col-md-6">
                       <h5>Academic Information</h5>
-                      <table class="table table-borderless">
+                      <table class="datatable table table-borderless datatable">
                         <tr>
                           <td><strong>Current Class:</strong></td>
                           <td><?php echo htmlspecialchars((string) ($student['class_name'] ?? 'Not Assigned')); ?></td>
@@ -512,7 +533,7 @@ $gradeAverage = student_grade_average($studentId);
                     </div>
                   <?php else: ?>
                     <div class="table-responsive">
-                      <table class="table table-hover mb-0">
+                      <table class="datatable table table-hover mb-0 datatable">
                         <thead class="bg-light">
                           <tr>
                             <th>Fee Type</th>
@@ -526,8 +547,9 @@ $gradeAverage = student_grade_average($studentId);
                           </tr>
                         </thead>
                         <tbody>
-                          <?php foreach ($payment_history as $payment): ?>
+                          <?php $sn = 1; ?><?php foreach ($payment_history as $payment): ?>
                           <tr>
+                                                         <td><?php echo $sn++; ?></td>
                             <td><strong><?php echo htmlspecialchars((string) ($payment['type_name'] ?? 'School Fee')); ?></strong></td>
                             <td>
                               <small class="text-muted">
@@ -670,6 +692,9 @@ $gradeAverage = student_grade_average($studentId);
                     <button type="button" class="btn btn-make-payment action-btn" data-bs-toggle="modal" data-bs-target="#paymentModal">
                       <i class="fas fa-credit-card me-2"></i>Make Payment
                     </button>
+                    <button type="button" class="btn btn-warning text-dark action-btn fw-bold" data-bs-toggle="modal" data-bs-target="#extraFeeModal">
+                      <i class="fas fa-plus-circle me-2"></i>Add Extra Fee / Charge
+                    </button>
                     <a href="/admin/fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-info action-btn text-white">
                       <i class="fas fa-file-invoice me-2"></i>Allocate Fee Structure
                     </a>
@@ -681,6 +706,45 @@ $gradeAverage = student_grade_average($studentId);
                     </a>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal: Add Extra Fee / Charge -->
+          <div class="modal fade" id="extraFeeModal" tabindex="-1" aria-labelledby="extraFeeModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+              <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                  <h5 class="modal-title fw-bold" id="extraFeeModalLabel">
+                    <i class="fas fa-plus-circle me-2"></i>Add Extra Fee / Charge
+                  </h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" action="">
+                  <input type="hidden" name="add_additional_charge" value="1">
+                  <div class="modal-body">
+                    <p class="text-muted small">Add a custom extra charge (e.g. Extra Examination Fee, Bus Levy, Uniform Replacement) to this student's profile.</p>
+
+                    <div class="mb-3">
+                      <label for="modal_fee_name" class="form-label fw-bold">Fee Name <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control" name="fee_name" id="modal_fee_name" placeholder="e.g. Extra Exam Fee, Bus Levy" required>
+                    </div>
+
+                    <div class="mb-3">
+                      <label for="modal_charge_amount" class="form-label fw-bold">Amount (₦) <span class="text-danger">*</span></label>
+                      <input type="number" step="0.01" min="0.01" class="form-control" name="charge_amount" id="modal_charge_amount" placeholder="0.00" required>
+                    </div>
+
+                    <div class="mb-3">
+                      <label for="modal_reason" class="form-label fw-bold">Reason / Description</label>
+                      <textarea class="form-control" name="reason" id="modal_reason" rows="3" placeholder="Reason or explanation for this extra fee charge"></textarea>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning fw-bold text-dark">Add Extra Fee</button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>
@@ -706,7 +770,7 @@ $gradeAverage = student_grade_average($studentId);
                       <p class="text-muted mb-4">Select an allocated fee below. Payments strictly update and increment existing payments on the selected fee without overwriting prior payment history.</p>
 
                       <div class="outstanding-fees-list">
-                        <?php foreach ($outstanding_fees as $index => $fee): ?>
+                        <?php $sn = 1; ?><?php foreach ($outstanding_fees as $index => $fee): ?>
                         <div class="card mb-3 fee-item" 
                              data-fee-id="<?php echo (int) $fee['id']; ?>"
                              data-fee-name="<?php echo htmlspecialchars((string) ($fee['type_name'] ?? 'Fee')); ?>"

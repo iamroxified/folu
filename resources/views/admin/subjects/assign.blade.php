@@ -107,7 +107,7 @@ if ($selectedClass) {
                                 <div class="col-md-4">
                                     <label for="academic_session_link">Academic Session</label>
                                     <select class="form-control" id="academic_session_link" name="academic_session_link">
-                                        <?php foreach ($sessions as $session): ?>
+                                        <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                             <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                             </option>
@@ -118,7 +118,7 @@ if ($selectedClass) {
                                     <label for="class_link">Class</label>
                                     <select class="form-control" id="class_link" name="class_link">
                                         <option value="">All Classes</option>
-                                        <?php foreach ($classes as $class): ?>
+                                        <?php $sn = 1; ?><?php foreach ($classes as $class): ?>
                                             <option value="<?php echo (int) $class['id']; ?>" <?php echo $selectedClassId === (int) $class['id'] ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars(trim(($class['class_name'] ?? '') . ' ' . ($class['class_arm'] ?? ''))); ?>
                                             </option>
@@ -155,7 +155,7 @@ if ($selectedClass) {
                                                 <label for="subject_link">Subject</label>
                                                 <select class="form-control" id="subject_link" name="subject_link" required>
                                                     <option value="">Select Subject</option>
-                                                    <?php foreach ($subjects as $subject): ?>
+                                                    <?php $sn = 1; ?><?php foreach ($subjects as $subject): ?>
                                                         <option value="<?php echo (int) $subject['id']; ?>" <?php echo ((int) ($subject['already_assigned'] ?? 0) > 0) ? 'disabled' : ''; ?>>
                                                             <?php echo htmlspecialchars((string) ($subject['subject_name'] . ' (' . $subject['subject_code'] . ') - ' . $subject['class_level'])); ?>
                                                             <?php if ((int) ($subject['already_assigned'] ?? 0) > 0): ?>
@@ -182,9 +182,10 @@ if ($selectedClass) {
                                         <div class="alert alert-info mb-0">No subject assignments were found for this filter.</div>
                                     <?php else: ?>
                                         <div class="table-responsive">
-                                            <table class="table table-bordered table-striped">
+                                            <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                                 <thead>
-                                                    <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                         <th>Class</th>
                                                         <th>Subject</th>
                                                         <th>Code</th>
@@ -193,8 +194,9 @@ if ($selectedClass) {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <?php foreach ($assignments as $assignment): ?>
+                                                    <?php $sn = 1; ?><?php foreach ($assignments as $assignment): ?>
                                                         <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                             <td><?php echo htmlspecialchars(trim(($assignment['class_name'] ?? '') . ' ' . ($assignment['class_arm'] ?? ''))); ?></td>
                                                             <td><?php echo htmlspecialchars((string) ($assignment['subject_name'] ?? '')); ?></td>
                                                             <td><?php echo htmlspecialchars((string) ($assignment['subject_code'] ?? '')); ?></td>

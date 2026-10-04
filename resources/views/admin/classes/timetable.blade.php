@@ -134,7 +134,7 @@ $timetableEntries = get_timetable_entries($selectedClassId > 0 ? $selectedClassI
                                 <div class="col-md-4">
                                     <label for="academic_session_link">Academic Session</label>
                                     <select class="form-control" id="academic_session_link" name="academic_session_link">
-                                        <?php foreach ($sessions as $session): ?>
+                                        <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                             <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                             </option>
@@ -145,7 +145,7 @@ $timetableEntries = get_timetable_entries($selectedClassId > 0 ? $selectedClassI
                                     <label for="class_link">Class</label>
                                     <select class="form-control" id="class_link" name="class_link">
                                         <option value="">All Classes</option>
-                                        <?php foreach ($classes as $class): ?>
+                                        <?php $sn = 1; ?><?php foreach ($classes as $class): ?>
                                             <option value="<?php echo (int) $class['id']; ?>" <?php echo $selectedClassId === (int) $class['id'] ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars(trim(($class['class_name'] ?? '') . ' ' . ($class['class_arm'] ?? ''))); ?>
                                             </option>
@@ -173,7 +173,7 @@ $timetableEntries = get_timetable_entries($selectedClassId > 0 ? $selectedClassI
                                         <div class="form-group">
                                             <label for="form_session_id">Academic Session</label>
                                             <select class="form-control" id="form_session_id" name="academic_session_link" required>
-                                                <?php foreach ($sessions as $session): ?>
+                                                <?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                                     <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                                     </option>
@@ -184,7 +184,7 @@ $timetableEntries = get_timetable_entries($selectedClassId > 0 ? $selectedClassI
                                             <label for="form_class_link">Class</label>
                                             <select class="form-control" id="form_class_link" name="class_link" required>
                                                 <option value="">Select Class</option>
-                                                <?php foreach ($classes as $class): ?>
+                                                <?php $sn = 1; ?><?php foreach ($classes as $class): ?>
                                                     <option value="<?php echo (int) $class['id']; ?>" <?php echo $selectedClassId === (int) $class['id'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars(trim(($class['class_name'] ?? '') . ' ' . ($class['class_arm'] ?? ''))); ?>
                                                     </option>
@@ -195,7 +195,7 @@ $timetableEntries = get_timetable_entries($selectedClassId > 0 ? $selectedClassI
                                             <label for="subject_link">Subject</label>
                                             <select class="form-control" id="subject_link" name="subject_link" required>
                                                 <option value="">Select Subject</option>
-                                                <?php foreach ($classAssignments as $assignment): ?>
+                                                <?php $sn = 1; ?><?php foreach ($classAssignments as $assignment): ?>
                                                     <option value="<?php echo (int) ($assignment['subject_link'] ?? 0); ?>" <?php echo ((int) ($editingEntry['subject_link'] ?? 0) === (int) ($assignment['subject_link'] ?? 0)) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars((string) (($assignment['subject_name'] ?? '') . ' (' . ($assignment['subject_code'] ?? '') . ')')); ?>
                                                     </option>
@@ -206,7 +206,7 @@ $timetableEntries = get_timetable_entries($selectedClassId > 0 ? $selectedClassI
                                             <label for="teacher_link">Teacher</label>
                                             <select class="form-control" id="teacher_link" name="teacher_link" required>
                                                 <option value="">Select Teacher</option>
-                                                <?php foreach ($teachers as $teacher): ?>
+                                                <?php $sn = 1; ?><?php foreach ($teachers as $teacher): ?>
                                                     <option value="<?php echo (int) $teacher['id']; ?>" <?php echo ((int) ($editingEntry['teacher_link'] ?? 0) === (int) $teacher['id']) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars((string) ($teacher['teacher_id'] . ' - ' . $teacher['first_name'] . ' ' . $teacher['last_name'])); ?>
                                                     </option>
@@ -217,7 +217,7 @@ $timetableEntries = get_timetable_entries($selectedClassId > 0 ? $selectedClassI
                                             <label for="day_of_week">Day of Week</label>
                                             <select class="form-control" id="day_of_week" name="day_of_week" required>
                                                 <option value="">Select Day</option>
-                                                <?php foreach ($days as $value => $label): ?>
+                                                <?php $sn = 1; ?><?php foreach ($days as $value => $label): ?>
                                                     <option value="<?php echo $value; ?>" <?php echo ((int) ($editingEntry['day_of_week'] ?? 0) === $value) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars($label); ?>
                                                     </option>
@@ -261,9 +261,10 @@ $timetableEntries = get_timetable_entries($selectedClassId > 0 ? $selectedClassI
                                         <div class="alert alert-info mb-0">No timetable entries were found for this filter.</div>
                                     <?php else: ?>
                                         <div class="table-responsive">
-                                            <table class="table table-bordered table-striped">
+                                            <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                                 <thead>
-                                                    <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                         <th>Class</th>
                                                         <th>Day</th>
                                                         <th>Time</th>
@@ -274,8 +275,9 @@ $timetableEntries = get_timetable_entries($selectedClassId > 0 ? $selectedClassI
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <?php foreach ($timetableEntries as $entry): ?>
+                                                    <?php $sn = 1; ?><?php foreach ($timetableEntries as $entry): ?>
                                                         <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                             <td><?php echo htmlspecialchars(trim(($entry['class_name'] ?? '') . ' ' . ($entry['class_arm'] ?? ''))); ?></td>
                                                             <td><?php echo htmlspecialchars($days[(int) ($entry['day_of_week'] ?? 0)] ?? 'Unknown'); ?></td>
                                                             <td><?php echo htmlspecialchars(date('H:i', strtotime((string) $entry['start_time'])) . ' - ' . date('H:i', strtotime((string) $entry['end_time']))); ?></td>

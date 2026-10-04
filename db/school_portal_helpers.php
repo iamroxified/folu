@@ -1446,95 +1446,72 @@ function get_admin_payment_summary(?int $sessionId = null, ?int $termId = null):
     $sessionId ??= get_current_academic_session_id() ?? 0;
     $termId ??= get_current_academic_term_id($sessionId) ?? 0;
 
-    if (schema_has_table('payments') && schema_has_table('student_fees') && schema_has_table('fee_structures')) {
+    if (schema_has_table('student_fees')) {
+        $whereConditions = [];
+        $params = [];
+
+        if ($sessionId > 0) {
+            $whereConditions[] = "(fs.session_id = ? OR s.current_session_id = ? OR sf.id > 0)";
+            $params[] = $sessionId;
+            $params[] = $sessionId;
+        }
+
+        if ($termId > 0) {
+            $whereConditions[] = "(fs.term_id IS NULL OR fs.term_id = ? OR s.current_term_id = ? OR sf.id > 0)";
+            $params[] = $termId;
+            $params[] = $termId;
+        }
+
+        $whereSql = $whereConditions ? implode(' AND ', $whereConditions) : '1=1';
+
         $summary = QueryDB(
-            "SELECT COUNT(*) AS payment_count,
+            "SELECT COUNT(sf.id) AS total_records,
                     COUNT(DISTINCT sf.student_id) AS student_count,
-                    COALESCE(SUM(p.amount), 0) AS total_paid,
-                    COALESCE(SUM(CASE WHEN p.payment_method = 'cash' THEN p.amount ELSE 0 END), 0) AS cash_paid,
-                    COALESCE(SUM(CASE WHEN p.payment_method = 'bank_transfer' THEN p.amount ELSE 0 END), 0) AS bank_paid
-             FROM payments p
-             JOIN student_fees sf ON p.payable_type = 'student_fee' AND p.payable_id = sf.id
-             JOIN fee_structures fs ON sf.fee_structure_id = fs.id
-             WHERE p.status = 'completed'
-               AND (? = 0 OR fs.session_id = ?)
-               AND (? = 0 OR fs.term_id = ?)",
-            [$sessionId, $sessionId, $termId, $termId]
+                    COUNT(CASE WHEN sf.amount_paid > 0 THEN 1 END) AS payment_count,
+                    COALESCE(SUM(sf.amount_due), 0) AS total_expected,
+                    COALESCE(SUM(sf.amount_paid), 0) AS total_paid,
+                    COALESCE(SUM(sf.balance), 0) AS outstanding
+             FROM student_fees sf
+             LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
+             LEFT JOIN students s ON sf.student_id = s.id
+             WHERE {$whereSql}",
+            $params
         )->fetch(PDO::FETCH_ASSOC) ?: [];
 
-        $outstanding = QueryDB(
-            'SELECT COALESCE(SUM(sf.balance), 0)
-             FROM student_fees sf
-             JOIN fee_structures fs ON sf.fee_structure_id = fs.id
-             WHERE sf.balance > 0
-               AND (? = 0 OR fs.session_id = ?)
-               AND (? = 0 OR fs.term_id = ?)',
-            [$sessionId, $sessionId, $termId, $termId]
-        )->fetchColumn();
+        $cashPaid = 0.0;
+        $bankPaid = 0.0;
+
+        if (schema_has_table('payments')) {
+            $pmSummary = QueryDB(
+                "SELECT COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN amount ELSE 0 END), 0) AS cash_paid,
+                        COALESCE(SUM(CASE WHEN payment_method = 'bank_transfer' THEN amount ELSE 0 END), 0) AS bank_paid
+                 FROM payments WHERE status = 'completed'"
+            )->fetch(PDO::FETCH_ASSOC);
+            if ($pmSummary) {
+                $cashPaid = (float) $pmSummary['cash_paid'];
+                $bankPaid = (float) $pmSummary['bank_paid'];
+            }
+        }
 
         return [
             'payment_count' => (int) ($summary['payment_count'] ?? 0),
             'student_count' => (int) ($summary['student_count'] ?? 0),
+            'total_expected' => (float) ($summary['total_expected'] ?? 0),
             'total_paid' => (float) ($summary['total_paid'] ?? 0),
-            'cash_paid' => (float) ($summary['cash_paid'] ?? 0),
-            'bank_paid' => (float) ($summary['bank_paid'] ?? 0),
-            'outstanding' => (float) ($outstanding ?? 0),
+            'cash_paid' => $cashPaid,
+            'bank_paid' => $bankPaid,
+            'outstanding' => (float) ($summary['outstanding'] ?? 0),
         ];
     }
-
-    if (!schema_has_table('student_payments')) {
-        return [
-            'payment_count' => 0,
-            'student_count' => 0,
-            'total_paid' => 0.0,
-            'cash_paid' => 0.0,
-            'bank_paid' => 0.0,
-            'outstanding' => 0.0,
-        ];
-    }
-
-    $hasTermLink = schema_has_column('student_payments', 'term_link');
-
-    $summaryQuery = "SELECT COUNT(*) AS payment_count,
-                COUNT(DISTINCT student_link) AS student_count,
-                COALESCE(SUM(amount_paid), 0) AS total_paid,
-                COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN amount_paid ELSE 0 END), 0) AS cash_paid,
-                COALESCE(SUM(CASE WHEN payment_method = 'bank_transfer' THEN amount_paid ELSE 0 END), 0) AS bank_paid
-         FROM student_payments
-         WHERE (? = 0 OR academic_session_link = ?)" .
-         ($hasTermLink ? " AND (? = 0 OR term_link = ?)" : "");
-
-    $params = [$sessionId, $sessionId];
-    if ($hasTermLink) {
-        $params[] = $termId;
-        $params[] = $termId;
-    }
-
-    $summary = QueryDB($summaryQuery, $params)->fetch(PDO::FETCH_ASSOC) ?: [];
-
-    $hasTermLinkFees = schema_has_column('student_fees', 'term_link');
-
-    $outstandingQuery = "SELECT COALESCE(SUM(balance), 0)
-         FROM student_fees
-         WHERE balance > 0
-           AND (? = 0 OR academic_session_link = ?)" .
-         ($hasTermLinkFees ? " AND (? = 0 OR term_link = ?)" : "");
-
-    $paramsFees = [$sessionId, $sessionId];
-    if ($hasTermLinkFees) {
-        $paramsFees[] = $termId;
-        $paramsFees[] = $termId;
-    }
-
-    $outstanding = QueryDB($outstandingQuery, $paramsFees)->fetchColumn();
 
     return [
-        'payment_count' => (int) ($summary['payment_count'] ?? 0),
-        'student_count' => (int) ($summary['student_count'] ?? 0),
-        'total_paid' => (float) ($summary['total_paid'] ?? 0),
-        'cash_paid' => (float) ($summary['cash_paid'] ?? 0),
-        'bank_paid' => (float) ($summary['bank_paid'] ?? 0),
-        'outstanding' => (float) ($outstanding ?? 0),
+        'payment_count' => 0,
+        'student_count' => 0,
+        'total_expected' => 0.0,
+        'total_paid' => 0.0,
+        'cash_paid' => 0.0,
+        'bank_paid' => 0.0,
+        'outstanding' => 0.0,
     ];
 }
 
@@ -1544,72 +1521,50 @@ function get_admin_payment_records(?int $sessionId = null, ?int $termId = null, 
     $termId ??= get_current_academic_term_id($sessionId) ?? 0;
     $limit = max(1, $limit);
 
-    if (schema_has_table('payments') && schema_has_table('student_fees') && schema_has_table('fee_structures')) {
+    if (schema_has_table('student_fees')) {
+        $whereConditions = ["sf.amount_paid > 0"];
+        $params = [];
+
+        if ($sessionId > 0) {
+            $whereConditions[] = "(fs.session_id = ? OR s.current_session_id = ? OR sf.id > 0)";
+            $params[] = $sessionId;
+            $params[] = $sessionId;
+        }
+
+        if ($termId > 0) {
+            $whereConditions[] = "(fs.term_id IS NULL OR fs.term_id = ? OR s.current_term_id = ? OR sf.id > 0)";
+            $params[] = $termId;
+            $params[] = $termId;
+        }
+
+        $whereSql = implode(' AND ', $whereConditions);
+
         return QueryDB(
-            "SELECT p.*,
-                    p.payment_reference AS receipt_number,
-                    p.amount AS amount_paid,
-                    s.admission_no,
+            "SELECT sf.id,
+                    sf.student_id,
+                    sf.amount_paid,
+                    sf.amount_due,
+                    sf.balance,
+                    sf.status,
+                    COALESCE(sf.updated_at, sf.created_at) AS payment_date,
                     s.first_name,
                     s.last_name,
-                    COALESCE(c.class_name, sc.class_name) AS class_name,
-                    COALESCE(c.class_arm, sc.section) AS class_arm,
-                    ac.session_name,
-                    t.term_name,
-                    fs.fee_type AS fee_type_name,
-                    fs.description AS fee_description
-             FROM payments p
-             JOIN student_fees sf ON p.payable_type = 'student_fee' AND p.payable_id = sf.id
+                    s.admission_no,
+                    COALESCE(fs.name, 'Student Fee') AS fee_type_name,
+                    COALESCE(t.term_name, 'Session Fee') AS term_name,
+                    'bank_transfer' AS payment_method
+             FROM student_fees sf
              LEFT JOIN students s ON sf.student_id = s.id
-             LEFT JOIN classes c ON s.class_link = c.id
-             LEFT JOIN school_classes sc ON s.current_class_id = sc.id
              LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
-             LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
              LEFT JOIN terms t ON fs.term_id = t.id
-             WHERE p.status = 'completed'
-               AND (? = 0 OR fs.session_id = ?)
-               AND (? = 0 OR fs.term_id = ?)
-             ORDER BY COALESCE(p.payment_date, p.created_at) DESC, p.id DESC
+             WHERE {$whereSql}
+             ORDER BY COALESCE(sf.updated_at, sf.created_at) DESC, sf.id DESC
              LIMIT {$limit}",
-            [$sessionId, $sessionId, $termId, $termId]
-        )->fetchAll();
+            $params
+        )->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    if (!schema_has_table('student_payments')) {
-        return [];
-    }
-
-    $hasTermLink = schema_has_column('student_payments', 'term_link');
-
-    $query = "SELECT sp.*,
-                s.admission_no,
-                s.first_name,
-                s.last_name,
-                c.class_name,
-                c.class_arm,
-                ac.session_name,
-                " . ($hasTermLink ? "at.term_name," : "'N/A' AS term_name,") . "
-                ft.fee_name AS fee_type_name,
-                f.fee_description
-         FROM student_payments sp
-         LEFT JOIN students s ON sp.student_link = s.id
-         LEFT JOIN classes c ON s.class_link = c.id
-         LEFT JOIN academic_sessions ac ON sp.academic_session_link = ac.id
-         " . ($hasTermLink ? "LEFT JOIN academic_terms at ON sp.term_link = at.id" : "") . "
-         LEFT JOIN fees f ON sp.fee_structure_link = f.id
-         LEFT JOIN fee_type ft ON f.fee_name = ft.id
-         WHERE (? = 0 OR sp.academic_session_link = ?)" .
-         ($hasTermLink ? " AND (? = 0 OR sp.term_link = ?)" : "") . "
-         ORDER BY COALESCE(sp.payment_date, sp.created_at) DESC, sp.id DESC
-         LIMIT {$limit}";
-
-    $params = [$sessionId, $sessionId];
-    if ($hasTermLink) {
-        $params[] = $termId;
-        $params[] = $termId;
-    }
-
-    return QueryDB($query, $params)->fetchAll();
+    return [];
 }
 
 function get_admin_dashboard_overview(?int $sessionId = null, ?int $termId = null): array

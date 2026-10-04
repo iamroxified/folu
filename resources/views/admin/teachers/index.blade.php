@@ -55,9 +55,10 @@ $teachers = QueryDB("SELECT * FROM teachers WHERE status = 'active' OR status IS
                                 </div>
                                 <div class="card-body">
                                     <div class="table-responsive">
-                                        <table class="table table-bordered">
+                                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered">
                                             <thead>
-                                                <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                     <th><?php echo htmlspecialchars($teacherIdLabel); ?></th>
                                                     <th>Name</th>
                                                     <th>Email</th>
@@ -68,7 +69,7 @@ $teachers = QueryDB("SELECT * FROM teachers WHERE status = 'active' OR status IS
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($teachers as $teacher): ?>
+                                                <?php $sn = 1; ?><?php foreach ($teachers as $teacher): ?>
                                                     <?php
                                                         $teacherId = $teacher[$teacherIdField] ?? 'N/A';
                                                         $teacherName = trim(($teacher['first_name'] ?? '') . ' ' . ($teacher['last_name'] ?? ''));
@@ -78,6 +79,7 @@ $teachers = QueryDB("SELECT * FROM teachers WHERE status = 'active' OR status IS
                                                         $teacherDate = $teacher[$teacherDateField] ?? null;
                                                     ?>
                                                     <tr>
+                                                        <td><?php echo $sn++; ?></td>
                                                         <td><?php echo htmlspecialchars($teacherId); ?></td>
                                                         <td><?php echo htmlspecialchars($teacherName !== '' ? $teacherName : 'N/A'); ?></td>
                                                         <td><?php echo htmlspecialchars($teacherEmail); ?></td>

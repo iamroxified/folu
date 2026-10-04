@@ -55,22 +55,21 @@
         <ul class="folu-footer-contact-list">
           <li class="folu-footer-contact-item">
             <i class="fa fa-map-marker"></i>
-            <span>P.O. Box 37, Itedo-Ijowa, Isanlu, Kogi State, Nigeria</span>
+            <span>{{ !empty($schoolSettings->school_address) ? $schoolSettings->school_address : 'P.O. Box 37, Itedo-Ijowa, Isanlu, Kogi State, Nigeria' }}</span>
           </li>
           <li class="folu-footer-contact-item">
             <i class="fa fa-phone"></i>
             <div>
-              <a href="tel:08165354191">08165354191</a><br>
-              <a href="tel:08057421037">08057421037</a>
+              <a href="tel:{{ !empty($schoolSettings->school_phone) ? $schoolSettings->school_phone : '08165354191' }}">{{ !empty($schoolSettings->school_phone) ? $schoolSettings->school_phone : '08165354191' }}</a>
             </div>
           </li>
           <li class="folu-footer-contact-item">
             <i class="fa fa-envelope"></i>
-            <a href="mailto:info@foluinternationalschools.sch.ng">info@foluinternationalschools.sch.ng</a>
+            <a href="mailto:{{ !empty($schoolSettings->school_email) ? $schoolSettings->school_email : 'info@foluinternationalschools.sch.ng' }}">{{ !empty($schoolSettings->school_email) ? $schoolSettings->school_email : 'info@foluinternationalschools.sch.ng' }}</a>
           </li>
           <li class="folu-footer-contact-item">
             <i class="fa fa-whatsapp"></i>
-            <a href="https://wa.me/2348165354191" target="_blank" rel="noopener noreferrer">WhatsApp Chat Line</a>
+            <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $schoolSettings->school_phone ?? '2348165354191') }}" target="_blank" rel="noopener noreferrer">WhatsApp Chat Line</a>
           </li>
         </ul>
       </div>

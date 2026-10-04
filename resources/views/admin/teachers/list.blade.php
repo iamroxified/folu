@@ -59,9 +59,10 @@ $teachers = QueryDB(
                         </div>
                         <div class="card-body">
                             <div class="table-responsive">
-                                <table class="table table-bordered table-striped">
+                                <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                     <thead>
-                                        <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                             <th>Teacher ID</th>
                                             <th>Name</th>
                                             <th>Username</th>
@@ -73,8 +74,9 @@ $teachers = QueryDB(
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($teachers as $teacher): ?>
+                                        <?php $sn = 1; ?><?php foreach ($teachers as $teacher): ?>
                                             <tr>
+                                                <td><?php echo $sn++; ?></td>
                                                 <td><?php echo htmlspecialchars($teacher['teacher_id']); ?></td>
                                                 <td><?php echo htmlspecialchars(trim($teacher['first_name'] . ' ' . $teacher['last_name'])); ?></td>
                                                 <td><?php echo htmlspecialchars($teacher['username']); ?></td>

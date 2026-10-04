@@ -78,9 +78,10 @@ if (schema_has_table('student_attendance')) {
                                 </div>
                                 <div class="card-body">
                                     <div class="table-responsive">
-                                        <table class="table table-bordered">
+                                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered">
                                             <thead>
-                                                <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                     <th>Date</th>
                                                     <th>Student</th>
                                                     <th><?php echo htmlspecialchars($studentIdentifierLabel); ?></th>
@@ -90,9 +91,10 @@ if (schema_has_table('student_attendance')) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($attendance as $record): ?>
+                                                <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($attendance as $record): ?>
                                                     <?php $studentName = trim(($record['first_name'] ?? '') . ' ' . ($record['last_name'] ?? '')); ?>
                                                     <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                         <td><?php echo date('M d, Y', strtotime($record['date'])); ?></td>
                                                         <td><?php echo htmlspecialchars($studentName !== '' ? $studentName : 'N/A'); ?></td>
                                                         <td><?php echo htmlspecialchars((string) ($record['student_identifier'] ?? 'N/A')); ?></td>

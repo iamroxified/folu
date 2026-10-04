@@ -128,7 +128,7 @@ if ($selectedClassId > 0) {
                                 <div class="col-md-3">
                                     <label for="academic_session_link">Session</label>
                                     <select class="form-control" id="academic_session_link" name="academic_session_link">
-                                        <?php foreach ($sessions as $session): ?>
+                                        <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                             <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                             </option>
@@ -139,7 +139,7 @@ if ($selectedClassId > 0) {
                                     <label for="class_link">Class</label>
                                     <select class="form-control" id="class_link" name="class_link">
                                         <option value="">Select Class</option>
-                                        <?php foreach ($classes as $class): ?>
+                                        <?php $sn = 1; ?><?php foreach ($classes as $class): ?>
                                             <option value="<?php echo (int) $class['id']; ?>" <?php echo $selectedClassId === (int) $class['id'] ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars(trim(($class['class_name'] ?? '') . ' ' . ($class['class_arm'] ?? ''))); ?>
                                             </option>
@@ -150,7 +150,7 @@ if ($selectedClassId > 0) {
                                     <label for="subject_link">Subject</label>
                                     <select class="form-control" id="subject_link" name="subject_link">
                                         <option value="0">General / Class Attendance</option>
-                                        <?php foreach ($subjects as $subject): ?>
+                                        <?php $sn = 1; ?><?php foreach ($subjects as $subject): ?>
                                             <option value="<?php echo (int) $subject['id']; ?>" <?php echo $selectedSubjectId === (int) $subject['id'] ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars((string) $subject['subject_name']); ?>
                                             </option>
@@ -189,9 +189,10 @@ if ($selectedClassId > 0) {
                                     <input type="hidden" name="subject_link" value="<?php echo $selectedSubjectId; ?>">
                                     <input type="hidden" name="attendance_date" value="<?php echo htmlspecialchars($selectedDate); ?>">
                                     <div class="table-responsive">
-                                        <table class="table table-bordered table-striped">
+                                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                             <thead>
-                                                <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                     <th>Admission No</th>
                                                     <th>Student</th>
                                                     <th>Status</th>
@@ -199,15 +200,16 @@ if ($selectedClassId > 0) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($students as $student): ?>
+                                                <?php $sn = 1; ?><?php foreach ($students as $student): ?>
                                                     <?php $existing = $existingAttendance[(int) $student['id']] ?? []; ?>
                                                     <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                         <td><?php echo htmlspecialchars((string) $student['admission_no']); ?></td>
                                                         <td><?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? '') . ' ' . ($student['other_names'] ?? ''))); ?></td>
                                                         <td style="min-width: 180px;">
                                                             <select class="form-control status-select" name="attendance[<?php echo (int) $student['id']; ?>]">
                                                                 <option value="">Not Marked</option>
-                                                                <?php foreach (['present', 'absent', 'late', 'excused'] as $status): ?>
+                                                                <?php $sn = 1; ?><?php foreach (['present', 'absent', 'late', 'excused'] as $status): ?>
                                                                     <option value="<?php echo $status; ?>" <?php echo (($existing['status'] ?? '') === $status) ? 'selected' : ''; ?>>
                                                                         <?php echo htmlspecialchars(ucfirst($status)); ?>
                                                                     </option>

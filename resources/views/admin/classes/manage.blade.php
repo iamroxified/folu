@@ -187,7 +187,7 @@ $classLevels = [
                                             <label for="class_level">Class Level Code</label>
                                             <select class="form-control" id="class_level" name="class_level" required>
                                                 <option value="">Select Level</option>
-                                                <?php foreach ($classLevels as $value => $label): ?>
+                                                <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($classLevels as $value => $label): ?>
                                                     <option value="<?php echo htmlspecialchars($value); ?>" <?php echo (($editingClass['class_level'] ?? '') === $value) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars($label . ' (' . $value . ')'); ?>
                                                     </option>
@@ -198,7 +198,7 @@ $classLevels = [
                                             <label for="form_teacher_link">Default Form Teacher</label>
                                             <select class="form-control" id="form_teacher_link" name="form_teacher_link">
                                                 <option value="0">No Default Form Teacher Yet</option>
-                                                <?php foreach ($teachers as $teacher): ?>
+                                                <?php $sn = 1; ?><?php foreach ($teachers as $teacher): ?>
                                                     <option value="<?php echo (int) $teacher['id']; ?>" <?php echo ((int) ($editingClass['form_teacher_link'] ?? 0) === (int) $teacher['id']) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars((string) ($teacher['teacher_id'] . ' - ' . $teacher['first_name'] . ' ' . $teacher['last_name'])); ?>
                                                     </option>
@@ -224,9 +224,10 @@ $classLevels = [
                                         <div class="alert alert-info mb-0">No classes have been created yet.</div>
                                     <?php else: ?>
                                         <div class="table-responsive">
-                                            <table class="table table-bordered table-striped">
+                                            <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                                 <thead>
-                                                    <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                         <th>Class</th>
                                                         <th>Level</th>
                                                         <th>Form Teacher</th>
@@ -236,8 +237,9 @@ $classLevels = [
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <?php foreach ($classes as $class): ?>
+                                                    <?php $sn = 1; ?><?php foreach ($classes as $class): ?>
                                                         <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                             <td><?php echo htmlspecialchars(trim(($class['class_name'] ?? '') . ' ' . ($class['class_arm'] ?? ''))); ?></td>
                                                             <td><?php echo htmlspecialchars((string) ($classLevels[$class['class_level'] ?? ''] ?? ($class['class_level'] ?? ''))); ?></td>
                                                             <td><?php echo htmlspecialchars((string) ($class['form_teacher_name'] ?? 'Not Assigned')); ?></td>

@@ -5,15 +5,15 @@
       <div class="folu-topbar-info">
         <span class="folu-topbar-item">
           <i class="fa fa-map-marker"></i>
-          <span>P.O. Box 37, Itedo-Ijowa, Isanlu, Kogi State</span>
+          <span>{{ !empty($schoolSettings->school_address) ? $schoolSettings->school_address : 'P.O. Box 37, Itedo-Ijowa, Isanlu, Kogi State' }}</span>
         </span>
         <span class="folu-topbar-item">
           <i class="fa fa-phone"></i>
-          <a href="tel:08165354191">08165354191</a> / <a href="tel:08057421037">08057421037</a>
+          <a href="tel:{{ !empty($schoolSettings->school_phone) ? $schoolSettings->school_phone : '08165354191' }}">{{ !empty($schoolSettings->school_phone) ? $schoolSettings->school_phone : '08165354191' }}</a>
         </span>
         <span class="folu-topbar-item folu-topbar-email">
           <i class="fa fa-envelope-o"></i>
-          <a href="mailto:info@foluinternationalschools.sch.ng">info@foluinternationalschools.sch.ng</a>
+          <a href="mailto:{{ !empty($schoolSettings->school_email) ? $schoolSettings->school_email : 'info@foluinternationalschools.sch.ng' }}">{{ !empty($schoolSettings->school_email) ? $schoolSettings->school_email : 'info@foluinternationalschools.sch.ng' }}</a>
         </span>
       </div>
       <div class="folu-topbar-actions">
@@ -170,15 +170,11 @@
   <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--folu-border); font-size: 13px; color: var(--folu-text-muted);">
     <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
       <i class="fa fa-phone" style="color: var(--folu-navy);"></i>
-      <a href="tel:08165354191" style="color: var(--folu-text-body); text-decoration: none; font-weight: 600;">08165354191</a>
-    </div>
-    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-      <i class="fa fa-whatsapp" style="color: var(--folu-green);"></i>
-      <a href="https://wa.me/2348165354191" target="_blank" rel="noopener noreferrer" style="color: var(--folu-green); text-decoration: none; font-weight: 600;">08057421037</a>
+      <a href="tel:{{ !empty($schoolSettings->school_phone) ? $schoolSettings->school_phone : '08165354191' }}" style="color: var(--folu-text-body); text-decoration: none; font-weight: 600;">{{ !empty($schoolSettings->school_phone) ? $schoolSettings->school_phone : '08165354191' }}</a>
     </div>
     <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.4;">
       <i class="fa fa-map-marker" style="color: var(--folu-gold); margin-top: 2px;"></i>
-      <span>P.O. Box 37, Itedo-Ijowa, Isanlu, Kogi State</span>
+      <span>{{ !empty($schoolSettings->school_address) ? $schoolSettings->school_address : 'P.O. Box 37, Itedo-Ijowa, Isanlu, Kogi State' }}</span>
     </div>
   </div>
 </div>

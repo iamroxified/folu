@@ -49,17 +49,19 @@ if (schema_has_table('student_attendance')) {
             <div class="container">
                 <div class="page-inner">
                     <div class="table-responsive">
-                        <table class="table table-bordered">
+                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered">
                             <thead>
-                                <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                     <th>Date</th>
                                     <th>Student</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($attendanceRecords as $record): ?>
+                                <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($attendanceRecords as $record): ?>
                                     <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                         <td><?= date('M d, Y', strtotime($record['date'])) ?></td>
                                         <td><?= $record['first_name'] . ' ' . $record['last_name'] ?></td>
                                         <td><?= ucfirst($record['status']) ?></td>

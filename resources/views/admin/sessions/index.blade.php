@@ -185,7 +185,7 @@ $allTerms = QueryDB(
                                             <label for="term_session_id">Session</label>
                                             <select class="form-control" id="term_session_id" name="session_id" required>
                                                 <option value="">Select Session</option>
-                                                <?php foreach ($sessions as $session): ?>
+                                                <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                                     <option value="<?php echo (int) $session['id']; ?>" <?php echo $selectedSessionId === (int) $session['id'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars((string) $session['session_name']); ?>
                                                     </option>
@@ -255,9 +255,10 @@ $allTerms = QueryDB(
                                 </div>
                                 <div class="card-body">
                                     <div class="table-responsive">
-                                        <table class="table table-bordered table-striped">
+                                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                             <thead>
-                                                <tr>
+                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                     <th>Session</th>
                                                     <th>Dates</th>
                                                     <th>Status</th>
@@ -265,8 +266,9 @@ $allTerms = QueryDB(
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($sessions as $session): ?>
+                                                <?php $sn = 1; ?><?php foreach ($sessions as $session): ?>
                                                     <tr>
+                                                         <td><?php echo $sn++; ?></td>
                                                         <td><?php echo htmlspecialchars((string) $session['session_name']); ?></td>
                                                         <td><?php echo htmlspecialchars((string) ($session['start_date'] . ' to ' . $session['end_date'])); ?></td>
                                                         <td>
@@ -306,9 +308,10 @@ $allTerms = QueryDB(
                                         </div>
                                     <?php endif; ?>
                                     <div class="table-responsive">
-                                        <table class="table table-bordered table-striped">
+                                        <table id="basic-datatables" class="display table-striped table-hover table table-bordered table-striped">
                                             <thead>
                                                 <tr>
+                                                    <th style="width: 50px;">S/N</th>
                                                     <th>Session</th>
                                                     <th>Term</th>
                                                     <th>Dates</th>
@@ -317,7 +320,7 @@ $allTerms = QueryDB(
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($allTerms as $term): ?>
+                                                <?php $sn = 1; ?><?php foreach ($allTerms as $term): ?>
                                                     <?php if ($selectedSessionId > 0 && (int) $term['academic_session_link'] !== $selectedSessionId) { continue; } ?>
                                                     <tr>
                                                         <td><?php echo htmlspecialchars((string) $term['session_name']); ?></td>

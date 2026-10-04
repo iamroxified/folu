@@ -24,10 +24,10 @@
     <a href="javascript:window.print()" class="print-btn">Print Letter</a>
 
     <div class="header">
-        <div class="school-name">{{ $schoolSettings->school_name ?? 'School Management System' }}</div>
+        <div class="school-name">{{ !empty($schoolSettings->school_name) ? $schoolSettings->school_name : 'Folu International Schools' }}</div>
         <div class="school-details">
-            {{ $schoolSettings->school_address ?? '123 School Address, City' }}<br>
-            Phone: {{ $schoolSettings->school_phone ?? '123-456-7890' }} | Email: {{ $schoolSettings->school_email ?? 'info@school.com' }}
+            {{ !empty($schoolSettings->school_address) ? $schoolSettings->school_address : 'P.O Box 37, Itedo-Ijowa, Isanlu Kogi State Nigeria' }}<br>
+            Phone: {{ !empty($schoolSettings->school_phone) ? $schoolSettings->school_phone : '+234 816 535 4191' }} | Email: {{ !empty($schoolSettings->school_email) ? $schoolSettings->school_email : 'info@foluinternationalschools.com.ng' }}
         </div>
     </div>
 
