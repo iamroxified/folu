@@ -364,13 +364,13 @@ try {
                         <tbody>
                           <?php if ($feeStructures === []): ?>
                           <tr>
-                                                         <td><?php echo $sn++; ?></td>
-                            <td colspan="7" class="text-center text-muted">No applicable fee structures were found for
+                            <td colspan="8" class="text-center text-muted py-4">No applicable fee structures were found for
                               this student's current session, term, and class.</td>
                           </tr>
                           <?php else: ?>
-                          <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($feeStructures as $fee): ?>
+                          <?php $sn = 1; foreach ($feeStructures as $fee): ?>
                           <tr>
+                            <td><?php echo $sn++; ?></td>
                             <td>
                               <input type="checkbox" name="fee_ids[]" value="<?php echo (int) $fee['id']; ?>"
                                 class="fee-checkbox" <?php echo !empty($fee['is_allocated']) ? 'disabled' : ''; ?>>

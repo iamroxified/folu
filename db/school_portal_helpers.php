@@ -274,11 +274,28 @@ function generate_teacher_identifier(): string
 {
     global $pdo;
 
+    $count = 0;
+    if (schema_has_table('teachers')) {
+        $count = (int) QueryDB('SELECT COUNT(*) FROM teachers')->fetchColumn();
+    }
+
+    $hasEmployeeId = schema_has_column('teachers', 'employee_id');
+
+    $num = $count + 1;
     do {
-        $identifier = 'TCH' . date('Y') . str_pad((string) random_int(1, 9999), 4, '0', STR_PAD_LEFT);
-        $stmt = $pdo->prepare('SELECT COUNT(*) FROM teachers WHERE teacher_id = ?');
-        $stmt->execute([$identifier]);
-    } while ((int) $stmt->fetchColumn() > 0);
+        $identifier = 'FIS/STF/' . str_pad((string) $num, 3, '0', STR_PAD_LEFT);
+        if ($hasEmployeeId) {
+            $stmt = $pdo->prepare('SELECT COUNT(*) FROM teachers WHERE teacher_id = ? OR employee_id = ?');
+            $stmt->execute([$identifier, $identifier]);
+        } else {
+            $stmt = $pdo->prepare('SELECT COUNT(*) FROM teachers WHERE teacher_id = ?');
+            $stmt->execute([$identifier]);
+        }
+        $exists = (int) $stmt->fetchColumn() > 0;
+        if ($exists) {
+            $num++;
+        }
+    } while ($exists);
 
     return $identifier;
 }
@@ -956,6 +973,10 @@ function get_teacher_class_assignments(int $teacherId, ?int $sessionId = null): 
 
 function assign_teacher_subject(int $teacherId, int $subjectId, int $classId, int $sessionId): bool
 {
+    if (!schema_has_table('teacher_subjects')) {
+        return false;
+    }
+
     $existing = QueryDB(
         'SELECT COUNT(*) FROM teacher_subjects WHERE teacher_link = ? AND subject_link = ? AND class_link = ? AND academic_session_link = ?',
         [$teacherId, $subjectId, $classId, $sessionId]

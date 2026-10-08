@@ -178,14 +178,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label for="qualification">Qualification</label>
-                                    <textarea class="form-control" id="qualification" name="qualification" rows="3"><?php echo htmlspecialchars((string) ($teacher['qualification'] ?? '')); ?></textarea>
+                                    <label for="qualification">Academic Qualification</label>
+                                    <?php $currentQual = (string) ($teacher['qualification'] ?? ''); ?>
+                                    <select class="form-control" id="qualification" name="qualification">
+                                        <option value="">-- Select Academic Qualification --</option>
+                                        <?php 
+                                        $quals = [
+                                            'B.Ed. (Bachelor of Education)',
+                                            "B.Sc. / B.A. (Bachelor's Degree)",
+                                            'M.Ed. (Master of Education)',
+                                            "M.Sc. / M.A. (Master's Degree)",
+                                            'Ph.D. (Doctor of Philosophy)',
+                                            'NCE (National Certificate in Education)',
+                                            'PGDE (Postgraduate Diploma in Education)',
+                                            'HND (Higher National Diploma)',
+                                            'OND (Ordinary National Diploma)',
+                                            'SSCE / WASSCE',
+                                            'Other Professional Certification',
+                                        ];
+                                        foreach ($quals as $q):
+                                        ?>
+                                            <option value="<?php echo htmlspecialchars($q); ?>" <?php echo (strcasecmp($currentQual, $q) === 0 || str_contains($currentQual, explode(' ', $q)[0])) ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($q); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                        <?php if ($currentQual !== '' && !in_array($currentQual, $quals, true)): ?>
+                                            <option value="<?php echo htmlspecialchars($currentQual); ?>" selected><?php echo htmlspecialchars($currentQual); ?></option>
+                                        <?php endif; ?>
+                                    </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="specialization">Specialization</label>
-                                    <textarea class="form-control" id="specialization" name="specialization" rows="3"><?php echo htmlspecialchars((string) ($teacher['specialization'] ?? '')); ?></textarea>
+                                    <label for="specialization">Specialization / Subject Taught</label>
+                                    <textarea class="form-control" id="specialization" name="specialization" rows="2"><?php echo htmlspecialchars((string) ($teacher['specialization'] ?? '')); ?></textarea>
                                 </div>
-                                <button type="submit" class="btn btn-primary">Save Changes</button>
+                                <button type="submit" class="btn btn-primary fw-bold px-4 py-2 mt-2">
+                                    <i class="fas fa-save me-1"></i> Save Changes
+                                </button>
                             </form>
                         </div>
                     </div>

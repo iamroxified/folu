@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
+use App\Models\Staff;
+use App\Models\Payroll;
+use App\Models\Expenditure;
 use App\Models\AcademicSession;
 use App\Models\Term;
 use App\Models\SchoolClass;
@@ -838,5 +841,464 @@ class AdminController extends Controller
         FinancialAuditLog::logAction('changed_admin_password', $user, [], []);
 
         return back()->with('success', 'Password updated successfully.');
+    }
+
+    // Staff details AJAX endpoint
+    public function getStaffDetails(Staff $staff)
+    {
+        $staff->load(['assignedClass', 'assignedSubject']);
+        return response()->json([
+            'id' => $staff->id,
+            'full_name' => $staff->full_name,
+            'staff_type' => $staff->staff_type ?? 'full_time',
+            'staff_type_label' => $staff->formatted_staff_type,
+            'class_or_subject' => $staff->class_or_subject,
+            'salary' => (float) $staff->salary,
+            'position' => $staff->position,
+            'department' => $staff->department,
+        ]);
+    }
+
+    // Payroll Management
+    public function payroll(Request $request)
+    {
+        $query = Payroll::with(['staff.assignedClass', 'staff.assignedSubject'])->latest('pay_date');
+
+        if ($request->filled('staff_id')) {
+            $query->where('staff_id', $request->staff_id);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('staff_type')) {
+            $query->where('staff_type', $request->staff_type);
+        }
+
+        if ($request->filled('month')) {
+            $query->where('month', $request->month);
+        }
+
+        if ($request->filled('year')) {
+            $query->where('year', $request->year);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->whereHas('staff', function($sq) use ($search) {
+                    $sq->where('first_name', 'LIKE', "%{$search}%")
+                      ->orWhere('last_name', 'LIKE', "%{$search}%")
+                      ->orWhere('staff_number', 'LIKE', "%{$search}%");
+                })->orWhere('class_subject', 'LIKE', "%{$search}%")
+                  ->orWhere('payment_reference', 'LIKE', "%{$search}%")
+                  ->orWhere('month', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $payrolls = $query->paginate(20)->withQueryString();
+
+        $staffList = Staff::where('status', 'active')->orderBy('first_name')->get();
+        if ($staffList->isEmpty()) {
+            $staffList = Staff::orderBy('first_name')->get();
+        }
+
+        $months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        $years = range((int) date('Y') - 2, (int) date('Y') + 2);
+
+        $stats = [
+            'total_payroll_paid' => Payroll::where('status', 'paid')->sum('net_pay'),
+            'total_payroll_pending' => Payroll::whereIn('status', ['pending', 'not_paid', 'unpaid'])->sum('net_pay'),
+            'total_records' => Payroll::count(),
+            'paid_records_count' => Payroll::where('status', 'paid')->count(),
+        ];
+
+        $schoolSettings = SchoolSetting::first();
+
+        return view('admin.payroll.index', compact('payrolls', 'staffList', 'stats', 'schoolSettings', 'months', 'years'));
+    }
+
+    public function createPayroll()
+    {
+        $staffList = Staff::orderBy('first_name')->get();
+        $classes = SchoolClass::all();
+        $subjects = Subject::all();
+        $months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        $years = range((int) date('Y') - 2, (int) date('Y') + 2);
+        $schoolSettings = SchoolSetting::first();
+        return view('admin.payroll.create', compact('staffList', 'classes', 'subjects', 'schoolSettings', 'months', 'years'));
+    }
+
+    public function storePayroll(Request $request)
+    {
+        $request->validate([
+            'staff_id' => 'required|exists:staff,id',
+            'staff_type' => 'required|in:full_time,part_time',
+            'class_subject' => 'nullable|string|max:255',
+            'month' => 'required|string',
+            'year' => 'required|integer',
+            'basic_salary' => 'required|numeric|min:0',
+            'allowances' => 'nullable|numeric|min:0',
+            'deductions' => 'nullable|numeric|min:0',
+            'bonuses' => 'nullable|numeric|min:0',
+            'overtime_pay' => 'nullable|numeric|min:0',
+            'pay_date' => 'required|date',
+            'status' => 'required|in:paid,not_paid,pending,processed',
+            'payment_method' => 'required|string',
+            'payment_reference' => 'nullable|string|max:255',
+            'remarks' => 'nullable|string',
+            'update_staff_profile' => 'nullable|boolean',
+        ]);
+
+        $staff = Staff::findOrFail($request->staff_id);
+
+        $basicSalary = (float) $request->basic_salary;
+        $allowances = (float) ($request->allowances ?? 0);
+        $deductions = (float) ($request->deductions ?? 0);
+        $bonuses = (float) ($request->bonuses ?? 0);
+        $overtimePay = (float) ($request->overtime_pay ?? 0);
+
+        $grossPay = $basicSalary + $allowances + $bonuses + $overtimePay;
+        $netPay = max(0, $grossPay - $deductions);
+
+        $classSubject = $request->class_subject ?: $staff->class_or_subject;
+
+        $reference = $request->payment_reference ?: ('PAY-' . date('Ym') . '-' . str_pad(Payroll::count() + 1, 4, '0', STR_PAD_LEFT));
+
+        $payroll = Payroll::create([
+            'staff_id' => $staff->id,
+            'staff_type' => $request->staff_type,
+            'class_subject' => $classSubject,
+            'month' => $request->month,
+            'year' => $request->year,
+            'basic_salary' => $basicSalary,
+            'allowances' => $allowances,
+            'deductions' => $deductions,
+            'bonuses' => $bonuses,
+            'overtime_pay' => $overtimePay,
+            'gross_pay' => $grossPay,
+            'net_pay' => $netPay,
+            'pay_period_start' => $request->pay_date,
+            'pay_period_end' => $request->pay_date,
+            'pay_date' => $request->pay_date,
+            'status' => $request->status,
+            'payment_method' => $request->payment_method,
+            'payment_reference' => $reference,
+            'remarks' => $request->remarks,
+        ]);
+
+        if ($request->has('update_staff_profile')) {
+            $staff->update([
+                'staff_type' => $request->staff_type,
+                'salary' => $basicSalary,
+                'class_or_subject_custom' => $request->class_subject,
+            ]);
+        }
+
+        FinancialAuditLog::logAction('recorded_payroll_payment', $payroll, [], $payroll->toArray());
+
+        return redirect()->route('admin.payroll')->with('success', "Payroll payment for {$staff->full_name} ({$request->month} {$request->year}) recorded successfully.");
+    }
+
+    public function showPayroll(Payroll $payroll)
+    {
+        $payroll->load(['staff.assignedClass', 'staff.assignedSubject']);
+        $schoolSettings = SchoolSetting::first();
+        return view('admin.payroll.show', compact('payroll', 'schoolSettings'));
+    }
+
+    public function editPayroll(Payroll $payroll)
+    {
+        $payroll->load('staff');
+        $staffList = Staff::orderBy('first_name')->get();
+        $months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        $years = range((int) date('Y') - 2, (int) date('Y') + 2);
+        $schoolSettings = SchoolSetting::first();
+        return view('admin.payroll.edit', compact('payroll', 'staffList', 'schoolSettings', 'months', 'years'));
+    }
+
+    public function updatePayroll(Request $request, Payroll $payroll)
+    {
+        $request->validate([
+            'staff_id' => 'required|exists:staff,id',
+            'staff_type' => 'required|in:full_time,part_time',
+            'class_subject' => 'nullable|string|max:255',
+            'month' => 'required|string',
+            'year' => 'required|integer',
+            'basic_salary' => 'required|numeric|min:0',
+            'allowances' => 'nullable|numeric|min:0',
+            'deductions' => 'nullable|numeric|min:0',
+            'bonuses' => 'nullable|numeric|min:0',
+            'pay_date' => 'required|date',
+            'status' => 'required|in:paid,not_paid,pending,processed',
+            'payment_method' => 'required|string',
+            'payment_reference' => 'nullable|string|max:255',
+            'remarks' => 'nullable|string',
+        ]);
+
+        $basicSalary = (float) $request->basic_salary;
+        $allowances = (float) ($request->allowances ?? 0);
+        $deductions = (float) ($request->deductions ?? 0);
+        $bonuses = (float) ($request->bonuses ?? 0);
+        $overtimePay = (float) ($payroll->overtime_pay ?? 0);
+
+        $grossPay = $basicSalary + $allowances + $bonuses + $overtimePay;
+        $netPay = max(0, $grossPay - $deductions);
+
+        $oldData = $payroll->toArray();
+
+        $payroll->update([
+            'staff_id' => $request->staff_id,
+            'staff_type' => $request->staff_type,
+            'class_subject' => $request->class_subject,
+            'month' => $request->month,
+            'year' => $request->year,
+            'basic_salary' => $basicSalary,
+            'allowances' => $allowances,
+            'deductions' => $deductions,
+            'bonuses' => $bonuses,
+            'gross_pay' => $grossPay,
+            'net_pay' => $netPay,
+            'pay_date' => $request->pay_date,
+            'status' => $request->status,
+            'payment_method' => $request->payment_method,
+            'payment_reference' => $request->payment_reference ?: $payroll->payment_reference,
+            'remarks' => $request->remarks,
+        ]);
+
+        FinancialAuditLog::logAction('updated_payroll_payment', $payroll, $oldData, $payroll->toArray());
+
+        return redirect()->route('admin.payroll')->with('success', 'Payroll record updated successfully.');
+    }
+
+    public function destroyPayroll(Payroll $payroll)
+    {
+        $oldData = $payroll->toArray();
+        $payroll->delete();
+
+        FinancialAuditLog::logAction('deleted_payroll_payment', null, $oldData, []);
+
+        return redirect()->route('admin.payroll')->with('success', 'Payroll record deleted successfully.');
+    }
+
+    public function payrollReceipt(Payroll $payroll)
+    {
+        $payroll->load(['staff.assignedClass', 'staff.assignedSubject']);
+        $schoolSettings = SchoolSetting::first();
+        return view('admin.payroll.receipt', compact('payroll', 'schoolSettings'));
+    }
+
+    public function exportPayroll(Request $request)
+    {
+        $payrolls = Payroll::with('staff')->latest('pay_date')->get();
+
+        return response()->streamDownload(function() use ($payrolls) {
+            echo "Reference,Staff Name,Staff Type,Class / Subject,Month Paid For,Basic Salary,Net Pay,Payment Date,Payment Method,Status,Remarks\n";
+            foreach ($payrolls as $p) {
+                $staffName = $p->staff ? $p->staff->full_name : 'N/A';
+                $staffType = $p->formatted_staff_type;
+                $classSub = $p->class_subject ?: ($p->staff ? $p->staff->class_or_subject : 'N/A');
+                $monthYear = $p->pay_period_formatted;
+                $payDate = $p->pay_date ? $p->pay_date->format('Y-m-d') : '';
+                $status = $p->formatted_status;
+                echo "\"{$p->payment_reference}\",\"{$staffName}\",\"{$staffType}\",\"{$classSub}\",\"{$monthYear}\",\"{$p->basic_salary}\",\"{$p->net_pay}\",\"{$payDate}\",\"{$p->payment_method}\",\"{$status}\",\"{$p->remarks}\"\n";
+            }
+        }, 'payroll_report_' . date('Y_m_d') . '.csv');
+    }
+
+    // Expenditure Management
+    public function expenditures(Request $request)
+    {
+        $query = Expenditure::with('recorder')->latest('expenditure_date');
+
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('title', 'LIKE', "%{$search}%")
+                  ->orWhere('expenditure_number', 'LIKE', "%{$search}%")
+                  ->orWhere('vendor_recipient', 'LIKE', "%{$search}%")
+                  ->orWhere('description', 'LIKE', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('from_date')) {
+            $query->where('expenditure_date', '>=', $request->from_date);
+        }
+        if ($request->filled('to_date')) {
+            $query->where('expenditure_date', '<=', $request->to_date);
+        }
+
+        $expenditures = $query->paginate(20)->withQueryString();
+
+        $categories = [
+            'Utilities',
+            'Maintenance & Repairs',
+            'Supplies & Stationery',
+            'Equipment & IT',
+            'Events & Activities',
+            'Salaries & Wages',
+            'Transport & Logistics',
+            'Miscellaneous',
+        ];
+
+        $stats = [
+            'total_amount' => Expenditure::where('status', '!=', 'cancelled')->sum('amount'),
+            'paid_amount' => Expenditure::where('status', 'paid')->sum('amount'),
+            'pending_amount' => Expenditure::where('status', 'pending')->sum('amount'),
+            'total_count' => Expenditure::count(),
+        ];
+
+        $schoolSettings = SchoolSetting::first();
+
+        return view('admin.expenditures.index', compact('expenditures', 'categories', 'stats', 'schoolSettings'));
+    }
+
+    public function createExpenditure()
+    {
+        $categories = [
+            'Utilities',
+            'Maintenance & Repairs',
+            'Supplies & Stationery',
+            'Equipment & IT',
+            'Events & Activities',
+            'Salaries & Wages',
+            'Transport & Logistics',
+            'Miscellaneous',
+        ];
+        $schoolSettings = SchoolSetting::first();
+        return view('admin.expenditures.create', compact('categories', 'schoolSettings'));
+    }
+
+    public function storeExpenditure(Request $request)
+    {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'category' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0.01',
+            'expenditure_date' => 'required|date',
+            'vendor_recipient' => 'nullable|string|max:255',
+            'payment_method' => 'required|string',
+            'status' => 'required|in:paid,pending,approved,cancelled',
+            'description' => 'nullable|string',
+            'receipt' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        ]);
+
+        $receiptPath = null;
+        if ($request->hasFile('receipt')) {
+            $receiptPath = $request->file('receipt')->store('expenditures', 'public');
+        }
+
+        $expNumber = 'EXP-' . date('Ym') . '-' . str_pad(Expenditure::count() + 1, 4, '0', STR_PAD_LEFT);
+
+        $expenditure = Expenditure::create([
+            'expenditure_number' => $expNumber,
+            'title' => $request->title,
+            'category' => $request->category,
+            'amount' => $request->amount,
+            'expenditure_date' => $request->expenditure_date,
+            'vendor_recipient' => $request->vendor_recipient,
+            'payment_method' => $request->payment_method,
+            'status' => $request->status,
+            'description' => $request->description,
+            'receipt_path' => $receiptPath,
+            'recorded_by' => auth()->id() ?? ($_SESSION['adid'] ?? null),
+        ]);
+
+        FinancialAuditLog::logAction('created_expenditure', $expenditure, [], $expenditure->toArray());
+
+        return redirect()->route('admin.expenditures')->with('success', 'Expenditure recorded successfully.');
+    }
+
+    public function showExpenditure(Expenditure $expenditure)
+    {
+        $expenditure->load('recorder');
+        $schoolSettings = SchoolSetting::first();
+        return view('admin.expenditures.show', compact('expenditure', 'schoolSettings'));
+    }
+
+    public function editExpenditure(Expenditure $expenditure)
+    {
+        $categories = [
+            'Utilities',
+            'Maintenance & Repairs',
+            'Supplies & Stationery',
+            'Equipment & IT',
+            'Events & Activities',
+            'Salaries & Wages',
+            'Transport & Logistics',
+            'Miscellaneous',
+        ];
+        $schoolSettings = SchoolSetting::first();
+        return view('admin.expenditures.edit', compact('expenditure', 'categories', 'schoolSettings'));
+    }
+
+    public function updateExpenditure(Request $request, Expenditure $expenditure)
+    {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'category' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0.01',
+            'expenditure_date' => 'required|date',
+            'vendor_recipient' => 'nullable|string|max:255',
+            'payment_method' => 'required|string',
+            'status' => 'required|in:paid,pending,approved,cancelled',
+            'description' => 'nullable|string',
+            'receipt' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        ]);
+
+        $data = $request->only([
+            'title', 'category', 'amount', 'expenditure_date',
+            'vendor_recipient', 'payment_method', 'status', 'description'
+        ]);
+
+        if ($request->hasFile('receipt')) {
+            if ($expenditure->receipt_path) {
+                Storage::disk('public')->delete($expenditure->receipt_path);
+            }
+            $data['receipt_path'] = $request->file('receipt')->store('expenditures', 'public');
+        }
+
+        $oldData = $expenditure->toArray();
+        $expenditure->update($data);
+
+        FinancialAuditLog::logAction('updated_expenditure', $expenditure, $oldData, $expenditure->toArray());
+
+        return redirect()->route('admin.expenditures')->with('success', 'Expenditure record updated successfully.');
+    }
+
+    public function destroyExpenditure(Expenditure $expenditure)
+    {
+        if ($expenditure->receipt_path) {
+            Storage::disk('public')->delete($expenditure->receipt_path);
+        }
+        $oldData = $expenditure->toArray();
+        $expenditure->delete();
+
+        FinancialAuditLog::logAction('deleted_expenditure', null, $oldData, []);
+
+        return redirect()->route('admin.expenditures')->with('success', 'Expenditure record deleted successfully.');
+    }
+
+    public function exportExpenditures(Request $request)
+    {
+        $expenditures = Expenditure::latest('expenditure_date')->get();
+
+        return response()->streamDownload(function() use ($expenditures) {
+            echo "Expenditure No,Title,Category,Amount,Date,Vendor/Recipient,Payment Method,Status,Description\n";
+            foreach ($expenditures as $e) {
+                $date = $e->expenditure_date ? $e->expenditure_date->format('Y-m-d') : '';
+                $status = $e->formatted_status;
+                echo "\"{$e->expenditure_number}\",\"{$e->title}\",\"{$e->category}\",\"{$e->amount}\",\"{$date}\",\"{$e->vendor_recipient}\",\"{$e->payment_method}\",\"{$status}\",\"{$e->description}\"\n";
+            }
+        }, 'expenditures_report_' . date('Y_m_d') . '.csv');
     }
 }

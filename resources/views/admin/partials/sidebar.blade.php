@@ -70,9 +70,27 @@
               </div>
             </li>
             <li class="nav-item {{ $isActive(['teachers', 'teachers/index', 'teachers/list', 'teachers/add', 'teachers/edit', 'teachers/view', 'teachers/assign_subjects']) }}">
-              <a href="{{ url('/admin/teachers.php') }}"> <i class="fas fa-chalkboard-teacher"></i>
+              <a data-bs-toggle="collapse" href="#teachersSubmenu">
+                <i class="fas fa-chalkboard-teacher"></i>
                 <p>Teachers</p>
+                <span class="caret"></span>
               </a>
+              <div class="collapse {{ $isSubmenuActive(['teachers', 'teachers/index', 'teachers/list', 'teachers/add', 'teachers/edit', 'teachers/view', 'teachers/assign_subjects']) }}" id="teachersSubmenu">
+                <ul class="nav nav-collapse">
+                  <li>
+                    <a href="{{ url('/admin/teachers.php') }}">Overview</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/teachers/list.php') }}">All Teachers</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/teachers/add.php') }}">Add Teacher</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/teachers/assign_subjects.php') }}">Assign Subjects</a>
+                  </li>
+                </ul>
+              </div>
             </li>
             <li class="nav-item {{ $isActive(['classes/manage', 'classes/assign_students', 'classes/timetable']) }}">
               <a href="{{ url('/admin/classes/manage.php') }}"> <i class="fas fa-school"></i>
@@ -130,6 +148,16 @@
             <li class="nav-item {{ $isActive(['classes/timetable']) }}">
               <a href="{{ url('/admin/classes/timetable.php') }}"> <i class="fas fa-calendar"></i>
                 <p>Timetables</p>
+              </a>
+            </li>
+            <li class="nav-item {{ $isActive(['payroll', 'payroll/create', 'payroll/index', 'payroll/edit', 'payroll/show']) }}">
+              <a href="{{ route('admin.payroll') }}"> <i class="fas fa-file-invoice-dollar"></i>
+                <p>Staff Payroll</p>
+              </a>
+            </li>
+            <li class="nav-item {{ $isActive(['expenditures', 'expenditures/create', 'expenditures/index', 'expenditures/edit', 'expenditures/show']) }}">
+              <a href="{{ route('admin.expenditures') }}"> <i class="fas fa-receipt"></i>
+                <p>Expenditures</p>
               </a>
             </li>
             <li class="nav-item">

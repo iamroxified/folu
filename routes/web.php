@@ -96,6 +96,28 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/staff', [AdminController::class, 'staff'])->name('staff');
     Route::get('/staff/create', [AdminController::class, 'createStaff'])->name('staff.create');
     Route::post('/staff', [AdminController::class, 'storeStaff'])->name('staff.store');
+    Route::get('/staff/{staff}/details', [AdminController::class, 'getStaffDetails'])->name('staff.details');
+
+    // Payroll Management
+    Route::get('/payroll', [AdminController::class, 'payroll'])->name('payroll');
+    Route::get('/payroll/create', [AdminController::class, 'createPayroll'])->name('payroll.create');
+    Route::post('/payroll', [AdminController::class, 'storePayroll'])->name('payroll.store');
+    Route::get('/payroll/{payroll}', [AdminController::class, 'showPayroll'])->name('payroll.show');
+    Route::get('/payroll/{payroll}/edit', [AdminController::class, 'editPayroll'])->name('payroll.edit');
+    Route::put('/payroll/{payroll}', [AdminController::class, 'updatePayroll'])->name('payroll.update');
+    Route::delete('/payroll/{payroll}', [AdminController::class, 'destroyPayroll'])->name('payroll.destroy');
+    Route::get('/payroll/{payroll}/receipt', [AdminController::class, 'payrollReceipt'])->name('payroll.receipt');
+    Route::get('/payroll/export/csv', [AdminController::class, 'exportPayroll'])->name('payroll.export');
+
+    // Expenditure Module
+    Route::get('/expenditures', [AdminController::class, 'expenditures'])->name('expenditures');
+    Route::get('/expenditures/create', [AdminController::class, 'createExpenditure'])->name('expenditures.create');
+    Route::post('/expenditures', [AdminController::class, 'storeExpenditure'])->name('expenditures.store');
+    Route::get('/expenditures/{expenditure}', [AdminController::class, 'showExpenditure'])->name('expenditures.show');
+    Route::get('/expenditures/{expenditure}/edit', [AdminController::class, 'editExpenditure'])->name('expenditures.edit');
+    Route::put('/expenditures/{expenditure}', [AdminController::class, 'updateExpenditure'])->name('expenditures.update');
+    Route::delete('/expenditures/{expenditure}', [AdminController::class, 'destroyExpenditure'])->name('expenditures.destroy');
+    Route::get('/expenditures/export/csv', [AdminController::class, 'exportExpenditures'])->name('expenditures.export');
 });
 
 Route::middleware(['auth', 'role:Teacher'])->prefix('teacher')->name('teacher.')->group(function () {

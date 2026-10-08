@@ -10,10 +10,17 @@ if (!isset($_SESSION['adid'])) {
 $search = trim((string) ($_GET['search'] ?? ''));
 $searchParam = '%' . $search . '%';
 
+$subjectCountSubquery = schema_has_table('teacher_subjects') 
+    ? "(SELECT COUNT(*) FROM teacher_subjects ts WHERE ts.teacher_link = t.id)" 
+    : "0";
+$classCountSubquery = schema_has_table('teacher_class_assignments') 
+    ? "(SELECT COUNT(*) FROM teacher_class_assignments tca WHERE tca.teacher_link = t.id)" 
+    : "0";
+
 $teachers = QueryDB(
     "SELECT t.*, u.username, u.status AS user_status,
-            (SELECT COUNT(*) FROM teacher_subjects ts WHERE ts.teacher_link = t.id) AS subject_count,
-            (SELECT COUNT(*) FROM teacher_class_assignments tca WHERE tca.teacher_link = t.id) AS class_count
+            {$subjectCountSubquery} AS subject_count,
+            {$classCountSubquery} AS class_count
      FROM teachers t
      JOIN users u ON t.user_link = u.id
      WHERE (? = '%%')
