@@ -119,14 +119,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$classOrderBy = schema_has_column('classes', 'class_level') ? 'c.class_level, c.class_name, c.class_arm' : 'c.class_name, c.class_arm';
+$subjectOrderBy = schema_has_column('subjects', 'class_level') ? 'class_level, subject_name' : 'subject_name';
+
 $sessions = QueryDB('SELECT * FROM academic_sessions ORDER BY id DESC')->fetchAll();
 $classes = QueryDB(
     "SELECT c.*, CONCAT(t.first_name, ' ', t.last_name) AS form_teacher_name
      FROM classes c
      LEFT JOIN teachers t ON c.form_teacher_link = t.id
-     ORDER BY c.class_level, c.class_name, c.class_arm",
+     ORDER BY {$classOrderBy}"
 )->fetchAll();
-$subjects = QueryDB('SELECT * FROM subjects ORDER BY class_level, subject_name')->fetchAll();
+$subjects = QueryDB("SELECT * FROM subjects ORDER BY {$subjectOrderBy}")->fetchAll();
 $classAssignments = get_teacher_class_assignments($teacherId, $selectedSessionId);
 $subjectAssignments = get_teacher_subject_assignments($teacherId, $selectedSessionId);
 ?>

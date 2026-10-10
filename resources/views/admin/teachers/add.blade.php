@@ -10,6 +10,11 @@ if (!isset($_SESSION['adid'])) {
 $error = '';
 $success = '';
 
+if (isset($_SESSION['success_msg'])) {
+    $success = (string) $_SESSION['success_msg'];
+    unset($_SESSION['success_msg']);
+}
+
 $generatedId = generate_teacher_id();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -83,8 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
 
             $pdo->commit();
-            $success = 'Teacher created successfully! Teacher ID & Username: ' . $teacherId . ' | Default Password: ' . $password;
-            $generatedId = generate_teacher_id(); // Refresh for next creation
+            $_SESSION['success_msg'] = 'Teacher created successfully! Teacher ID & Username: ' . $teacherId . ' | Default Password: ' . $password;
+            header('Location: /admin/teachers/add.php');
+            exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();

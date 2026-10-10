@@ -165,6 +165,43 @@
                 <p>Reports</p>
               </a>
             </li>
+            <li class="nav-item {{ $isActive(['users', 'users/list', 'users/add', 'users/edit', 'users/roles']) }}">
+              <a data-bs-toggle="collapse" href="#usersSubmenu">
+                <i class="fas fa-users-cog"></i>
+                <p>User Management</p>
+                <span class="caret"></span>
+              </a>
+              <div class="collapse {{ $isSubmenuActive(['users', 'users/list', 'users/add', 'users/edit', 'users/roles']) }}" id="usersSubmenu">
+                <ul class="nav nav-collapse">
+                  <li>
+                    <a href="{{ url('/admin/users/list.php') }}">All Users</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/users/add.php') }}">Add User</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/users/roles.php') }}">Roles & Permissions</a>
+                  </li>
+                </ul>
+              </div>
+            </li>
+            <li class="nav-item {{ $isActive(['blog', 'blog/list', 'blog/add', 'blog/edit']) }}">
+              <a data-bs-toggle="collapse" href="#blogSubmenu">
+                <i class="fas fa-newspaper"></i>
+                <p>Blog Management</p>
+                <span class="caret"></span>
+              </a>
+              <div class="collapse {{ $isSubmenuActive(['blog', 'blog/list', 'blog/add', 'blog/edit']) }}" id="blogSubmenu">
+                <ul class="nav nav-collapse">
+                  <li>
+                    <a href="{{ url('/admin/blog/list.php') }}">All Blog Posts</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/blog/add.php') }}">Add New Post</a>
+                  </li>
+                </ul>
+              </div>
+            </li>
             <li class="nav-item {{ $isActive(['announcements', 'announcements/index']) }}">
               <a href="{{ url('/admin/announcements.php') }}"> <i class="fas fa-bell"></i>
                 <p>Announcements</p>
