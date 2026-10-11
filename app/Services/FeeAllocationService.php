@@ -16,11 +16,14 @@ class FeeAllocationService
      */
     public static function allocateFeeForStudent(Student $student, ?int $sessionId = null, ?int $termId = null): ?StudentFee
     {
-        $sessionId = $sessionId ?? $student->current_session_id;
-        $termId = $termId ?? $student->current_term_id;
+        $activeSession = \App\Models\AcademicSession::where('is_active', true)->first();
+        $activeSessionId = $activeSession ? (int) $activeSession->id : 2;
+
+        $sessionId = $sessionId ?? ($student->current_session_id ?: $activeSessionId);
+        $termId = $termId ?? ($student->current_term_id ?: 1);
 
         if (!$sessionId) {
-            return null;
+            $sessionId = $activeSessionId;
         }
 
         // Standardize category identifier: 'NI' for New Intake, 'OS' for Returning Student
@@ -59,6 +62,11 @@ class FeeAllocationService
         });
 
         $feeStructure = $feeStructures->first();
+
+        // If no matching fee structure found in this session, try falling back to active session
+        if (!$feeStructure && $sessionId !== $activeSessionId) {
+            return self::allocateFeeForStudent($student, $activeSessionId, $termId);
+        }
 
         if (!$feeStructure) {
             return null;
@@ -114,11 +122,52 @@ class FeeAllocationService
      */
     public static function addAdditionalCharge(Student $student, string $feeName, float $amount, ?string $reason = null, ?int $sessionId = null, ?int $termId = null): AdditionalCharge
     {
-        $sessionId = $sessionId ?? $student->current_session_id;
-        $termId = $termId ?? $student->current_term_id;
+        $activeSession = \App\Models\AcademicSession::where('is_active', true)->first();
+        $activeSessionId = $activeSession ? (int) $activeSession->id : 2;
 
-        // Find or create current StudentFee allocation to attach charge
+        $sessionId = $sessionId ?? ($student->current_session_id ?: $activeSessionId);
+        $termId = $termId ?? ($student->current_term_id ?: 1);
+
+        // 1. Find or auto-allocate StudentFee for this student
         $studentFee = self::allocateFeeForStudent($student, $sessionId, $termId);
+
+        // 2. If null and student's session was different from the active session, try active session
+        if (!$studentFee && $sessionId !== $activeSessionId) {
+            $studentFee = self::allocateFeeForStudent($student, $activeSessionId, $termId);
+            if ($studentFee) {
+                $sessionId = $activeSessionId;
+            }
+        }
+
+        // 3. If still null, check if any StudentFee already exists for this student
+        if (!$studentFee) {
+            $studentFee = StudentFee::where('student_id', $student->id)->latest('id')->first();
+        }
+
+        // 4. If student STILL has no StudentFee at all, create an explicit StudentFee container
+        if (!$studentFee) {
+            $templateFeeStructure = FeeStructure::where('is_active', true)->first() ?: FeeStructure::first();
+            $feeStructureId = $templateFeeStructure ? $templateFeeStructure->id : 2;
+            $academicYear = $activeSession ? $activeSession->session_name : date('Y');
+
+            $studentFee = StudentFee::create([
+                'student_id' => $student->id,
+                'fee_structure_id' => $feeStructureId,
+                'session_id' => $sessionId ?: $activeSessionId,
+                'term_id' => $termId,
+                'base_amount' => 0.00,
+                'additional_amount' => 0.00,
+                'total_payable' => 0.00,
+                'amount_due' => 0.00,
+                'amount_paid' => 0.00,
+                'amount_owed' => 0.00,
+                'balance' => 0.00,
+                'due_date' => now()->addDays(30),
+                'status' => 'unpaid',
+                'academic_year' => $academicYear,
+                'notes' => 'Allocated Student Fee Profile with Additional Charges',
+            ]);
+        }
 
         $charge = AdditionalCharge::create([
             'student_id' => $student->id,
@@ -133,6 +182,11 @@ class FeeAllocationService
         ]);
 
         if ($studentFee) {
+            // Also link any previously unlinked charges for this student
+            AdditionalCharge::where('student_id', $student->id)
+                ->whereNull('student_fee_id')
+                ->update(['student_fee_id' => $studentFee->id]);
+
             $studentFee->recalculateTotals();
         }
 
@@ -144,5 +198,25 @@ class FeeAllocationService
         ]);
 
         return $charge;
+    }
+
+    /**
+     * Remove an additional charge from a student's profile and recalculate totals.
+     */
+    public static function removeAdditionalCharge(int $chargeId): bool
+    {
+        $charge = AdditionalCharge::find($chargeId);
+        if (!$charge) {
+            return false;
+        }
+
+        $studentFee = $charge->studentFee;
+        $charge->delete();
+
+        if ($studentFee) {
+            $studentFee->recalculateTotals();
+        }
+
+        return true;
     }
 }

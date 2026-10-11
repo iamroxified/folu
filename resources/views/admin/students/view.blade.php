@@ -59,11 +59,12 @@ if ($studentId) {
     die('Student ID is required');
 }
 
-// Handle payment form submission or deletion
+// Handle payment form submission, fee charge addition, or deletion
 $isPost = (isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SERVER['REQUEST_METHOD']) === 'POST') || (function_exists('request') && request()->isMethod('post'));
 $hasProcessPayment = isset($_POST['process_payment']) || (function_exists('request') && request()->has('process_payment'));
 $hasDeletePayment = isset($_POST['delete_payment']) || (function_exists('request') && request()->has('delete_payment'));
 $hasAddCharge = isset($_POST['add_additional_charge']) || (function_exists('request') && request()->has('add_additional_charge'));
+$hasDeleteCharge = isset($_POST['delete_additional_charge']) || (function_exists('request') && request()->has('delete_additional_charge'));
 
 if ($isPost && $hasAddCharge) {
     $fee_name = trim((string) ($_POST['fee_name'] ?? request('fee_name') ?? ''));
@@ -77,10 +78,22 @@ if ($isPost && $hasAddCharge) {
             $studentModel = \App\Models\Student::find($studentId);
             if ($studentModel) {
                 \App\Services\FeeAllocationService::addAdditionalCharge($studentModel, $fee_name, $charge_amount, $reason);
-                $message = "Additional charge of ₦" . number_format($charge_amount, 2) . " ('{$fee_name}') added successfully to student profile.";
+                $message = "Additional charge of ₦" . number_format($charge_amount, 2) . " ('{$fee_name}') added and calculated successfully in student profile.";
             }
         } catch (\Throwable $e) {
             $error = 'Failed to add additional charge: ' . $e->getMessage();
+        }
+    }
+}
+
+if ($isPost && $hasDeleteCharge) {
+    $charge_id = (int) ($_POST['charge_id'] ?? request('charge_id') ?? 0);
+    if ($charge_id > 0) {
+        try {
+            \App\Services\FeeAllocationService::removeAdditionalCharge($charge_id);
+            $message = "Additional fee charge removed and balance recalculated successfully.";
+        } catch (\Throwable $e) {
+            $error = 'Failed to remove additional charge: ' . $e->getMessage();
         }
     }
 }
@@ -248,14 +261,43 @@ if ($isPost && $hasProcessPayment) {
     }
 }
 
-// Get student fee summary, recent payment history, and outstanding fees
+// Get student fee summary, additional charges, recent payment history, and outstanding fees
 try {
-    // Get student fee summary
+    // 1. Link any unlinked additional charges to the student's active fee record
+    $unlinked_charges_count = (int) $pdo->query("SELECT COUNT(*) FROM additional_charges WHERE student_id = {$studentId} AND (student_fee_id IS NULL OR student_fee_id = 0)")->fetchColumn();
+    if ($unlinked_charges_count > 0) {
+        $studentModel = \App\Models\Student::find($studentId);
+        if ($studentModel) {
+            $sf = \App\Models\StudentFee::where('student_id', $studentId)->latest('id')->first();
+            if (!$sf) {
+                $sf = \App\Services\FeeAllocationService::allocateFeeForStudent($studentModel, 2);
+            }
+            if ($sf) {
+                $pdo->exec("UPDATE additional_charges SET student_fee_id = {$sf->id} WHERE student_id = {$studentId} AND (student_fee_id IS NULL OR student_fee_id = 0)");
+                $sf->recalculateTotals();
+            }
+        }
+    }
+
+    // 2. Get student fee summary
     $fee_summary_stmt = $pdo->prepare("SELECT COALESCE(SUM(sf.amount_due), 0) as total_due, COALESCE(SUM(sf.amount_paid), 0) as total_paid, COALESCE(SUM(sf.balance), 0) as total_balance FROM student_fees sf WHERE sf.student_id = ?");
     $fee_summary_stmt->execute([$studentId]);
     $fee_summary = $fee_summary_stmt->fetch(PDO::FETCH_ASSOC);
 
-    // Get recent payment history
+    // 3. Get all additional charges for this student
+    $additional_charges_stmt = $pdo->prepare("
+        SELECT ac.*, u.name AS added_by_name, s.session_name, t.term_name
+        FROM additional_charges ac
+        LEFT JOIN users u ON ac.added_by = u.id
+        LEFT JOIN academic_sessions s ON ac.session_id = s.id
+        LEFT JOIN academic_terms t ON ac.term_id = t.id
+        WHERE ac.student_id = ?
+        ORDER BY ac.id DESC
+    ");
+    $additional_charges_stmt->execute([$studentId]);
+    $additional_charges = $additional_charges_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // 4. Get recent payment history
     $payment_history_stmt = $pdo->prepare("
         SELECT 
             p.id AS payment_id,
@@ -284,7 +326,7 @@ try {
     $payment_history_stmt->execute([$studentId]);
     $payment_history = $payment_history_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Get outstanding fees
+    // 5. Get outstanding fees
     $outstanding_stmt = $pdo->prepare("
         SELECT 
             sf.*,
@@ -306,6 +348,7 @@ try {
 
 } catch (PDOException $e) {
     $fee_summary = ['total_due' => 0, 'total_paid' => 0, 'total_balance' => 0];
+    $additional_charges = [];
     $payment_history = [];
     $outstanding_fees = [];
 }
@@ -411,7 +454,7 @@ $gradeAverage = student_grade_average($studentId);
             <div class="d-flex align-items-center">
               <i class="fas fa-check-circle me-2 fa-lg"></i>
               <div>
-                <strong>Payment Successful!</strong><br>
+                <strong>Success!</strong><br>
                 <?php echo htmlspecialchars($message); ?>
               </div>
             </div>
@@ -515,6 +558,106 @@ $gradeAverage = student_grade_average($studentId);
                       </table>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <!-- Additional Charges & Extra Fees -->
+              <div class="card mb-4 shadow-sm border-warning">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                  <h4 class="card-title mb-0 text-dark fw-bold">
+                    <i class="fas fa-file-invoice-dollar me-2 text-warning"></i>Additional Charges & Extra Fees
+                  </h4>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-warning text-dark fw-bold"><?php echo count($additional_charges); ?> Extra Charges</span>
+                    <button type="button" class="btn btn-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#extraFeeModal">
+                      <i class="fas fa-plus me-1"></i> Add Fee
+                    </button>
+                  </div>
+                </div>
+                <div class="card-body p-0">
+                  <?php if (empty($additional_charges)): ?>
+                    <div class="text-center py-4 text-muted">
+                      <i class="fas fa-receipt fa-2x mb-2 d-block text-muted"></i>
+                      No additional charges or extra fees recorded for this student.
+                      <div class="mt-2">
+                        <button type="button" class="btn btn-outline-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#extraFeeModal">
+                          <i class="fas fa-plus-circle me-1"></i> Add Extra Fee / Charge
+                        </button>
+                      </div>
+                    </div>
+                  <?php else: ?>
+                    <div class="table-responsive">
+                      <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                          <tr>
+                            <th style="width: 40px;">#</th>
+                            <th>Fee Name</th>
+                            <th>Reason / Description</th>
+                            <th>Amount (₦)</th>
+                            <th>Session / Term</th>
+                            <th>Date Added</th>
+                            <th>Status</th>
+                            <th class="text-end" style="width: 80px;">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <?php 
+                            $sn = 1; 
+                            $total_extra = 0;
+                            foreach ($additional_charges as $charge): 
+                              $total_extra += (float) ($charge['amount'] ?? 0);
+                          ?>
+                          <tr>
+                            <td><?php echo $sn++; ?></td>
+                            <td>
+                              <strong class="text-dark"><?php echo htmlspecialchars((string) $charge['fee_name']); ?></strong>
+                            </td>
+                            <td>
+                              <small class="text-muted"><?php echo htmlspecialchars((string) ($charge['reason'] ?? 'N/A')); ?></small>
+                            </td>
+                            <td class="fw-bold text-dark">
+                              ₦<?php echo number_format((float) ($charge['amount'] ?? 0), 2); ?>
+                            </td>
+                            <td>
+                              <small>
+                                <?php echo htmlspecialchars((string) ($charge['session_name'] ?? 'Current Session')); ?>
+                                <?php if (!empty($charge['term_name'])): ?>
+                                  (<?php echo htmlspecialchars((string) $charge['term_name']); ?>)
+                                <?php endif; ?>
+                              </small>
+                            </td>
+                            <td>
+                              <small class="text-muted">
+                                <?php echo !empty($charge['created_at']) ? date('M d, Y', strtotime((string) $charge['created_at'])) : 'N/A'; ?>
+                              </small>
+                            </td>
+                            <td>
+                              <span class="badge bg-<?php echo ($charge['status'] ?? 'unpaid') === 'paid' ? 'success' : 'warning'; ?> text-dark">
+                                <?php echo ucfirst((string) ($charge['status'] ?? 'unpaid')); ?>
+                              </span>
+                            </td>
+                            <td class="text-end">
+                              <form method="POST" action="" class="d-inline" onsubmit="return confirm('Are you sure you want to remove this additional fee charge? Total due and outstanding balance will be recalculated automatically.');">
+                                <input type="hidden" name="delete_additional_charge" value="1">
+                                <input type="hidden" name="charge_id" value="<?php echo (int) $charge['id']; ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove Charge">
+                                  <i class="fas fa-trash"></i>
+                                </button>
+                              </form>
+                            </td>
+                          </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                        <tfoot class="table-light">
+                          <tr>
+                            <td colspan="3" class="fw-bold text-end">Total Extra Charges:</td>
+                            <td class="fw-bold text-dark">₦<?php echo number_format($total_extra, 2); ?></td>
+                            <td colspan="4"></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  <?php endif; ?>
                 </div>
               </div>
 
@@ -665,6 +808,11 @@ $gradeAverage = student_grade_average($studentId);
                             (<?php echo htmlspecialchars((string) $fee['session_term']); ?>)
                           <?php endif; ?>
                         </small>
+                        <?php if ((float) ($fee['additional_amount'] ?? 0) > 0): ?>
+                          <br><span class="badge bg-warning text-dark mt-1" style="font-size: 11px;">
+                            Includes +₦<?php echo number_format((float) $fee['additional_amount'], 2); ?> extra charges
+                          </span>
+                        <?php endif; ?>
                       </div>
                       <div class="text-end">
                         <strong class="text-white">₦<?php echo number_format((float) ($fee['balance'] ?? 0), 2); ?></strong>
@@ -801,6 +949,9 @@ $gradeAverage = student_grade_average($studentId);
                                   <div class="text-end">
                                     <div class="small text-muted">Amount Due</div>
                                     <div class="fw-bold">₦<?php echo number_format((float) ($fee['amount_due'] ?? 0), 2); ?></div>
+                                    <?php if ((float) ($fee['additional_amount'] ?? 0) > 0): ?>
+                                      <div class="small text-muted" style="font-size: 11px;">(Base: ₦<?php echo number_format((float) $fee['base_amount'], 2); ?> + Extra: ₦<?php echo number_format((float) $fee['additional_amount'], 2); ?>)</div>
+                                    <?php endif; ?>
                                     <div class="small text-success">Paid: ₦<?php echo number_format((float) ($fee['amount_paid'] ?? 0), 2); ?></div>
                                     <div class="small text-danger">Balance: ₦<?php echo number_format((float) ($fee['balance'] ?? 0), 2); ?></div>
                                   </div>
