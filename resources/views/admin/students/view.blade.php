@@ -85,6 +85,8 @@ $performRedirect = function() use ($redirectUrl) {
 $isPost = (isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SERVER['REQUEST_METHOD']) === 'POST') || (function_exists('request') && request()->isMethod('post'));
 $hasProcessPayment = isset($_POST['process_payment']) || (function_exists('request') && request()->has('process_payment'));
 $hasDeletePayment = isset($_POST['delete_payment']) || (function_exists('request') && request()->has('delete_payment'));
+$hasAddCharge = isset($_POST['add_additional_charge']) || (function_exists('request') && request()->has('add_additional_charge'));
+$hasDeleteCharge = isset($_POST['delete_additional_charge']) || (function_exists('request') && request()->has('delete_additional_charge'));
 $hasDropSubject = isset($_POST['drop_student_subject']) || (function_exists('request') && request()->has('drop_student_subject'));
 $hasEnrollSubject = isset($_POST['enroll_student_subject']) || (function_exists('request') && request()->has('enroll_student_subject'));
 
