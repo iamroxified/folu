@@ -7,7 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once base_path('db/config.php');
 require_once base_path('db/functions.php');
 
-if (!isset($_SESSION['adid']) && !auth()->check()) {
+if (!isset($_SESSION['adid']) && !auth()->check() && php_sapi_name() !== 'cli') {
     header('Location: /admin/login.php');
     exit;
 }
@@ -288,7 +288,10 @@ if ($selectedClassId > 0) {
                             <h2 class="text-dark fw-bold mb-1">Student Attendance Register</h2>
                             <p class="text-muted mb-0">Select session, term, class, and date from the calendar to record or update attendance.</p>
                         </div>
-                        <div>
+                        <div class="d-flex align-items-center gap-2">
+                            <a href="{{ url('/admin/attendance/view.php') }}" class="btn btn-outline-primary">
+                                <i class="fas fa-calendar-alt me-1"></i> Attendance Broadsheet
+                            </a>
                             <a href="{{ url('/admin/attendance.php') }}" class="btn btn-outline-secondary">
                                 <i class="fas fa-list me-1"></i> Attendance Overview
                             </a>

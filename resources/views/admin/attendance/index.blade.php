@@ -71,7 +71,10 @@ if (schema_has_table('student_attendance')) {
                             <h2 class="text-dark fw-bold mb-1">Attendance Management</h2>
                             <p class="text-muted mb-0">View recent attendance history or record daily/subject attendance.</p>
                         </div>
-                        <div>
+                        <div class="d-flex align-items-center gap-2">
+                            <a href="{{ url('/admin/attendance/view.php') }}" class="btn btn-outline-primary fw-bold">
+                                <i class="fas fa-calendar-alt me-1"></i> Attendance Broadsheet
+                            </a>
                             <a href="{{ url('/admin/attendance/mark.php') }}" class="btn btn-primary fw-bold shadow-sm">
                                 <i class="fas fa-check-double me-1"></i> Mark Attendance
                             </a>

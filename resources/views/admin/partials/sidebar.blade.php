@@ -22,7 +22,7 @@
         <!-- Logo Header -->
         <div class="logo-header" data-background-color="dark">
           <a href="{{ url('/admin/index.php') }}" class="logo text-white">
-            <img src="{{ $schoolSettings->school_logo ? asset('storage/' . $schoolSettings->school_logo) : '/admin/assets/img/folu-banner-white.png' }}" alt="navbar brand" width="50%" class="navbar-brand img"/>
+            <img src="{{ data_get($schoolSettings, 'school_logo') ? asset('storage/' . data_get($schoolSettings, 'school_logo')) : '/admin/assets/img/folu-banner-white.png' }}" alt="navbar brand" width="50%" class="navbar-brand img"/>
           </a>
           <div class="nav-toggle">
             <button class="btn btn-toggle toggle-sidebar">
@@ -102,10 +102,25 @@
                 <p>Subjects</p>
               </a>
             </li>
-            <li class="nav-item {{ $isActive(['attendance', 'attendance/index', 'attendance/mark', 'attendance/report', 'attendance/view']) }}">
-              <a href="{{ url('/admin/attendance.php') }}"> <i class="fas fa-calendar-check"></i>
+            <li class="nav-item {{ $isActive(['attendance', 'attendance/index', 'attendance/mark', 'attendance/report', 'attendance/view', 'attendance/broadsheet']) }}">
+              <a data-bs-toggle="collapse" href="#attendanceSubmenu">
+                <i class="fas fa-calendar-check"></i>
                 <p>Attendance</p>
+                <span class="caret"></span>
               </a>
+              <div class="collapse {{ $isSubmenuActive(['attendance', 'attendance/index', 'attendance/mark', 'attendance/report', 'attendance/view', 'attendance/broadsheet']) }}" id="attendanceSubmenu">
+                <ul class="nav nav-collapse">
+                  <li>
+                    <a href="{{ url('/admin/attendance.php') }}">Overview</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/attendance/mark.php') }}">Mark Attendance</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/attendance/view.php') }}">Attendance Broadsheet</a>
+                  </li>
+                </ul>
+              </div>
             </li>
             <li class="nav-item {{ $isActive(['grades', 'grades/index']) }}">
               <a href="{{ url('/admin/grades.php') }}"> <i class="fas fa-clipboard"></i>
