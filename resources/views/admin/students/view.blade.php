@@ -64,9 +64,9 @@ if ($studentId) {
 }
 
 // Target redirect URL for Post-Redirect-Get (PRG) pattern
-$currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/admin/view_student.php', PHP_URL_PATH);
+$currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/admin/view_students.php', PHP_URL_PATH);
 if (!$currentPath || $currentPath === '/' || $currentPath === '') {
-    $currentPath = '/admin/view_student.php';
+    $currentPath = '/admin/view_students.php';
 }
 $redirectUrl = $currentPath . '?id=' . $studentId;
 

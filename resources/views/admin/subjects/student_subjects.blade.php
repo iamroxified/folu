@@ -295,7 +295,7 @@ if ($selectedClass) {
                                                         <td><?php echo $sn++; ?></td>
                                                         <td><code><?php echo htmlspecialchars((string) $st['admission_no']); ?></code></td>
                                                         <td>
-                                                            <a href="/admin/view_student.php?id=<?php echo (int) $st['id']; ?>" class="fw-bold text-dark">
+                                                            <a href="/admin/view_students.php?id=<?php echo (int) $st['id']; ?>" class="fw-bold text-dark">
                                                                 <?php echo htmlspecialchars(trim($st['first_name'] . ' ' . $st['last_name'] . ' ' . ($st['other_names'] ?? ''))); ?>
                                                             </a>
                                                         </td>
@@ -421,7 +421,7 @@ if ($selectedClass) {
                                                         <td><?php echo $sn++; ?></td>
                                                         <td><code><?php echo htmlspecialchars((string) $st['admission_no']); ?></code></td>
                                                         <td>
-                                                            <a href="/admin/view_student.php?id=<?php echo (int) $st['id']; ?>" class="fw-bold text-dark">
+                                                            <a href="/admin/view_students.php?id=<?php echo (int) $st['id']; ?>" class="fw-bold text-dark">
                                                                 <?php echo htmlspecialchars(trim($st['first_name'] . ' ' . $st['last_name'] . ' ' . ($st['other_names'] ?? ''))); ?>
                                                             </a>
                                                         </td>
@@ -456,7 +456,7 @@ if ($selectedClass) {
                                                             <?php endif; ?>
                                                         </td>
                                                         <td class="text-end">
-                                                            <a href="/admin/view_student.php?id=<?php echo (int) $st['id']; ?>" class="btn btn-outline-primary btn-sm">
+                                                            <a href="/admin/view_students.php?id=<?php echo (int) $st['id']; ?>" class="btn btn-outline-primary btn-sm">
                                                                 <i class="fas fa-user me-1"></i> Profile & Subjects
                                                             </a>
                                                         </td>
