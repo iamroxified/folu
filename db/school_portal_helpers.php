@@ -1,31 +1,39 @@
 <?php
 
-function schema_has_table(string $table): bool
+function schema_has_table(string $table, bool $refresh = false): bool
 {
     static $tables = null;
 
-    if ($tables === null) {
+    if ($tables === null || $refresh) {
         global $pdo;
         $tables = [];
 
-        foreach ($pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN) as $tableName) {
-            $tables[strtolower((string) $tableName)] = true;
+        if (isset($pdo) && $pdo instanceof PDO) {
+            try {
+                foreach ($pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN) as $tableName) {
+                    $tables[strtolower((string) $tableName)] = true;
+                }
+            } catch (\Throwable $e) {}
         }
     }
 
     return isset($tables[strtolower($table)]);
 }
 
-function schema_table_columns(string $table): array
+function schema_table_columns(string $table, bool $refresh = false): array
 {
     static $cache = [];
     $cacheKey = strtolower($table);
 
-    if (!isset($cache[$cacheKey])) {
+    if (!isset($cache[$cacheKey]) || $refresh) {
         if (!schema_has_table($table)) {
             $cache[$cacheKey] = [];
         } else {
-            $cache[$cacheKey] = QueryDB("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_COLUMN);
+            try {
+                $cache[$cacheKey] = QueryDB("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_COLUMN);
+            } catch (\Throwable $e) {
+                $cache[$cacheKey] = [];
+            }
         }
     }
 
@@ -35,6 +43,96 @@ function schema_table_columns(string $table): array
 function schema_has_column(string $table, string $column): bool
 {
     return in_array($column, schema_table_columns($table), true);
+}
+
+function get_csa_class_column(): string
+{
+    return schema_has_column('class_subject_assignments', 'school_class_id')
+        ? 'school_class_id'
+        : (schema_has_column('class_subject_assignments', 'class_id') ? 'class_id' : 'class_link');
+}
+
+function get_csa_subject_column(): string
+{
+    return schema_has_column('class_subject_assignments', 'subject_id')
+        ? 'subject_id'
+        : 'subject_link';
+}
+
+function ensure_school_portal_schema(): void
+{
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+    $ensured = true;
+
+    global $pdo;
+    if (!isset($pdo) || !($pdo instanceof PDO)) {
+        if (class_exists('\Illuminate\Support\Facades\DB')) {
+            try {
+                $pdo = \Illuminate\Support\Facades\DB::connection()->getPdo();
+            } catch (\Throwable $t) {}
+        }
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            $pdo = $GLOBALS['pdo'] ?? null;
+        }
+    }
+
+    if (!isset($pdo) || !($pdo instanceof PDO)) {
+        return;
+    }
+
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `student_subjects` (
+                `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+                `student_id` bigint unsigned NOT NULL,
+                `subject_id` bigint unsigned NOT NULL,
+                `session_id` bigint unsigned DEFAULT NULL,
+                `term_id` bigint unsigned DEFAULT NULL,
+                `status` enum('enrolled','dropped') NOT NULL DEFAULT 'enrolled',
+                `dropped_at` timestamp NULL DEFAULT NULL,
+                `reason` varchar(255) DEFAULT NULL,
+                `created_at` timestamp NULL DEFAULT NULL,
+                `updated_at` timestamp NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `student_subject_session_unique` (`student_id`, `subject_id`, `session_id`),
+                KEY `idx_student_subjects_student` (`student_id`),
+                KEY `idx_student_subjects_subject` (`subject_id`),
+                KEY `idx_student_subjects_session` (`session_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        schema_has_table('student_subjects', true);
+    } catch (\Throwable $t) {}
+
+    try {
+        if (schema_has_table('students') && !schema_has_column('students', 'department')) {
+            $pdo->exec("ALTER TABLE `students` ADD COLUMN `department` VARCHAR(50) NOT NULL DEFAULT 'general' AFTER `student_type`");
+            schema_table_columns('students', true);
+        }
+    } catch (\Throwable $t) {}
+
+    try {
+        if (schema_has_table('subjects') && !schema_has_column('subjects', 'class_level')) {
+            $pdo->exec("ALTER TABLE `subjects` ADD COLUMN `class_level` VARCHAR(50) NOT NULL DEFAULT 'ALL' AFTER `subject_name`");
+            schema_table_columns('subjects', true);
+        }
+    } catch (\Throwable $t) {}
+
+    try {
+        if (schema_has_table('subjects') && !schema_has_column('subjects', 'department')) {
+            $pdo->exec("ALTER TABLE `subjects` ADD COLUMN `department` VARCHAR(255) NULL DEFAULT NULL AFTER `description`");
+            schema_table_columns('subjects', true);
+        }
+    } catch (\Throwable $t) {}
+
+    try {
+        if (schema_has_table('class_subject_assignments') && !schema_has_column('class_subject_assignments', 'academic_session_link')) {
+            $pdo->exec("ALTER TABLE `class_subject_assignments` ADD COLUMN `academic_session_link` bigint unsigned NULL DEFAULT 1 AFTER `subject_id`");
+            schema_table_columns('class_subject_assignments', true);
+        }
+    } catch (\Throwable $t) {}
 }
 
 function normalize_term_code($term): ?string
@@ -1196,6 +1294,8 @@ function get_students_by_class_and_session(int $classId, ?int $sessionId = null)
 
 function get_class_subject_assignments(?int $classId = null, ?int $sessionId = null): array
 {
+    ensure_school_portal_schema();
+
     if (!schema_has_table('class_subject_assignments')) {
         return [];
     }
@@ -1203,19 +1303,29 @@ function get_class_subject_assignments(?int $classId = null, ?int $sessionId = n
     $sessionId ??= get_current_academic_session_id() ?? 0;
     $classId ??= 0;
 
-    return QueryDB(
-        "SELECT csa.*, 
+    $classCol = get_csa_class_column();
+    $subjCol = get_csa_subject_column();
+    $hasSessionCol = schema_has_column('class_subject_assignments', 'academic_session_link');
+
+    $sql = "SELECT csa.*, 
                 c.class_name, c.class_arm, c.class_level, 
                 s.subject_name, s.subject_code, s.subject_type, s.department,
                 CASE WHEN s.subject_type = 'core' THEN 1 ELSE 0 END AS is_core
          FROM class_subject_assignments csa
-         JOIN classes c ON (csa.school_class_id = c.id OR csa.class_link = c.id)
-         JOIN subjects s ON (csa.subject_id = s.id OR csa.subject_link = s.id)
-         WHERE (? = 0 OR csa.school_class_id = ? OR csa.class_link = ?)
-           AND (? = 0 OR csa.academic_session_link = ?)
-         ORDER BY c.class_level, c.class_name, c.class_arm, s.subject_name",
-        [$classId, $classId, $classId, $sessionId, $sessionId]
-    )->fetchAll();
+         JOIN classes c ON csa.{$classCol} = c.id
+         JOIN subjects s ON csa.{$subjCol} = s.id
+         WHERE (? = 0 OR csa.{$classCol} = ?)";
+    $params = [$classId, $classId];
+
+    if ($hasSessionCol) {
+        $sql .= " AND (? = 0 OR csa.academic_session_link = ?)";
+        $params[] = $sessionId;
+        $params[] = $sessionId;
+    }
+
+    $sql .= " ORDER BY c.class_level, c.class_name, c.class_arm, s.subject_name";
+
+    return QueryDB($sql, $params)->fetchAll();
 }
 
 function subject_matches_class_level(string $subjectLevel, string $classLevel): bool
@@ -1255,6 +1365,8 @@ function subject_matches_student_department(?string $subjectDept, ?string $stude
 
 function assign_subject_to_class(int $classId, int $subjectId, int $sessionId): bool
 {
+    ensure_school_portal_schema();
+
     if (!schema_has_table('class_subject_assignments')) {
         return false;
     }
@@ -1274,13 +1386,18 @@ function assign_subject_to_class(int $classId, int $subjectId, int $sessionId): 
         return false;
     }
 
-    $existing = QueryDB(
-        'SELECT COUNT(*) FROM class_subject_assignments 
-         WHERE (school_class_id = ? OR class_link = ?) 
-           AND (subject_id = ? OR subject_link = ?) 
-           AND academic_session_link = ?',
-        [$classId, $classId, $subjectId, $subjectId, $sessionId]
-    )->fetchColumn();
+    $classCol = get_csa_class_column();
+    $subjCol = get_csa_subject_column();
+    $hasSessionCol = schema_has_column('class_subject_assignments', 'academic_session_link');
+
+    $checkSql = "SELECT COUNT(*) FROM class_subject_assignments WHERE {$classCol} = ? AND {$subjCol} = ?";
+    $checkParams = [$classId, $subjectId];
+    if ($hasSessionCol && $sessionId > 0) {
+        $checkSql .= " AND academic_session_link = ?";
+        $checkParams[] = $sessionId;
+    }
+
+    $existing = QueryDB($checkSql, $checkParams)->fetchColumn();
 
     if ((int) $existing > 0) {
         return false;
@@ -1288,11 +1405,36 @@ function assign_subject_to_class(int $classId, int $subjectId, int $sessionId): 
 
     $sessionName = QueryDB('SELECT session_name FROM academic_sessions WHERE id = ? LIMIT 1', [$sessionId])->fetchColumn() ?: date('Y');
 
-    QueryDB(
-        'INSERT INTO class_subject_assignments (school_class_id, subject_id, academic_year, academic_session_link, status, created_at, updated_at) 
-         VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
-        [$classId, $subjectId, $sessionName, $sessionId, 'active']
-    );
+    $cols = [$classCol, $subjCol];
+    $vals = [$classId, $subjectId];
+    $placeholders = ['?', '?'];
+
+    if (schema_has_column('class_subject_assignments', 'academic_year')) {
+        $cols[] = 'academic_year';
+        $vals[] = $sessionName;
+        $placeholders[] = '?';
+    }
+    if ($hasSessionCol) {
+        $cols[] = 'academic_session_link';
+        $vals[] = $sessionId;
+        $placeholders[] = '?';
+    }
+    if (schema_has_column('class_subject_assignments', 'status')) {
+        $cols[] = 'status';
+        $vals[] = 'active';
+        $placeholders[] = '?';
+    }
+    if (schema_has_column('class_subject_assignments', 'created_at')) {
+        $cols[] = 'created_at';
+        $placeholders[] = 'NOW()';
+    }
+    if (schema_has_column('class_subject_assignments', 'updated_at')) {
+        $cols[] = 'updated_at';
+        $placeholders[] = 'NOW()';
+    }
+
+    $insertSql = "INSERT INTO class_subject_assignments (" . implode(', ', $cols) . ") VALUES (" . implode(', ', $placeholders) . ")";
+    QueryDB($insertSql, $vals);
 
     return true;
 }
@@ -1308,6 +1450,8 @@ function remove_class_subject_assignment(int $assignmentId): bool
 
 function get_student_allocated_subjects(int $studentId, ?int $sessionId = null): array
 {
+    ensure_school_portal_schema();
+
     $student = QueryDB("SELECT * FROM students WHERE id = ? LIMIT 1", [$studentId])->fetch(PDO::FETCH_ASSOC);
     if (!$student) {
         return [];
@@ -1331,28 +1475,48 @@ function get_student_allocated_subjects(int $studentId, ?int $sessionId = null):
     // 1. Get subjects explicitly assigned to this class
     $classAssignedSubjects = [];
     if ($classId > 0 && schema_has_table('class_subject_assignments')) {
-        $classAssignedSubjects = QueryDB(
-            "SELECT s.*, 1 AS is_class_assignment
-             FROM class_subject_assignments csa
-             JOIN subjects s ON (csa.subject_id = s.id OR csa.subject_link = s.id)
-             WHERE (csa.school_class_id = ? OR csa.class_link = ?)
-               AND (? = 0 OR csa.academic_session_link = ? OR csa.academic_session_link IS NULL)
-             ORDER BY s.subject_name",
-            [$classId, $classId, $sessionId, $sessionId]
-        )->fetchAll(PDO::FETCH_ASSOC);
+        $classCol = get_csa_class_column();
+        $subjCol = get_csa_subject_column();
+        $hasSessionCol = schema_has_column('class_subject_assignments', 'academic_session_link');
+
+        $query = "SELECT s.*, 1 AS is_class_assignment
+                  FROM class_subject_assignments csa
+                  JOIN subjects s ON csa.{$subjCol} = s.id
+                  WHERE csa.{$classCol} = ?";
+        $params = [$classId];
+
+        if ($hasSessionCol) {
+            $query .= " AND (? = 0 OR csa.academic_session_link = ? OR csa.academic_session_link IS NULL)";
+            $params[] = $sessionId;
+            $params[] = $sessionId;
+        }
+
+        $query .= " ORDER BY s.subject_name";
+
+        $classAssignedSubjects = QueryDB($query, $params)->fetchAll(PDO::FETCH_ASSOC);
     }
 
     // 2. Fetch subjects matching class level
     $levelSubjects = [];
     if ($classLevel !== '') {
-        $levelSubjects = QueryDB(
-            "SELECT s.*, 0 AS is_class_assignment
-             FROM subjects s
-             WHERE (s.status IS NULL OR s.status = 'active')
-               AND (s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%') OR (s.class_level = 'PRI' AND ? LIKE 'PRI%'))
-             ORDER BY s.subject_name",
-            [$classLevel, $classLevel, $classLevel, $classLevel]
-        )->fetchAll(PDO::FETCH_ASSOC);
+        if (schema_has_column('subjects', 'class_level')) {
+            $levelSubjects = QueryDB(
+                "SELECT s.*, 0 AS is_class_assignment
+                 FROM subjects s
+                 WHERE (s.status IS NULL OR s.status = 'active')
+                   AND (s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%') OR (s.class_level = 'PRI' AND ? LIKE 'PRI%'))
+                 ORDER BY s.subject_name",
+                [$classLevel, $classLevel, $classLevel, $classLevel]
+            )->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $allSubjects = QueryDB(
+                "SELECT s.*, 0 AS is_class_assignment
+                 FROM subjects s
+                 WHERE (s.status IS NULL OR s.status = 'active')
+                 ORDER BY s.subject_name"
+            )->fetchAll(PDO::FETCH_ASSOC);
+            $levelSubjects = array_filter($allSubjects, fn($sub) => subject_matches_class_level($sub['class_level'] ?? 'ALL', $classLevel));
+        }
     }
 
     // Combine subjects by ID
@@ -1370,7 +1534,7 @@ function get_student_allocated_subjects(int $studentId, ?int $sessionId = null):
     $studentSubjectRecords = [];
     if (schema_has_table('student_subjects')) {
         $records = QueryDB(
-            "SELECT ss.*, s.subject_name, s.subject_code, s.class_level, s.department, s.subject_type
+            "SELECT ss.*, s.subject_name, s.subject_code, s.department, s.subject_type
              FROM student_subjects ss
              JOIN subjects s ON ss.subject_id = s.id
              WHERE ss.student_id = ?
@@ -1441,6 +1605,12 @@ function get_student_allocated_subjects(int $studentId, ?int $sessionId = null):
 
 function drop_student_subject(int $studentId, int $subjectId, ?int $sessionId = null, ?string $reason = null): bool
 {
+    ensure_school_portal_schema();
+
+    if (!schema_has_table('student_subjects')) {
+        return false;
+    }
+
     $sessionId ??= get_current_academic_session_id() ?? 0;
     
     $existing = QueryDB(
@@ -1464,6 +1634,12 @@ function drop_student_subject(int $studentId, int $subjectId, ?int $sessionId = 
 
 function enroll_student_subject(int $studentId, int $subjectId, ?int $sessionId = null): bool
 {
+    ensure_school_portal_schema();
+
+    if (!schema_has_table('student_subjects')) {
+        return false;
+    }
+
     $sessionId ??= get_current_academic_session_id() ?? 0;
     
     $existing = QueryDB(
@@ -1513,10 +1689,13 @@ function get_students_enrolled_in_subject(int $classId, int $subjectId, ?int $se
         }
 
         // Check explicit student_subjects record
-        $rec = QueryDB(
-            "SELECT status FROM student_subjects WHERE student_id = ? AND subject_id = ? AND (session_id = ? OR session_id IS NULL) LIMIT 1",
-            [$student['id'], $subjectId, $sessionId]
-        )->fetch(PDO::FETCH_ASSOC);
+        $rec = null;
+        if (schema_has_table('student_subjects')) {
+            $rec = QueryDB(
+                "SELECT status FROM student_subjects WHERE student_id = ? AND subject_id = ? AND (session_id = ? OR session_id IS NULL) LIMIT 1",
+                [$student['id'], $subjectId, $sessionId]
+            )->fetch(PDO::FETCH_ASSOC);
+        }
 
         if ($rec) {
             if ($rec['status'] === 'enrolled') {

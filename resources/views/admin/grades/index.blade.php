@@ -70,15 +70,24 @@ if ($selectedClassId > 0) {
     $selectedClass = QueryDB('SELECT * FROM classes WHERE id = ? LIMIT 1', [$selectedClassId])->fetch(PDO::FETCH_ASSOC);
 
     if ($selectedClass) {
-        $classLevel = (string) ($selectedClass['class_level'] ?? '');
+        $classCol = get_csa_class_column();
+        $subjCol = get_csa_subject_column();
+        $hasSubjectClassLevel = schema_has_column('subjects', 'class_level');
+
+        $levelClause = $hasSubjectClassLevel
+            ? "(s.status = 'active' AND (s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%') OR (s.class_level = 'PRI' AND ? LIKE 'PRI%')))"
+            : "(s.status = 'active')";
+
         $subjects = QueryDB(
             "SELECT DISTINCT s.*
              FROM subjects s
-             LEFT JOIN class_subject_assignments csa ON (csa.subject_id = s.id OR csa.subject_link = s.id)
-             WHERE (csa.school_class_id = ? OR csa.class_link = ?)
-                OR (s.status = 'active' AND (s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%') OR (s.class_level = 'PRI' AND ? LIKE 'PRI%')))
+             LEFT JOIN class_subject_assignments csa ON csa.{$subjCol} = s.id
+             WHERE csa.{$classCol} = ?
+                OR {$levelClause}
              ORDER BY s.subject_name",
-            [$selectedClassId, $selectedClassId, $classLevel, $classLevel, $classLevel, $classLevel]
+            $hasSubjectClassLevel
+                ? [$selectedClassId, $classLevel, $classLevel, $classLevel, $classLevel]
+                : [$selectedClassId]
         )->fetchAll(PDO::FETCH_ASSOC);
 
         $students = get_students_by_class_and_session($selectedClassId, $selectedSessionId);
@@ -307,10 +316,12 @@ if ($selectedClassId > 0 && $selectedSubjectId > 0 && $selectedSessionId > 0) {
                                                         if ($stDept === '') $stDept = 'general';
 
                                                         // Check student enrollment status for this subject
-                                                        $rec = QueryDB(
-                                                            "SELECT status, reason FROM student_subjects WHERE student_id = ? AND subject_id = ? AND (? = 0 OR session_id = ? OR session_id IS NULL) LIMIT 1",
-                                                            [$student['id'], $selectedSubjectId, $selectedSessionId, $selectedSessionId]
-                                                        )->fetch(PDO::FETCH_ASSOC);
+                                                        $rec = schema_has_table('student_subjects')
+                                                            ? QueryDB(
+                                                                "SELECT status, reason FROM student_subjects WHERE student_id = ? AND subject_id = ? AND (? = 0 OR session_id = ? OR session_id IS NULL) LIMIT 1",
+                                                                [$student['id'], $selectedSubjectId, $selectedSessionId, $selectedSessionId]
+                                                            )->fetch(PDO::FETCH_ASSOC)
+                                                            : null;
 
                                                         $isExplicitEnrolled = $rec && ($rec['status'] === 'enrolled');
                                                         $isDropped = $rec && ($rec['status'] === 'dropped');

@@ -16,8 +16,9 @@ $editId = (int) ($_GET['edit'] ?? 0);
 $teacherAssignmentCountSelect = schema_has_table('teacher_subjects')
     ? '(SELECT COUNT(*) FROM teacher_subjects ts WHERE ts.subject_link = s.id) AS teacher_assignment_count'
     : '0 AS teacher_assignment_count';
+$csaSubjCol = get_csa_subject_column();
 $classAssignmentCountSelect = schema_has_table('class_subject_assignments')
-    ? '(SELECT COUNT(*) FROM class_subject_assignments csa WHERE csa.subject_id = s.id) AS class_assignment_count'
+    ? "(SELECT COUNT(*) FROM class_subject_assignments csa WHERE csa.{$csaSubjCol} = s.id) AS class_assignment_count"
     : '0 AS class_assignment_count';
 $resultCountSelect = schema_has_table('student_grades')
     ? '(SELECT COUNT(*) FROM student_grades g WHERE g.subject_id = s.id) AS result_count'
@@ -89,7 +90,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hasAssignments += (int) QueryDB('SELECT COUNT(*) FROM teacher_subjects WHERE subject_link = ?', [$subjectId])->fetchColumn();
             }
             if (schema_has_table('class_subject_assignments')) {
-                $hasAssignments += (int) QueryDB('SELECT COUNT(*) FROM class_subject_assignments WHERE subject_id = ?', [$subjectId])->fetchColumn();
+                $csaSubjCol = get_csa_subject_column();
+                $hasAssignments += (int) QueryDB("SELECT COUNT(*) FROM class_subject_assignments WHERE {$csaSubjCol} = ?", [$subjectId])->fetchColumn();
             }
             if (schema_has_table('student_grades')) {
                 $hasAssignments += (int) QueryDB('SELECT COUNT(*) FROM student_grades WHERE subject_id = ?', [$subjectId])->fetchColumn();

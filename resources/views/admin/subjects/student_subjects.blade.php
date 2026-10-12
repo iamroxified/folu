@@ -97,20 +97,31 @@ $studentsList = [];
 if ($selectedClass) {
     // Get all class-assigned subjects and level-compatible subjects
     $classLevel = (string) ($selectedClass['class_level'] ?? '');
+    $classCol = get_csa_class_column();
+    $subjCol = get_csa_subject_column();
+    $hasSubjectClassLevel = schema_has_column('subjects', 'class_level');
+
+    $levelClause = $hasSubjectClassLevel
+        ? "(s.status = 'active' AND (s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%')))"
+        : "(s.status = 'active')";
+
     $classSubjects = QueryDB(
         "SELECT DISTINCT s.*
          FROM subjects s
-         LEFT JOIN class_subject_assignments csa ON (csa.subject_id = s.id OR csa.subject_link = s.id)
-         WHERE (csa.school_class_id = ? OR csa.class_link = ?)
-            OR (s.status = 'active' AND (s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%')))
+         LEFT JOIN class_subject_assignments csa ON csa.{$subjCol} = s.id
+         WHERE csa.{$classCol} = ?
+            OR {$levelClause}
          ORDER BY s.subject_name",
-        [$selectedClassId, $selectedClassId, $classLevel, $classLevel, $classLevel]
+        $hasSubjectClassLevel
+            ? [$selectedClassId, $classLevel, $classLevel, $classLevel]
+            : [$selectedClassId]
     )->fetchAll(PDO::FETCH_ASSOC);
 
     // Fetch students in class
-    $studentsQuery = "SELECT s.* FROM students s WHERE (s.current_class_id = ? OR s.class_link = ?)";
-    $params = [$selectedClassId, $selectedClassId];
-    if ($selectedDepartment !== '') {
+    $studentClassCol = schema_has_column('students', 'current_class_id') ? 's.current_class_id' : 's.class_link';
+    $studentsQuery = "SELECT s.* FROM students s WHERE {$studentClassCol} = ?";
+    $params = [$selectedClassId];
+    if ($selectedDepartment !== '' && schema_has_column('students', 'department')) {
         $studentsQuery .= " AND s.department = ?";
         $params[] = $selectedDepartment;
     }

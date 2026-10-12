@@ -79,21 +79,33 @@ $subjects = [];
 
 if ($selectedClass) {
     $classLevel = (string) ($selectedClass['class_level'] ?? '');
+    $classCol = get_csa_class_column();
+    $subjCol = get_csa_subject_column();
+    $hasSessionCol = schema_has_column('class_subject_assignments', 'academic_session_link');
+
+    $alreadyAssignedSql = "(SELECT COUNT(*) FROM class_subject_assignments csa WHERE csa.{$classCol} = ? AND csa.{$subjCol} = s.id";
+    $params = [$selectedClassId];
+    if ($hasSessionCol) {
+        $alreadyAssignedSql .= " AND (? = 0 OR csa.academic_session_link = ?)";
+        $params[] = $selectedSessionId;
+        $params[] = $selectedSessionId;
+    }
+    $alreadyAssignedSql .= ") AS already_assigned";
+
+    $hasSubjectClassLevel = schema_has_column('subjects', 'class_level');
+    $levelClause = $hasSubjectClassLevel
+        ? "(s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%') OR (s.class_level = 'PRI' AND ? LIKE 'PRI%'))"
+        : "1 = 1";
+
     $subjects = QueryDB(
-        "SELECT s.*,
-                (SELECT COUNT(*) FROM class_subject_assignments csa 
-                 WHERE (csa.school_class_id = ? OR csa.class_link = ?) 
-                   AND (csa.subject_id = s.id OR csa.subject_link = s.id) 
-                   AND (? = 0 OR csa.academic_session_link = ?)) AS already_assigned
+        "SELECT s.*, {$alreadyAssignedSql}
          FROM subjects s
          WHERE (s.status IS NULL OR s.status = 'active')
-           AND (s.class_level = 'ALL' 
-            OR s.class_level = ? 
-            OR (s.class_level = 'SSS' AND ? LIKE 'SSS%')
-            OR (s.class_level = 'JSS' AND ? LIKE 'JSS%')
-            OR (s.class_level = 'PRI' AND ? LIKE 'PRI%'))
+           AND {$levelClause}
          ORDER BY s.subject_name, s.subject_code",
-        [$selectedClassId, $selectedClassId, $selectedSessionId, $selectedSessionId, $classLevel, $classLevel, $classLevel, $classLevel]
+        $hasSubjectClassLevel
+            ? array_merge($params, [$classLevel, $classLevel, $classLevel, $classLevel])
+            : $params
     )->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>

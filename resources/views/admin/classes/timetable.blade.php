@@ -33,10 +33,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception('Please choose the session, class, subject, and teacher.');
             }
 
-            $isAssigned = QueryDB(
-                'SELECT COUNT(*) FROM class_subject_assignments WHERE class_link = ? AND subject_link = ? AND academic_session_link = ?',
-                [$selectedClassId, $subjectId, $selectedSessionId]
-            )->fetchColumn();
+            $classCol = get_csa_class_column();
+            $subjCol = get_csa_subject_column();
+            $hasSessionCol = schema_has_column('class_subject_assignments', 'academic_session_link');
+
+            $checkSql = "SELECT COUNT(*) FROM class_subject_assignments WHERE {$classCol} = ? AND {$subjCol} = ?";
+            $checkParams = [$selectedClassId, $subjectId];
+            if ($hasSessionCol && $selectedSessionId > 0) {
+                $checkSql .= " AND academic_session_link = ?";
+                $checkParams[] = $selectedSessionId;
+            }
+
+            $isAssigned = QueryDB($checkSql, $checkParams)->fetchColumn();
 
             if ((int) $isAssigned === 0) {
                 throw new Exception('Assign the subject to the class before adding it to the timetable.');
