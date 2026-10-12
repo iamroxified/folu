@@ -12,8 +12,15 @@ class Subject extends Model
     protected $fillable = [
         'subject_name',
         'subject_code',
+        'class_level',
+        'department',
+        'credit_hours',
+        'subject_type',
+        'grade_levels',
         'description',
         'grade_level',
+        'is_practical',
+        'status',
         'is_active',
     ];
 

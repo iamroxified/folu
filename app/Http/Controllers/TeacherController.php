@@ -125,6 +125,15 @@ class TeacherController extends Controller
         ]);
 
         foreach ($request->grades as $gradeData) {
+            // Check if student dropped this subject
+            $isDropped = \App\Models\StudentSubject::where('student_id', $gradeData['student_id'])
+                ->where('subject_id', $request->subject_id)
+                ->where('status', 'dropped')
+                ->exists();
+            if ($isDropped) {
+                continue;
+            }
+
             $total = ($gradeData['ca1'] ?? 0) + ($gradeData['ca2'] ?? 0) + ($gradeData['exam'] ?? 0);
 
             StudentGrade::updateOrCreate(
@@ -152,16 +161,37 @@ class TeacherController extends Controller
     public function viewResults(Request $request)
     {
         $request->validate([
-            'class_id' => 'required|exists:school_classes,id',
+            'class_id' => 'required',
             'subject_id' => 'required|exists:subjects,id',
-            'session_id' => 'required|exists:academic_sessions,id',
-            'term_id' => 'required|exists:terms,id',
+            'session_id' => 'required',
+            'term_id' => 'required',
         ]);
 
-        $students = Student::where('current_class_id', $request->class_id)
-                          ->where('current_session_id', $request->session_id)
-                          ->where('current_term_id', $request->term_id)
-                          ->get();
+        $subject = \App\Models\Subject::find($request->subject_id);
+        $subjDept = strtolower(trim((string) ($subject->department ?? 'general')));
+
+        $students = Student::where(function($q) use ($request) {
+                $q->where('current_class_id', $request->class_id)
+                  ->orWhere('class_link', $request->class_id);
+            })
+            ->get()
+            ->filter(function($student) use ($request, $subjDept) {
+                $subRec = \App\Models\StudentSubject::where('student_id', $student->id)
+                    ->where('subject_id', $request->subject_id)
+                    ->first();
+                if ($subRec && $subRec->status === 'dropped') {
+                    return false;
+                }
+                if ($subRec && $subRec->status === 'enrolled') {
+                    return true;
+                }
+                $studDept = strtolower(trim((string) ($student->department ?? 'general')));
+                if (function_exists('subject_matches_student_department')) {
+                    return subject_matches_student_department($subjDept, $studDept);
+                }
+                if ($subjDept === 'general' || $subjDept === '' || $subjDept === 'all') return true;
+                return $subjDept === $studDept;
+            });
 
         $grades = StudentGrade::where('class_id', $request->class_id)
                              ->where('subject_id', $request->subject_id)

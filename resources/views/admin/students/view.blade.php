@@ -85,8 +85,34 @@ $performRedirect = function() use ($redirectUrl) {
 $isPost = (isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SERVER['REQUEST_METHOD']) === 'POST') || (function_exists('request') && request()->isMethod('post'));
 $hasProcessPayment = isset($_POST['process_payment']) || (function_exists('request') && request()->has('process_payment'));
 $hasDeletePayment = isset($_POST['delete_payment']) || (function_exists('request') && request()->has('delete_payment'));
-$hasAddCharge = isset($_POST['add_additional_charge']) || (function_exists('request') && request()->has('add_additional_charge'));
-$hasDeleteCharge = isset($_POST['delete_additional_charge']) || (function_exists('request') && request()->has('delete_additional_charge'));
+$hasDropSubject = isset($_POST['drop_student_subject']) || (function_exists('request') && request()->has('drop_student_subject'));
+$hasEnrollSubject = isset($_POST['enroll_student_subject']) || (function_exists('request') && request()->has('enroll_student_subject'));
+
+if ($isPost && ($hasDropSubject || $hasEnrollSubject)) {
+    $subSessionId = (int) ($student['current_session_id'] ?? $student['academic_session_link'] ?? 0);
+    $subjectId = (int) ($_POST['subject_id'] ?? request('subject_id') ?? 0);
+
+    if ($hasDropSubject) {
+        $reason = trim((string) ($_POST['drop_reason'] ?? request('drop_reason') ?? ''));
+        if ($subjectId > 0) {
+            drop_student_subject($studentId, $subjectId, $subSessionId, $reason ?: 'Dropped by administrator');
+            $_SESSION['flash_message'] = "Subject dropped successfully for this student.";
+        } else {
+            $_SESSION['flash_error'] = "Invalid subject selected for drop.";
+        }
+        $performRedirect();
+    }
+
+    if ($hasEnrollSubject) {
+        if ($subjectId > 0) {
+            enroll_student_subject($studentId, $subjectId, $subSessionId);
+            $_SESSION['flash_message'] = "Subject enrolled / restored successfully for this student.";
+        } else {
+            $_SESSION['flash_error'] = "Invalid subject selected for enrollment.";
+        }
+        $performRedirect();
+    }
+}
 
 if ($isPost && ($hasAddCharge || $hasDeleteCharge || $hasDeletePayment || $hasProcessPayment)) {
     if ($hasAddCharge) {
@@ -605,6 +631,12 @@ try {
 $attendancePercentage = student_attendance_percentage($studentId);
 $gradeAverage = student_grade_average($studentId);
 
+// Student allocated and dropped subjects
+$studentSessionId = (int) ($student['current_session_id'] ?? $student['academic_session_link'] ?? 0);
+$allocatedSubjects = get_student_allocated_subjects($studentId, $studentSessionId);
+$allocatedSubjectIds = array_column($allocatedSubjects, 'id');
+$allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR status = 'active') ORDER BY subject_name")->fetchAll(PDO::FETCH_ASSOC);
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -795,6 +827,23 @@ $gradeAverage = student_grade_average($studentId);
                           <td><?php echo number_format((float) $gradeAverage, 1); ?></td>
                         </tr>
                         <tr>
+                          <td><strong>Stream / Category:</strong></td>
+                          <td>
+                            <?php 
+                              $stdDept = strtolower((string) ($student['department'] ?? 'general'));
+                              if ($stdDept === 'science'):
+                            ?>
+                              <span class="badge bg-info text-dark"><i class="fas fa-flask me-1"></i>Sciences Stream</span>
+                            <?php elseif ($stdDept === 'arts'): ?>
+                              <span class="badge text-white" style="background-color: #6f42c1;"><i class="fas fa-palette me-1"></i>Arts & Humanities</span>
+                            <?php elseif ($stdDept === 'commercial'): ?>
+                              <span class="badge bg-success"><i class="fas fa-calculator me-1"></i>Commercial Stream</span>
+                            <?php else: ?>
+                              <span class="badge bg-secondary"><i class="fas fa-layer-group me-1"></i>General (All)</span>
+                            <?php endif; ?>
+                          </td>
+                        </tr>
+                        <tr>
                           <td><strong>Admission Date:</strong></td>
                           <td>
                             <?php
@@ -806,6 +855,205 @@ $gradeAverage = student_grade_average($studentId);
                       </table>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <!-- Registered & Allocated Subjects Card -->
+              <div class="card mb-4 shadow-sm border-info">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div>
+                    <h4 class="card-title mb-0 text-dark fw-bold">
+                      <i class="fas fa-book-reader me-2 text-info"></i>Registered & Allocated Subjects
+                    </h4>
+                    <small class="text-muted">
+                      Subjects automatically allocated to class & stream. Students can drop or re-enroll subjects here.
+                    </small>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <?php 
+                      $enrolledCount = count(array_filter($allocatedSubjects, fn($s) => !$s['is_dropped']));
+                      $droppedCount = count(array_filter($allocatedSubjects, fn($s) => $s['is_dropped']));
+                    ?>
+                    <span class="badge bg-success text-white fw-bold"><?php echo $enrolledCount; ?> Active</span>
+                    <?php if ($droppedCount > 0): ?>
+                      <span class="badge bg-danger text-white fw-bold"><?php echo $droppedCount; ?> Dropped</span>
+                    <?php endif; ?>
+                    <button class="btn btn-primary btn-sm fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#enrollElectiveCollapse">
+                      <i class="fas fa-plus me-1"></i> Add / Elective Subject
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Enroll Elective Collapse -->
+                <div class="collapse border-bottom bg-light" id="enrollElectiveCollapse">
+                  <div class="card-body py-3">
+                    <form method="POST" class="row align-items-end g-2">
+                      <input type="hidden" name="enroll_student_subject" value="1">
+                      <div class="col-md-9">
+                        <label class="form-label fw-bold text-dark mb-1">Select Subject to Add / Enroll</label>
+                        <select name="subject_id" class="form-control" required>
+                          <option value="">-- Choose Subject from Catalogue --</option>
+                          <?php foreach ($allCatalogueSubjects as $catSub): ?>
+                            <?php 
+                              $isAlreadyAllocated = in_array((int) $catSub['id'], $allocatedSubjectIds, true);
+                              $catSubDept = strtolower((string) ($catSub['department'] ?? 'general'));
+                            ?>
+                            <option value="<?php echo (int) $catSub['id']; ?>" <?php echo $isAlreadyAllocated ? 'disabled' : ''; ?>>
+                              <?php echo htmlspecialchars($catSub['subject_name'] . ' (' . $catSub['subject_code'] . ') - Level: ' . ($catSub['class_level'] ?? 'ALL') . ' [' . ucfirst($catSubDept) . ']'); ?>
+                              <?php if ($isAlreadyAllocated): ?> [Already Allocated] <?php endif; ?>
+                            </option>
+                          <?php endforeach; ?>
+                        </select>
+                      </div>
+                      <div class="col-md-3">
+                        <button type="submit" class="btn btn-success w-100 fw-bold">
+                          <i class="fas fa-check me-1"></i> Enroll Subject
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+
+                <div class="card-body p-0">
+                  <?php if (empty($allocatedSubjects)): ?>
+                    <div class="text-center py-4 text-muted">
+                      <i class="fas fa-info-circle fa-2x mb-2 d-block text-muted"></i>
+                      No subjects are currently assigned to this student's class or stream.
+                      <div class="mt-2">
+                        <a href="/admin/subjects/assign.php" class="btn btn-outline-primary btn-sm">
+                          <i class="fas fa-link me-1"></i> Assign Subjects to Class
+                        </a>
+                      </div>
+                    </div>
+                  <?php else: ?>
+                    <div class="table-responsive">
+                      <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                          <tr>
+                            <th style="width: 40px;">#</th>
+                            <th>Subject</th>
+                            <th>Code</th>
+                            <th>Level</th>
+                            <th>Stream Category</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th class="text-end" style="min-width: 140px;">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <?php $subSn = 1; foreach ($allocatedSubjects as $asub): ?>
+                            <?php 
+                              $isSubDropped = !empty($asub['is_dropped']);
+                              $subDept = strtolower((string) ($asub['department'] ?? 'general'));
+                              $subType = (string) ($asub['subject_type'] ?? 'core');
+                            ?>
+                            <tr class="<?php echo $isSubDropped ? 'table-light text-muted' : ''; ?>">
+                              <td><?php echo $subSn++; ?></td>
+                              <td>
+                                <strong class="<?php echo $isSubDropped ? 'text-muted text-decoration-line-through' : 'text-dark'; ?>">
+                                  <?php echo htmlspecialchars((string) $asub['subject_name']); ?>
+                                </strong>
+                                <?php if ($isSubDropped && !empty($asub['reason'])): ?>
+                                  <br><small class="text-danger"><i class="fas fa-info-circle me-1"></i>Reason: <?php echo htmlspecialchars((string) $asub['reason']); ?></small>
+                                <?php endif; ?>
+                              </td>
+                              <td>
+                                <span class="badge bg-light text-dark border">
+                                  <?php echo htmlspecialchars((string) $asub['subject_code']); ?>
+                                </span>
+                              </td>
+                              <td>
+                                <span class="badge bg-secondary">
+                                  <?php echo htmlspecialchars((string) ($asub['class_level'] ?? 'ALL')); ?>
+                                </span>
+                              </td>
+                              <td>
+                                <?php if ($subDept === 'science'): ?>
+                                  <span class="badge bg-info text-dark"><i class="fas fa-flask me-1"></i>Sciences</span>
+                                <?php elseif ($subDept === 'arts'): ?>
+                                  <span class="badge text-white" style="background-color: #6f42c1;"><i class="fas fa-palette me-1"></i>Arts</span>
+                                <?php elseif ($subDept === 'commercial'): ?>
+                                  <span class="badge bg-success"><i class="fas fa-calculator me-1"></i>Commercial</span>
+                                <?php else: ?>
+                                  <span class="badge bg-light text-dark border"><i class="fas fa-globe me-1"></i>General / Core</span>
+                                <?php endif; ?>
+                              </td>
+                              <td>
+                                <span class="badge bg-<?php echo $subType === 'core' ? 'primary' : 'secondary'; ?>">
+                                  <?php echo ucfirst($subType); ?>
+                                </span>
+                              </td>
+                              <td>
+                                <?php if ($isSubDropped): ?>
+                                  <span class="badge bg-danger text-white">
+                                    <i class="fas fa-ban me-1"></i>Dropped
+                                  </span>
+                                  <?php if (!empty($asub['dropped_at'])): ?>
+                                    <br><small class="text-muted" style="font-size: 11px;"><?php echo date('M d, Y', strtotime($asub['dropped_at'])); ?></small>
+                                  <?php endif; ?>
+                                <?php else: ?>
+                                  <span class="badge bg-success text-white">
+                                    <i class="fas fa-check-circle me-1"></i>Enrolled (Active)
+                                  </span>
+                                <?php endif; ?>
+                              </td>
+                              <td class="text-end">
+                                <?php if ($isSubDropped): ?>
+                                  <!-- Re-enroll Subject Form -->
+                                  <form method="POST" class="d-inline">
+                                    <input type="hidden" name="enroll_student_subject" value="1">
+                                    <input type="hidden" name="subject_id" value="<?php echo (int) $asub['id']; ?>">
+                                    <button type="submit" class="btn btn-outline-success btn-sm fw-bold">
+                                      <i class="fas fa-undo me-1"></i> Re-enroll
+                                    </button>
+                                  </form>
+                                <?php else: ?>
+                                  <!-- Drop Subject Modal Trigger -->
+                                  <button type="button" class="btn btn-outline-danger btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#dropSubjectModal<?php echo (int) $asub['id']; ?>">
+                                    <i class="fas fa-times me-1"></i> Drop Subject
+                                  </button>
+
+                                  <!-- Drop Subject Modal -->
+                                  <div class="modal fade" id="dropSubjectModal<?php echo (int) $asub['id']; ?>" tabindex="-1" aria-hidden="true" style="text-align: left;">
+                                    <div class="modal-dialog">
+                                      <div class="modal-content">
+                                        <div class="modal-header bg-danger text-white">
+                                          <h5 class="modal-title fw-bold">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>Drop Subject
+                                          </h5>
+                                          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <form method="POST">
+                                          <div class="modal-body">
+                                            <input type="hidden" name="drop_student_subject" value="1">
+                                            <input type="hidden" name="subject_id" value="<?php echo (int) $asub['id']; ?>">
+                                            <p class="mb-3 text-dark">
+                                              Are you sure you want to drop <strong><?php echo htmlspecialchars((string) $asub['subject_name']); ?> (<?php echo htmlspecialchars((string) $asub['subject_code']); ?>)</strong> for <strong><?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''))); ?></strong>?
+                                            </p>
+                                            <div class="alert alert-warning py-2 mb-3">
+                                              <small><i class="fas fa-info-circle me-1"></i>Dropped subjects will not be included in examinations, grading, or result sheets for this student.</small>
+                                            </div>
+                                            <div class="form-group p-0">
+                                              <label for="drop_reason_<?php echo (int) $asub['id']; ?>" class="fw-bold mb-1">Reason for Dropping (Optional)</label>
+                                              <input type="text" class="form-control" id="drop_reason_<?php echo (int) $asub['id']; ?>" name="drop_reason" placeholder="e.g. Elective change, not taking this stream">
+                                            </div>
+                                          </div>
+                                          <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-danger fw-bold">Confirm Drop Subject</button>
+                                          </div>
+                                        </form>
+                                      </div>
+                                    </div>
+                                  </div>
+                                <?php endif; ?>
+                              </td>
+                            </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                  <?php endif; ?>
                 </div>
               </div>
 

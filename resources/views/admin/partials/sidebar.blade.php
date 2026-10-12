@@ -97,10 +97,28 @@
                 <p>Classes</p>
               </a>
             </li>
-            <li class="nav-item {{ $isActive(['subjects', 'subjects/index', 'subjects/manage', 'subjects/assign']) }}">
-              <a href="{{ url('/admin/subjects.php') }}"> <i class="fas fa-book"></i>
+            <li class="nav-item {{ $isActive(['subjects', 'subjects/index', 'subjects/manage', 'subjects/assign', 'subjects/student_subjects']) }}">
+              <a data-bs-toggle="collapse" href="#subjectsSubmenu">
+                <i class="fas fa-book"></i>
                 <p>Subjects</p>
+                <span class="caret"></span>
               </a>
+              <div class="collapse {{ $isSubmenuActive(['subjects', 'subjects/index', 'subjects/manage', 'subjects/assign', 'subjects/student_subjects']) }}" id="subjectsSubmenu">
+                <ul class="nav nav-collapse">
+                  <li>
+                    <a href="{{ url('/admin/subjects.php') }}">Overview</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/subjects/manage.php') }}">Manage & Categories</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/subjects/assign.php') }}">Assign to Classes</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/subjects/student_subjects.php') }}">Student Subjects & Drops</a>
+                  </li>
+                </ul>
+              </div>
             </li>
             <li class="nav-item {{ $isActive(['attendance', 'attendance/index', 'attendance/mark', 'attendance/report', 'attendance/view', 'attendance/broadsheet']) }}">
               <a data-bs-toggle="collapse" href="#attendanceSubmenu">

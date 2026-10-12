@@ -37,6 +37,7 @@ class Student extends Model
         'current_class_id',
         'current_session_id',
         'current_term_id',
+        'department',
     ];
 
     protected $casts = [
@@ -93,6 +94,11 @@ class Student extends Model
     public function complaints()
     {
         return $this->hasMany(Complaint::class);
+    }
+
+    public function studentSubjects()
+    {
+        return $this->hasMany(StudentSubject::class, 'student_id');
     }
 
     public function getClassLinkAttribute()

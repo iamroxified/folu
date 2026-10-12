@@ -110,6 +110,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $academic_session_link = filter_input(INPUT_POST, 'academic_session_link', FILTER_VALIDATE_INT);
     $admission_date = validate((string) ($_POST['admission_date'] ?? ''));
     $student_type = validate((string) ($_POST['student_type'] ?? 'day'));
+    $department = strtolower(validate((string) ($_POST['department'] ?? 'general')));
+    if (!in_array($department, ['general', 'science', 'arts', 'commercial'], true)) {
+        $department = 'general';
+    }
     $blood_group = validate((string) ($_POST['blood_group'] ?? ''));
     $genotype = validate((string) ($_POST['genotype'] ?? ''));
     $status = validate((string) ($_POST['status'] ?? 'active'));
@@ -192,6 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'state_of_origin' => $state_of_origin,
                 'lga' => $lga,
                 'student_type' => $student_type,
+                'department' => $department,
                 'blood_group' => $blood_group !== '' ? $blood_group : null,
                 'genotype' => $genotype !== '' ? $genotype : null,
                 'current_class_id' => $class_link ?: null,
@@ -402,7 +407,7 @@ $states = QueryDB("SELECT id, name FROM state ORDER BY name ASC")->fetchAll();
                     </div>
                     <hr>
                     <div class="row">
-                      <div class="col-md-6">
+                      <div class="col-md-4">
                         <div class="form-group">
                           <label for="class_link">Assign to Class <span class="text-danger">*</span></label>
                           <select class="form-control" name="class_link" id="class_link" required>
@@ -414,7 +419,18 @@ $states = QueryDB("SELECT id, name FROM state ORDER BY name ASC")->fetchAll();
                           </select>
                         </div>
                       </div>
-                      <div class="col-md-6">
+                      <div class="col-md-4">
+                        <div class="form-group">
+                          <label for="department">Stream / Category <span class="text-danger">*</span></label>
+                          <select class="form-control" name="department" id="department" required>
+                            <option value="general">General (Pre-Senior / All)</option>
+                            <option value="science">Sciences (Senior Secondary)</option>
+                            <option value="arts">Arts & Humanities (Senior Secondary)</option>
+                            <option value="commercial">Commercial (Senior Secondary)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="col-md-4">
                         <div class="form-group">
                           <label for="academic_session_link">Academic Session <span class="text-danger">*</span></label>
                           <select class="form-control" name="academic_session_link" id="academic_session_link" required>

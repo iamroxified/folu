@@ -48,6 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $academic_session_link = filter_input(INPUT_POST, 'academic_session_link', FILTER_VALIDATE_INT);
     $admission_date = validate($_POST['admission_date'] ?? '');
     $student_type = validate($_POST['student_type'] ?? 'day');
+    $department = strtolower(validate($_POST['department'] ?? 'general'));
+    if (!in_array($department, ['general', 'science', 'arts', 'commercial'], true)) {
+        $department = 'general';
+    }
     $blood_group = validate($_POST['blood_group'] ?? null);
     $genotype = validate($_POST['genotype'] ?? null);
     $status = validate($_POST['status'] ?? 'active');
@@ -64,14 +68,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'UPDATE students SET
                     first_name = ?, last_name = ?, other_names = ?, date_of_birth = ?, gender = ?,
                     state_of_origin = ?, lga = ?, address = ?, home_address = ?, current_class_id = ?, current_session_id = ?,
-                    admission_date = ?, enrollment_date = ?, student_type = ?, blood_group = ?, genotype = ?, status = ?,
+                    admission_date = ?, enrollment_date = ?, student_type = ?, department = ?, blood_group = ?, genotype = ?, status = ?,
                     updated_at = NOW()
                  WHERE id = ?'
             );
             $stmt->execute([
                 $first_name, $last_name, $other_names, $date_of_birth, $gender,
                 $state_of_origin, $lga, $home_address, $home_address, $class_link, $academic_session_link,
-                $admission_date, $admission_date, $student_type, $blood_group, $genotype, $status,
+                $admission_date, $admission_date, $student_type, $department, $blood_group, $genotype, $status,
                 $studentId
             ]);
 
@@ -252,7 +256,7 @@ if (!empty($student['state_of_origin'])) {
                     </div>
                     <hr>
                     <div class="row">
-                      <div class="col-md-6">
+                      <div class="col-md-4">
                         <div class="form-group">
                           <label for="class_link">Assign to Class <span class="text-danger">*</span></label>
                           <select class="form-control" name="class_link" id="class_link" required>
@@ -266,7 +270,19 @@ if (!empty($student['state_of_origin'])) {
                           </select>
                         </div>
                       </div>
-                      <div class="col-md-6">
+                      <div class="col-md-4">
+                        <div class="form-group">
+                          <label for="department">Stream / Category <span class="text-danger">*</span></label>
+                          <?php $curDept = strtolower((string) ($student['department'] ?? 'general')); ?>
+                          <select class="form-control" name="department" id="department" required>
+                            <option value="general" <?php echo ($curDept === 'general' || $curDept === '') ? 'selected' : ''; ?>>General (Pre-Senior / All)</option>
+                            <option value="science" <?php echo ($curDept === 'science') ? 'selected' : ''; ?>>Sciences (Senior Secondary)</option>
+                            <option value="arts" <?php echo ($curDept === 'arts') ? 'selected' : ''; ?>>Arts & Humanities (Senior Secondary)</option>
+                            <option value="commercial" <?php echo ($curDept === 'commercial') ? 'selected' : ''; ?>>Commercial (Senior Secondary)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="col-md-4">
                         <div class="form-group">
                           <label for="academic_session_link">Academic Session <span class="text-danger">*</span></label>
                           <select class="form-control" name="academic_session_link" id="academic_session_link" required>

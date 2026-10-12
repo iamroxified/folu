@@ -1204,15 +1204,53 @@ function get_class_subject_assignments(?int $classId = null, ?int $sessionId = n
     $classId ??= 0;
 
     return QueryDB(
-        "SELECT csa.*, c.class_name, c.class_arm, c.class_level, s.subject_name, s.subject_code, s.is_core
+        "SELECT csa.*, 
+                c.class_name, c.class_arm, c.class_level, 
+                s.subject_name, s.subject_code, s.subject_type, s.department,
+                CASE WHEN s.subject_type = 'core' THEN 1 ELSE 0 END AS is_core
          FROM class_subject_assignments csa
-         JOIN classes c ON csa.class_link = c.id
-         JOIN subjects s ON csa.subject_link = s.id
-         WHERE (? = 0 OR csa.class_link = ?)
+         JOIN classes c ON (csa.school_class_id = c.id OR csa.class_link = c.id)
+         JOIN subjects s ON (csa.subject_id = s.id OR csa.subject_link = s.id)
+         WHERE (? = 0 OR csa.school_class_id = ? OR csa.class_link = ?)
            AND (? = 0 OR csa.academic_session_link = ?)
          ORDER BY c.class_level, c.class_name, c.class_arm, s.subject_name",
-        [$classId, $classId, $sessionId, $sessionId]
+        [$classId, $classId, $classId, $sessionId, $sessionId]
     )->fetchAll();
+}
+
+function subject_matches_class_level(string $subjectLevel, string $classLevel): bool
+{
+    $sub = strtoupper(trim($subjectLevel));
+    $cls = strtoupper(trim($classLevel));
+    if ($sub === 'ALL' || $sub === '' || $cls === '' || $sub === $cls) {
+        return true;
+    }
+    if ($sub === 'SSS' && str_starts_with($cls, 'SSS')) {
+        return true;
+    }
+    if ($sub === 'JSS' && str_starts_with($cls, 'JSS')) {
+        return true;
+    }
+    if (($sub === 'PRI' || $sub === 'PRIMARY') && str_starts_with($cls, 'PRI')) {
+        return true;
+    }
+    return false;
+}
+
+function subject_matches_student_department(?string $subjectDept, ?string $studentDept): bool
+{
+    $sub = strtolower(trim((string) $subjectDept));
+    $stu = strtolower(trim((string) $studentDept));
+    if ($stu === '') {
+        $stu = 'general';
+    }
+    if ($sub === '' || $sub === 'all' || $sub === 'general' || $sub === 'core') {
+        return true;
+    }
+    if ($stu === 'general') {
+        return false;
+    }
+    return $sub === $stu;
 }
 
 function assign_subject_to_class(int $classId, int $subjectId, int $sessionId): bool
@@ -1232,22 +1270,28 @@ function assign_subject_to_class(int $classId, int $subjectId, int $sessionId): 
     $subjectLevel = (string) ($subject['class_level'] ?? 'ALL');
     $classLevel = (string) ($class['class_level'] ?? '');
 
-    if ($subjectLevel !== 'ALL' && $subjectLevel !== $classLevel) {
+    if (!subject_matches_class_level($subjectLevel, $classLevel)) {
         return false;
     }
 
     $existing = QueryDB(
-        'SELECT COUNT(*) FROM class_subject_assignments WHERE class_link = ? AND subject_link = ? AND academic_session_link = ?',
-        [$classId, $subjectId, $sessionId]
+        'SELECT COUNT(*) FROM class_subject_assignments 
+         WHERE (school_class_id = ? OR class_link = ?) 
+           AND (subject_id = ? OR subject_link = ?) 
+           AND academic_session_link = ?',
+        [$classId, $classId, $subjectId, $subjectId, $sessionId]
     )->fetchColumn();
 
     if ((int) $existing > 0) {
         return false;
     }
 
+    $sessionName = QueryDB('SELECT session_name FROM academic_sessions WHERE id = ? LIMIT 1', [$sessionId])->fetchColumn() ?: date('Y');
+
     QueryDB(
-        'INSERT INTO class_subject_assignments (class_link, subject_link, academic_session_link, created_at) VALUES (?, ?, ?, NOW())',
-        [$classId, $subjectId, $sessionId]
+        'INSERT INTO class_subject_assignments (school_class_id, subject_id, academic_year, academic_session_link, status, created_at, updated_at) 
+         VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
+        [$classId, $subjectId, $sessionName, $sessionId, 'active']
     );
 
     return true;
@@ -1260,6 +1304,235 @@ function remove_class_subject_assignment(int $assignmentId): bool
     }
 
     return QueryDB('DELETE FROM class_subject_assignments WHERE id = ?', [$assignmentId])->rowCount() > 0;
+}
+
+function get_student_allocated_subjects(int $studentId, ?int $sessionId = null): array
+{
+    $student = QueryDB("SELECT * FROM students WHERE id = ? LIMIT 1", [$studentId])->fetch(PDO::FETCH_ASSOC);
+    if (!$student) {
+        return [];
+    }
+
+    $classId = (int) ($student['current_class_id'] ?? $student['class_link'] ?? 0);
+    $studentDept = strtolower(trim((string) ($student['department'] ?? 'general')));
+    if ($studentDept === '') {
+        $studentDept = 'general';
+    }
+    $sessionId = ($sessionId !== null && $sessionId > 0)
+        ? $sessionId
+        : (int) ($student['current_session_id'] ?? $student['academic_session_link'] ?? get_current_academic_session_id() ?? 0);
+
+    // Class details
+    $class = $classId > 0
+        ? QueryDB("SELECT * FROM classes WHERE id = ? LIMIT 1", [$classId])->fetch(PDO::FETCH_ASSOC)
+        : null;
+    $classLevel = (string) ($class['class_level'] ?? '');
+
+    // 1. Get subjects explicitly assigned to this class
+    $classAssignedSubjects = [];
+    if ($classId > 0 && schema_has_table('class_subject_assignments')) {
+        $classAssignedSubjects = QueryDB(
+            "SELECT s.*, 1 AS is_class_assignment
+             FROM class_subject_assignments csa
+             JOIN subjects s ON (csa.subject_id = s.id OR csa.subject_link = s.id)
+             WHERE (csa.school_class_id = ? OR csa.class_link = ?)
+               AND (? = 0 OR csa.academic_session_link = ? OR csa.academic_session_link IS NULL)
+             ORDER BY s.subject_name",
+            [$classId, $classId, $sessionId, $sessionId]
+        )->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // 2. Fetch subjects matching class level
+    $levelSubjects = [];
+    if ($classLevel !== '') {
+        $levelSubjects = QueryDB(
+            "SELECT s.*, 0 AS is_class_assignment
+             FROM subjects s
+             WHERE (s.status IS NULL OR s.status = 'active')
+               AND (s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%') OR (s.class_level = 'PRI' AND ? LIKE 'PRI%'))
+             ORDER BY s.subject_name",
+            [$classLevel, $classLevel, $classLevel, $classLevel]
+        )->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // Combine subjects by ID
+    $combinedSubjects = [];
+    foreach ($classAssignedSubjects as $sub) {
+        $combinedSubjects[(int) $sub['id']] = $sub;
+    }
+    foreach ($levelSubjects as $sub) {
+        if (!isset($combinedSubjects[(int) $sub['id']])) {
+            $combinedSubjects[(int) $sub['id']] = $sub;
+        }
+    }
+
+    // 3. Fetch explicit student_subjects records (for enrollments and drops)
+    $studentSubjectRecords = [];
+    if (schema_has_table('student_subjects')) {
+        $records = QueryDB(
+            "SELECT ss.*, s.subject_name, s.subject_code, s.class_level, s.department, s.subject_type
+             FROM student_subjects ss
+             JOIN subjects s ON ss.subject_id = s.id
+             WHERE ss.student_id = ?
+               AND (? = 0 OR ss.session_id = ? OR ss.session_id IS NULL)",
+            [$studentId, $sessionId, $sessionId]
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($records as $rec) {
+            $subId = (int) $rec['subject_id'];
+            $studentSubjectRecords[$subId] = $rec;
+            if (!isset($combinedSubjects[$subId])) {
+                $combinedSubjects[$subId] = $rec;
+                $combinedSubjects[$subId]['id'] = $subId;
+            }
+        }
+    }
+
+    $result = [];
+    foreach ($combinedSubjects as $subId => $sub) {
+        $subjDept = strtolower(trim((string) ($sub['department'] ?? 'general')));
+        if ($subjDept === '' || $subjDept === 'all') {
+            $subjDept = 'general';
+        }
+
+        $matchesStream = subject_matches_student_department($subjDept, $studentDept);
+        $hasRecord = isset($studentSubjectRecords[$subId]);
+        $record = $hasRecord ? $studentSubjectRecords[$subId] : null;
+
+        $isExplicitEnrolled = $hasRecord && ($record['status'] ?? '') === 'enrolled';
+        $isDropped = $hasRecord && ($record['status'] ?? '') === 'dropped';
+
+        // An item is allocated to the student if:
+        // - It matches their stream and hasn't been dropped, OR
+        // - It has been explicitly dropped (we still return it so the UI shows it as dropped with re-enroll option), OR
+        // - It was explicitly enrolled
+        if (!$matchesStream && !$isExplicitEnrolled && !$isDropped) {
+            continue;
+        }
+
+        $status = $isDropped ? 'dropped' : 'enrolled';
+
+        $result[] = [
+            'id' => (int) $subId,
+            'subject_id' => (int) $subId,
+            'subject_name' => (string) ($sub['subject_name'] ?? ''),
+            'subject_code' => (string) ($sub['subject_code'] ?? ''),
+            'class_level' => (string) ($sub['class_level'] ?? 'ALL'),
+            'department' => $subjDept,
+            'subject_type' => (string) ($sub['subject_type'] ?? 'core'),
+            'matches_stream' => $matchesStream,
+            'status' => $status,
+            'is_dropped' => $isDropped,
+            'dropped_at' => $isDropped ? ($record['dropped_at'] ?? null) : null,
+            'reason' => $isDropped ? ($record['reason'] ?? null) : null,
+            'is_class_assignment' => !empty($sub['is_class_assignment']),
+        ];
+    }
+
+    usort($result, function($a, $b) {
+        if ($a['is_dropped'] !== $b['is_dropped']) {
+            return $a['is_dropped'] ? 1 : -1;
+        }
+        return strcasecmp($a['subject_name'], $b['subject_name']);
+    });
+
+    return $result;
+}
+
+function drop_student_subject(int $studentId, int $subjectId, ?int $sessionId = null, ?string $reason = null): bool
+{
+    $sessionId ??= get_current_academic_session_id() ?? 0;
+    
+    $existing = QueryDB(
+        "SELECT id FROM student_subjects WHERE student_id = ? AND subject_id = ? AND (session_id = ? OR session_id IS NULL) LIMIT 1",
+        [$studentId, $subjectId, $sessionId]
+    )->fetch(PDO::FETCH_ASSOC);
+
+    if ($existing) {
+        QueryDB(
+            "UPDATE student_subjects SET status = 'dropped', dropped_at = NOW(), reason = ?, updated_at = NOW() WHERE id = ?",
+            [$reason, $existing['id']]
+        );
+    } else {
+        QueryDB(
+            "INSERT INTO student_subjects (student_id, subject_id, session_id, status, dropped_at, reason, created_at, updated_at) VALUES (?, ?, ?, 'dropped', NOW(), ?, NOW(), NOW())",
+            [$studentId, $subjectId, $sessionId, $reason]
+        );
+    }
+    return true;
+}
+
+function enroll_student_subject(int $studentId, int $subjectId, ?int $sessionId = null): bool
+{
+    $sessionId ??= get_current_academic_session_id() ?? 0;
+    
+    $existing = QueryDB(
+        "SELECT id FROM student_subjects WHERE student_id = ? AND subject_id = ? AND (session_id = ? OR session_id IS NULL) LIMIT 1",
+        [$studentId, $subjectId, $sessionId]
+    )->fetch(PDO::FETCH_ASSOC);
+
+    if ($existing) {
+        QueryDB(
+            "UPDATE student_subjects SET status = 'enrolled', dropped_at = NULL, reason = NULL, updated_at = NOW() WHERE id = ?",
+            [$existing['id']]
+        );
+    } else {
+        QueryDB(
+            "INSERT INTO student_subjects (student_id, subject_id, session_id, status, created_at, updated_at) VALUES (?, ?, ?, 'enrolled', NOW(), NOW())",
+            [$studentId, $subjectId, $sessionId]
+        );
+    }
+    return true;
+}
+
+function get_student_active_subjects(int $studentId, ?int $sessionId = null): array
+{
+    $allocated = get_student_allocated_subjects($studentId, $sessionId);
+    return array_values(array_filter($allocated, fn($s) => ($s['status'] ?? '') === 'enrolled'));
+}
+
+function get_students_enrolled_in_subject(int $classId, int $subjectId, ?int $sessionId = null): array
+{
+    $sessionId ??= get_current_academic_session_id() ?? 0;
+    $allStudents = get_students_by_class_and_session($classId, $sessionId);
+    $subject = QueryDB("SELECT * FROM subjects WHERE id = ? LIMIT 1", [$subjectId])->fetch(PDO::FETCH_ASSOC);
+    if (!$subject) {
+        return $allStudents;
+    }
+
+    $subjDept = strtolower(trim((string) ($subject['department'] ?? 'general')));
+    if ($subjDept === '' || $subjDept === 'all') {
+        $subjDept = 'general';
+    }
+
+    $enrolledStudents = [];
+    foreach ($allStudents as $student) {
+        $studentDept = strtolower(trim((string) ($student['department'] ?? 'general')));
+        if ($studentDept === '') {
+            $studentDept = 'general';
+        }
+
+        // Check explicit student_subjects record
+        $rec = QueryDB(
+            "SELECT status FROM student_subjects WHERE student_id = ? AND subject_id = ? AND (session_id = ? OR session_id IS NULL) LIMIT 1",
+            [$student['id'], $subjectId, $sessionId]
+        )->fetch(PDO::FETCH_ASSOC);
+
+        if ($rec) {
+            if ($rec['status'] === 'enrolled') {
+                $enrolledStudents[] = $student;
+            }
+            // if dropped, excluded
+            continue;
+        }
+
+        // No record: check stream match
+        if (subject_matches_student_department($subjDept, $studentDept)) {
+            $enrolledStudents[] = $student;
+        }
+    }
+
+    return $enrolledStudents;
 }
 
 function get_timetable_entries(?int $classId = null, ?int $sessionId = null): array
@@ -2049,6 +2322,18 @@ function save_bulk_grade_records(
                     continue;
                 }
 
+                // Check if student has dropped this subject
+                if (schema_has_table('student_subjects')) {
+                    $isDropped = (int) QueryDB(
+                        "SELECT COUNT(*) FROM student_subjects WHERE student_id = ? AND subject_id = ? AND status = 'dropped' AND (? = 0 OR session_id = ? OR session_id IS NULL)",
+                        [$studentId, $subjectId, $sessionId, $sessionId]
+                    )->fetchColumn() > 0;
+
+                    if ($isDropped) {
+                        continue;
+                    }
+                }
+
                 $numericScore = (float) $score;
                 $grade = nigerian_grade_from_score($numericScore, true);
                 $remarks = validate((string) ($remarksByStudent[$studentId] ?? ''));
@@ -2376,6 +2661,7 @@ if (!function_exists('admin_build_student_insert_data')) {
         $setValue('state_of_origin', $studentData['state_of_origin'] ?? '');
         $setValue('lga', $studentData['lga'] ?? '');
         $setValue('student_type', $studentData['student_type'] ?? 'day');
+        $setValue('department', $studentData['department'] ?? 'general');
         $setValue('blood_group', $studentData['blood_group'] ?? null);
         $setValue('genotype', $studentData['genotype'] ?? null);
         $setValue('current_class_id', $studentData['current_class_id'] ?? null);
