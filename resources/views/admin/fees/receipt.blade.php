@@ -121,6 +121,7 @@ try {
                 p.description AS payment_description,
                 p.payment_method,
                 p.payment_date,
+                s.id AS student_id,
                 s.first_name,
                 s.last_name,
                 s.other_names,
@@ -185,18 +186,23 @@ try {
                 p.description AS payment_description,
                 p.payment_method,
                 p.payment_date,
+                s.id AS student_id,
                 s.first_name,
                 s.last_name,
                 s.other_names,
                 s.admission_no,
                 {$classSelectName},
                 {$classSelectArm},
-                sf.amount_due,
-                sf.amount_paid AS total_fee_paid,
-                sf.balance AS fee_balance,
-                sf.status AS fee_status,
+                sf.base_amount AS amount_due,
+                (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed') AS total_fee_paid,
+                GREATEST(0.00, sf.base_amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed')) AS fee_balance,
+                CASE 
+                    WHEN GREATEST(0.00, sf.base_amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed')) <= 0.001 THEN 'paid'
+                    WHEN (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed') > 0 THEN 'partial'
+                    ELSE 'pending'
+                END AS fee_status,
                 fs.description AS fee_description,
-                COALESCE(fs.name, fs.description, 'School Fee') AS type_name,
+                COALESCE(fs.name, fs.description, 'Tuition Fee') AS type_name,
                 {$sessionSelect},
                 {$termSelect}
             FROM payments p
@@ -209,6 +215,20 @@ try {
 
     if (!$payment) {
         die('Receipt reference "' . htmlspecialchars($receipt_number) . '" could not be formatted.');
+    }
+
+    // Calculate total remaining cumulative balance for this student across all fees & charges
+    $student_id = (int) ($payment['student_id'] ?? 0);
+    $totalCumulativeBalance = 0.00;
+    if ($student_id > 0) {
+        $cum_stmt = $pdo->prepare("
+            SELECT 
+                (SELECT COALESCE(SUM(balance), 0) FROM student_fees WHERE student_id = :sid1) +
+                (SELECT COALESCE(SUM(balance), 0) FROM additional_charges WHERE student_id = :sid2 AND (student_fee_id IS NULL OR student_fee_id = 0))
+            AS total_cum_balance
+        ");
+        $cum_stmt->execute(['sid1' => $student_id, 'sid2' => $student_id]);
+        $totalCumulativeBalance = (float) $cum_stmt->fetchColumn();
     }
 
 } catch (PDOException $e) {
@@ -341,6 +361,56 @@ try {
         }
         .details-table td {
             font-size: 14px;
+        }
+        .balance-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 25px;
+        }
+        .balance-box {
+            border-radius: 8px;
+            padding: 16px 20px;
+            text-align: center;
+        }
+        .balance-box.current-txn-box {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 1.5px dashed #22c55e;
+        }
+        .balance-box.current-txn-box .balance-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #15803d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .balance-box.current-txn-box .balance-value {
+            font-size: 26px;
+            font-weight: 800;
+            color: #14532d;
+        }
+        .balance-box.cumulative-box {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border: 1.5px dashed #ef4444;
+        }
+        .balance-box.cumulative-box .balance-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #b91c1c;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .balance-box.cumulative-box .balance-value {
+            font-size: 26px;
+            font-weight: 800;
+            color: #991b1b;
+        }
+        .balance-sub {
+            font-size: 11px;
+            display: block;
+            margin-top: 4px;
         }
         .amount-highlight-box {
             background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
@@ -489,9 +559,9 @@ try {
                     <tr>
                                                      <th style="width: 50px;">S/N</th>
                         <th>Description / Fee Item</th>
-                        <th>Total Fee Due (₦)</th>
+                        <th>Item Total Due (₦)</th>
                         <th>Amount Paid (₦)</th>
-                        <th>Remaining Balance (₦)</th>
+                        <th>Remaining Item Balance (₦)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -511,10 +581,22 @@ try {
                 </tbody>
             </table>
 
-            <!-- Amount Highlight Box -->
-            <div class="amount-highlight-box">
-                <div class="amount-label">Amount Paid in this Transaction</div>
-                <div class="amount-value">₦<?php echo number_format((float) $payment['transaction_amount'], 2); ?></div>
+            <!-- Payment Transaction & Total Remaining Cumulative Balance -->
+            <div class="balance-summary-grid">
+                <div class="balance-box current-txn-box">
+                    <div class="balance-label">Amount Paid in this Transaction</div>
+                    <div class="balance-value">₦<?php echo number_format((float) $payment['transaction_amount'], 2); ?></div>
+                    <small class="balance-sub" style="color: #166534;">
+                        Item: <?php echo htmlspecialchars($payment['type_name']); ?> | Method: <?php echo ucfirst(htmlspecialchars(str_replace('_', ' ', $payment['payment_method']))); ?>
+                    </small>
+                </div>
+                <div class="balance-box cumulative-box">
+                    <div class="balance-label">Total Student Cumulative Balance</div>
+                    <div class="balance-value">₦<?php echo number_format($totalCumulativeBalance, 2); ?></div>
+                    <small class="balance-sub" style="color: #991b1b;">
+                        <?php echo ($totalCumulativeBalance <= 0.001) ? '✓ All fees & charges cleared in full' : 'Total balance owed across all fees & extra charges'; ?>
+                    </small>
+                </div>
             </div>
 
             <!-- Footer Section -->

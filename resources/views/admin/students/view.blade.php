@@ -321,26 +321,56 @@ if ($isPost && $hasProcessPayment) {
 
 // Get student fee summary, additional charges, recent payment history, and outstanding fees
 try {
-    // 1. Link any unlinked additional charges to the student's active fee record
-    $unlinked_charges_count = (int) $pdo->query("SELECT COUNT(*) FROM additional_charges WHERE student_id = {$studentId} AND (student_fee_id IS NULL OR student_fee_id = 0)")->fetchColumn();
-    if ($unlinked_charges_count > 0) {
-        $studentModel = \App\Models\Student::find($studentId);
-        if ($studentModel) {
-            $sf = \App\Models\StudentFee::where('student_id', $studentId)->latest('id')->first();
-            if (!$sf) {
-                $sf = \App\Services\FeeAllocationService::allocateFeeForStudent($studentModel, 2);
-            }
-            if ($sf) {
-                $pdo->exec("UPDATE additional_charges SET student_fee_id = {$sf->id} WHERE student_id = {$studentId} AND (student_fee_id IS NULL OR student_fee_id = 0)");
-                $sf->recalculateTotals();
+    $studentModel = \App\Models\Student::find($studentId);
+
+    // Auto-allocate general/allocated fee structure if not already allocated for this student
+    if ($studentModel) {
+        $existingFee = \App\Models\StudentFee::where('student_id', $studentId)->latest('id')->first();
+        if (!$existingFee) {
+            \App\Services\FeeAllocationService::allocateFeeForStudent($studentModel);
+        } elseif ((float) $existingFee->base_amount <= 0.001) {
+            $allocated = \App\Services\FeeAllocationService::allocateFeeForStudent($studentModel);
+            if ($allocated && (float) $allocated->base_amount > 0 && $existingFee->id !== $allocated->id) {
+                $existingFee->base_amount = $allocated->base_amount;
+                $existingFee->recalculateTotals();
             }
         }
     }
 
-    // 2. Get student fee summary
-    $fee_summary_stmt = $pdo->prepare("SELECT COALESCE(SUM(sf.amount_due), 0) as total_due, COALESCE(SUM(sf.amount_paid), 0) as total_paid, COALESCE(SUM(sf.balance), 0) as total_balance FROM student_fees sf WHERE sf.student_id = ?");
-    $fee_summary_stmt->execute([$studentId]);
-    $fee_summary = $fee_summary_stmt->fetch(PDO::FETCH_ASSOC);
+    // 1. Link any unlinked additional charges to the student's active fee record
+    $unlinked_charges_count = (int) $pdo->query("SELECT COUNT(*) FROM additional_charges WHERE student_id = {$studentId} AND (student_fee_id IS NULL OR student_fee_id = 0)")->fetchColumn();
+    if ($unlinked_charges_count > 0 && $studentModel) {
+        $sf = \App\Models\StudentFee::where('student_id', $studentId)->latest('id')->first();
+        if ($sf) {
+            $pdo->exec("UPDATE additional_charges SET student_fee_id = {$sf->id} WHERE student_id = {$studentId} AND (student_fee_id IS NULL OR student_fee_id = 0)");
+            $sf->recalculateTotals();
+        }
+    }
+
+    // 2. Get all allocated student fees (both base tuition and general fee structures)
+    $allocated_fees_stmt = $pdo->prepare("
+        SELECT 
+            sf.*,
+            COALESCE(fs.name, fs.description, 'School Tuition Fee') AS type_name,
+            COALESCE(fs.description, fs.name, 'Base Term / Session Fee') AS fee_description,
+            fs.itemized_components,
+            sess.session_name,
+            t.term_name AS session_term,
+            CASE 
+                WHEN sf.base_amount > 0.001 THEN sf.base_amount
+                WHEN sf.amount_due > 0.001 THEN sf.amount_due
+                ELSE COALESCE(fs.amount, 0.00)
+            END AS calculated_base_amount,
+            (SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE (p.payable_type = 'student_fee' OR p.payable_type = 'App\\\\Models\\\\StudentFee') AND p.payable_id = sf.id AND p.status = 'completed') AS direct_fee_paid
+        FROM student_fees sf
+        LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
+        LEFT JOIN academic_sessions sess ON sf.session_id = sess.id
+        LEFT JOIN academic_terms t ON sf.term_id = t.id
+        WHERE sf.student_id = ?
+        ORDER BY sf.id DESC
+    ");
+    $allocated_fees_stmt->execute([$studentId]);
+    $allocated_fees = $allocated_fees_stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // 3. Get all additional charges for this student
     $additional_charges_stmt = $pdo->prepare("
@@ -355,7 +385,38 @@ try {
     $additional_charges_stmt->execute([$studentId]);
     $additional_charges = $additional_charges_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 4. Get recent payment history (both base tuition and individual extra charges)
+    // Accurate calculation of fee summary across both allocated fees and additional charges
+    $total_allocated_due = 0.0;
+    $total_allocated_paid = 0.0;
+    $total_allocated_bal = 0.0;
+    foreach ($allocated_fees as $af) {
+        $b_due = (float) $af['calculated_base_amount'];
+        $b_paid = (float) $af['direct_fee_paid'];
+        $b_bal = max(0.00, $b_due - $b_paid);
+        $total_allocated_due += $b_due;
+        $total_allocated_paid += $b_paid;
+        $total_allocated_bal += $b_bal;
+    }
+
+    $total_extra_due_sum = 0.0;
+    $total_extra_paid_sum = 0.0;
+    $total_extra_bal_sum = 0.0;
+    foreach ($additional_charges as $ac_item) {
+        $c_due = (float) ($ac_item['amount'] ?? 0);
+        $c_paid = (float) ($ac_item['amount_paid'] ?? 0);
+        $c_bal = (float) ($ac_item['balance'] ?? max(0.00, $c_due - $c_paid));
+        $total_extra_due_sum += $c_due;
+        $total_extra_paid_sum += $c_paid;
+        $total_extra_bal_sum += $c_bal;
+    }
+
+    $fee_summary = [
+        'total_due' => $total_allocated_due + $total_extra_due_sum,
+        'total_paid' => $total_allocated_paid + $total_extra_paid_sum,
+        'total_balance' => $total_allocated_bal + $total_extra_bal_sum,
+    ];
+
+    // 4. Get recent payment history (both base tuition and individual extra charges, with itemized non-cumulative balances)
     $payment_history_stmt = $pdo->prepare("
         SELECT 
             p.id AS payment_id,
@@ -376,19 +437,27 @@ try {
             END AS item_category,
             CASE 
                 WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.amount
-                ELSE sf.amount_due
+                ELSE CASE
+                    WHEN sf.base_amount > 0.001 THEN sf.base_amount
+                    WHEN sf.amount_due > 0.001 THEN sf.amount_due
+                    ELSE COALESCE(fs.amount, 0.00)
+                END
             END AS amount_due,
             CASE 
                 WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.amount_paid
-                ELSE sf.amount_paid
+                ELSE (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed')
             END AS total_fee_paid,
             CASE 
                 WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.balance
-                ELSE sf.balance
+                ELSE GREATEST(0.00, (CASE WHEN sf.base_amount > 0.001 THEN sf.base_amount WHEN sf.amount_due > 0.001 THEN sf.amount_due ELSE COALESCE(fs.amount, 0.00) END) - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed'))
             END AS current_balance,
             CASE 
                 WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.status
-                ELSE sf.status
+                ELSE CASE 
+                    WHEN GREATEST(0.00, (CASE WHEN sf.base_amount > 0.001 THEN sf.base_amount WHEN sf.amount_due > 0.001 THEN sf.amount_due ELSE COALESCE(fs.amount, 0.00) END) - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed')) <= 0.001 THEN 'paid'
+                    WHEN (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed') > 0 THEN 'partial'
+                    ELSE 'pending'
+                END
             END AS fee_status,
             COALESCE(sess_sf.session_name, sess_ac.session_name, 'N/A') AS session_name,
             COALESCE(t_sf.term_name, t_ac.term_name, '') AS session_term
@@ -417,7 +486,12 @@ try {
             COALESCE(fs.description, fs.name) AS fee_description,
             ac.session_name,
             t.term_name AS session_term,
-            t.term_name AS term
+            t.term_name AS term,
+            CASE 
+                WHEN sf.base_amount > 0.001 THEN sf.base_amount
+                WHEN sf.amount_due > 0.001 THEN sf.amount_due
+                ELSE COALESCE(fs.amount, 0.00)
+            END AS calculated_base_amount
         FROM student_fees sf
         LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
         LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
@@ -438,7 +512,7 @@ try {
         $direct_fee_paid_stmt->execute([$fee['id']]);
         $base_fee_paid = (float) $direct_fee_paid_stmt->fetchColumn();
 
-        $base_amount = (float) ($fee['base_amount'] ?? 0);
+        $base_amount = (float) ($fee['calculated_base_amount'] ?? $fee['base_amount'] ?? $fee['amount_due'] ?? 0);
         $base_balance = max(0.00, $base_amount - $base_fee_paid);
 
         if ($base_balance > 0.001) {
@@ -698,6 +772,123 @@ $gradeAverage = student_grade_average($studentId);
                       </table>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <!-- Allocated School & Tuition Fees -->
+              <div class="card mb-4 shadow-sm border-primary">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                  <h4 class="card-title mb-0 text-dark fw-bold">
+                    <i class="fas fa-graduation-cap me-2 text-primary"></i>Allocated School & Tuition Fees
+                  </h4>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-primary text-white fw-bold"><?php echo count($allocated_fees); ?> Allocated Fee(s)</span>
+                    <a href="/admin/fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-outline-primary btn-sm fw-bold">
+                      <i class="fas fa-sliders-h me-1"></i> Fee Structures
+                    </a>
+                  </div>
+                </div>
+                <div class="card-body p-0">
+                  <?php if (empty($allocated_fees)): ?>
+                    <div class="text-center py-4 text-muted">
+                      <i class="fas fa-info-circle fa-2x mb-2 d-block text-muted"></i>
+                      No allocated fee structure found.
+                    </div>
+                  <?php else: ?>
+                    <div class="table-responsive">
+                      <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                          <tr>
+                            <th style="width: 40px;">#</th>
+                            <th>Fee Name / Structure</th>
+                            <th>Session / Term</th>
+                            <th>Base Fee Due (₦)</th>
+                            <th>Amount Paid (₦)</th>
+                            <th>Remaining Balance (₦)</th>
+                            <th>Status</th>
+                            <th class="text-end" style="min-width: 120px;">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <?php 
+                            $sn_af = 1; 
+                            foreach ($allocated_fees as $af): 
+                              $af_due = (float) $af['calculated_base_amount'];
+                              $af_paid = (float) $af['direct_fee_paid'];
+                              $af_bal = max(0.00, $af_due - $af_paid);
+                              $af_status = ($af_bal <= 0.001) ? 'paid' : ($af_paid > 0 ? 'partially_paid' : 'unpaid');
+                              $snapshot = !empty($af['itemized_components']) ? (is_array($af['itemized_components']) ? $af['itemized_components'] : json_decode($af['itemized_components'], true)) : null;
+                          ?>
+                          <tr>
+                            <td><?php echo $sn_af++; ?></td>
+                            <td>
+                              <strong class="text-dark"><?php echo htmlspecialchars((string) $af['type_name']); ?></strong>
+                              <?php if (!empty($af['fee_description']) && $af['fee_description'] !== $af['type_name']): ?>
+                                <br><small class="text-muted"><?php echo htmlspecialchars((string) $af['fee_description']); ?></small>
+                              <?php endif; ?>
+                              <?php if (!empty($snapshot) && is_array($snapshot)): ?>
+                                <div class="mt-1">
+                                  <small class="text-secondary" style="font-size: 11px;">
+                                    <?php 
+                                      $parts = [];
+                                      foreach ($snapshot as $c_name => $c_val) {
+                                        $parts[] = htmlspecialchars($c_name) . ': ₦' . number_format((float)$c_val, 0);
+                                      }
+                                      echo implode(' | ', $parts);
+                                    ?>
+                                  </small>
+                                </div>
+                              <?php endif; ?>
+                            </td>
+                            <td>
+                              <small>
+                                <?php echo htmlspecialchars((string) ($af['session_name'] ?? 'Current Session')); ?>
+                                <?php if (!empty($af['session_term'])): ?>
+                                  (<?php echo htmlspecialchars((string) $af['session_term']); ?>)
+                                <?php endif; ?>
+                              </small>
+                            </td>
+                            <td class="fw-bold text-dark">
+                              ₦<?php echo number_format($af_due, 2); ?>
+                            </td>
+                            <td class="fw-bold text-success">
+                              ₦<?php echo number_format($af_paid, 2); ?>
+                            </td>
+                            <td class="fw-bold text-danger">
+                              ₦<?php echo number_format($af_bal, 2); ?>
+                            </td>
+                            <td>
+                              <span class="badge bg-<?php echo $af_status === 'paid' ? 'success' : ($af_status === 'partially_paid' ? 'warning' : 'danger'); ?> text-<?php echo $af_status === 'partially_paid' ? 'dark' : 'white'; ?>">
+                                <?php echo ucfirst(str_replace('_', ' ', $af_status)); ?>
+                              </span>
+                            </td>
+                            <td class="text-end">
+                              <?php if ($af_bal > 0.001): ?>
+                                <button type="button" 
+                                        class="btn btn-sm btn-primary text-white pay-item-direct-btn"
+                                        data-item-key="fee_<?php echo (int) $af['id']; ?>"
+                                        title="Pay this tuition fee">
+                                  <i class="fas fa-credit-card me-1"></i> Pay
+                                </button>
+                              <?php else: ?>
+                                <span class="badge bg-success"><i class="fas fa-check me-1"></i> Cleared</span>
+                              <?php endif; ?>
+                            </td>
+                          </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                        <tfoot class="table-light">
+                          <tr>
+                            <td colspan="3" class="fw-bold text-end">Total Tuition Fees:</td>
+                            <td class="fw-bold text-dark">₦<?php echo number_format($total_allocated_due, 2); ?></td>
+                            <td class="fw-bold text-success">₦<?php echo number_format($total_allocated_paid, 2); ?></td>
+                            <td class="fw-bold text-danger">₦<?php echo number_format($total_allocated_bal, 2); ?></td>
+                            <td colspan="2"></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  <?php endif; ?>
                 </div>
               </div>
 

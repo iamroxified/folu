@@ -63,9 +63,37 @@ class FeeAllocationService
 
         $feeStructure = $feeStructures->first();
 
-        // If no matching fee structure found in this session, try falling back to active session
+        // 1. If not found, try matching by class in this session regardless of gender or category
+        if (!$feeStructure && $student->current_class_id) {
+            $feeStructure = FeeStructure::where('session_id', $sessionId)
+                ->where('is_active', true)
+                ->where('class_id', $student->current_class_id)
+                ->first();
+        }
+
+        // 2. If not found, try general fee structure in this session (class_id IS NULL)
+        if (!$feeStructure) {
+            $feeStructure = FeeStructure::where('session_id', $sessionId)
+                ->where('is_active', true)
+                ->whereNull('class_id')
+                ->first();
+        }
+
+        // 3. If no matching fee structure found in this session, try falling back to active session
         if (!$feeStructure && $sessionId !== $activeSessionId) {
             return self::allocateFeeForStudent($student, $activeSessionId, $termId);
+        }
+
+        // 4. If still not found, try general fee structure across active sessions
+        if (!$feeStructure) {
+            $feeStructure = FeeStructure::where('is_active', true)
+                ->whereNull('class_id')
+                ->first();
+        }
+
+        // 5. Ultimate fallback to any active fee structure in system
+        if (!$feeStructure) {
+            $feeStructure = FeeStructure::where('is_active', true)->first();
         }
 
         if (!$feeStructure) {
@@ -83,7 +111,7 @@ class FeeAllocationService
         $studentFee = $existingQuery->first();
 
         if (!$studentFee) {
-            $baseAmount = $feeStructure->amount;
+            $baseAmount = (float) $feeStructure->amount;
             $studentFee = StudentFee::create([
                 'student_id' => $student->id,
                 'fee_structure_id' => $feeStructure->id,
@@ -111,6 +139,9 @@ class FeeAllocationService
             ]);
         } else {
             // Keep existing historical record intact, but recalculate totals
+            if ((float) $studentFee->base_amount <= 0.001) {
+                $studentFee->base_amount = (float) $feeStructure->amount;
+            }
             $studentFee->recalculateTotals();
         }
 

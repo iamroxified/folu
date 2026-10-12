@@ -73,6 +73,14 @@ class StudentFee extends Model
 
     public function recalculateTotals()
     {
+        if ((float) $this->base_amount <= 0.001) {
+            if ($this->feeStructure && (float) $this->feeStructure->amount > 0) {
+                $this->base_amount = (float) $this->feeStructure->amount;
+            } elseif ((float) $this->amount_due > 0) {
+                $this->base_amount = (float) $this->amount_due;
+            }
+        }
+
         $additionalSum = (float) $this->additionalCharges()->sum('amount');
         $chargeIds = $this->additionalCharges()->pluck('id')->toArray();
 
