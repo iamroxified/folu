@@ -66,8 +66,16 @@ if (schema_has_table('student_attendance')) {
             @include('admin.partials.header')
             <div class="container">
                 <div class="page-inner">
-                    <div class="d-flex align-items-left flex-column flex-md-row">
-                        <h2 class="text-dark pb-2 fw-bold">Attendance</h2>
+                    <div class="d-flex align-items-center justify-content-between flex-wrap pb-3">
+                        <div>
+                            <h2 class="text-dark fw-bold mb-1">Attendance Management</h2>
+                            <p class="text-muted mb-0">View recent attendance history or record daily/subject attendance.</p>
+                        </div>
+                        <div>
+                            <a href="{{ url('/admin/attendance/mark.php') }}" class="btn btn-primary fw-bold shadow-sm">
+                                <i class="fas fa-check-double me-1"></i> Mark Attendance
+                            </a>
+                        </div>
                     </div>
 
                     <div class="row">

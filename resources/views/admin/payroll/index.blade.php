@@ -230,6 +230,9 @@
                                                         </td>
                                                         <td class="text-center">
                                                             <div class="btn-group">
+                                                                <a href="{{ route('admin.payroll.receipt', $payroll->id) }}" target="_blank" class="btn btn-sm btn-secondary text-white" title="Print Official Receipt">
+                                                                    <i class="fas fa-print"></i>
+                                                                </a>
                                                                 <a href="{{ route('admin.payroll.show', $payroll->id) }}" class="btn btn-sm btn-info text-white" title="View Payslip/Details">
                                                                     <i class="fas fa-eye"></i>
                                                                 </a>

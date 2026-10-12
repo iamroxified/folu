@@ -27,8 +27,11 @@
                     <div class="d-flex align-items-center justify-content-between pb-3 no-print">
                         <h2 class="text-dark fw-bold mb-0">Staff Payment Details & Payslip</h2>
                         <div>
-                            <button onclick="window.print();" class="btn btn-primary me-2">
-                                <i class="fas fa-print me-1"></i> Print Payslip
+                            <a href="{{ route('admin.payroll.receipt', $payroll->id) }}" target="_blank" class="btn btn-primary me-2">
+                                <i class="fas fa-receipt me-1"></i> Official Printable Receipt
+                            </a>
+                            <button onclick="window.print();" class="btn btn-outline-primary me-2">
+                                <i class="fas fa-print me-1"></i> Quick Print
                             </button>
                             <a href="{{ route('admin.payroll') }}" class="btn btn-outline-secondary">
                                 <i class="fas fa-arrow-left me-1"></i> Back to List

@@ -1876,7 +1876,8 @@ function save_bulk_attendance_records(
     ?int $sessionId,
     string $date,
     array $records,
-    ?int $markedByUserId = null
+    ?int $markedByUserId = null,
+    ?int $termId = null
 ): int {
     global $pdo;
 
@@ -1887,7 +1888,14 @@ function save_bulk_attendance_records(
 
     try {
         if (schema_has_table('student_attendance')) {
-            $currentTerm = get_current_academic_term($sessionId);
+            $currentTerm = null;
+            if ($termId && $termId > 0 && schema_has_table('academic_terms')) {
+                $currentTerm = QueryDB('SELECT * FROM academic_terms WHERE id = ? LIMIT 1', [$termId])->fetch(PDO::FETCH_ASSOC) ?: null;
+            }
+            if (!$currentTerm) {
+                $currentTerm = get_current_academic_term($sessionId);
+            }
+
             $termCode = normalize_term_code($currentTerm['term_code'] ?? ($currentTerm['term_name'] ?? ''));
             $termName = match ($termCode) {
                 '1' => 'first',
