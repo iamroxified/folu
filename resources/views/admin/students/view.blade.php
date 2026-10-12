@@ -28,9 +28,13 @@ if (!isset($_SESSION['adid']) && !auth()->check()) {
     }
 }
 
-$message = '';
-$error = '';
-$payment_success = false;
+// Retrieve flash messages from session (PRG pattern)
+$message = $_SESSION['flash_message'] ?? '';
+$error = $_SESSION['flash_error'] ?? '';
+$flashReceipt = $_SESSION['flash_receipt'] ?? '';
+$flashPaymentSuccess = !empty($_SESSION['flash_payment_success']);
+$flashPaymentAmount = (float) ($_SESSION['flash_payment_amount'] ?? 0);
+unset($_SESSION['flash_message'], $_SESSION['flash_error'], $_SESSION['flash_receipt'], $_SESSION['flash_payment_success'], $_SESSION['flash_payment_amount']);
 
 // Fetch student information
 $studentId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT) ?: (int) ($_GET['id'] ?? request('id') ?? 0);
@@ -59,6 +63,24 @@ if ($studentId) {
     die('Student ID is required');
 }
 
+// Target redirect URL for Post-Redirect-Get (PRG) pattern
+$currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/admin/view_student.php', PHP_URL_PATH);
+if (!$currentPath || $currentPath === '/' || $currentPath === '') {
+    $currentPath = '/admin/view_student.php';
+}
+$redirectUrl = $currentPath . '?id=' . $studentId;
+
+$performRedirect = function() use ($redirectUrl) {
+    if (!headers_sent()) {
+        header("Location: " . $redirectUrl, true, 303);
+        exit;
+    } else {
+        echo "<script>window.location.replace(" . json_encode($redirectUrl) . ");</script>";
+        echo "<noscript><meta http-equiv='refresh' content='0;url=" . htmlspecialchars($redirectUrl, ENT_QUOTES) . "'></noscript>";
+        exit;
+    }
+};
+
 // Handle payment form submission, fee charge addition, or deletion
 $isPost = (isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SERVER['REQUEST_METHOD']) === 'POST') || (function_exists('request') && request()->isMethod('post'));
 $hasProcessPayment = isset($_POST['process_payment']) || (function_exists('request') && request()->has('process_payment'));
@@ -66,256 +88,268 @@ $hasDeletePayment = isset($_POST['delete_payment']) || (function_exists('request
 $hasAddCharge = isset($_POST['add_additional_charge']) || (function_exists('request') && request()->has('add_additional_charge'));
 $hasDeleteCharge = isset($_POST['delete_additional_charge']) || (function_exists('request') && request()->has('delete_additional_charge'));
 
-if ($isPost && $hasAddCharge) {
-    $fee_name = trim((string) ($_POST['fee_name'] ?? request('fee_name') ?? ''));
-    $charge_amount = (float) ($_POST['charge_amount'] ?? request('charge_amount') ?? 0);
-    $reason = trim((string) ($_POST['reason'] ?? request('reason') ?? ''));
+if ($isPost && ($hasAddCharge || $hasDeleteCharge || $hasDeletePayment || $hasProcessPayment)) {
+    if ($hasAddCharge) {
+        $fee_name = trim((string) ($_POST['fee_name'] ?? request('fee_name') ?? ''));
+        $charge_amount = (float) ($_POST['charge_amount'] ?? request('charge_amount') ?? 0);
+        $reason = trim((string) ($_POST['reason'] ?? request('reason') ?? ''));
 
-    if ($fee_name === '' || $charge_amount <= 0) {
-        $error = 'Please enter a valid fee name and amount greater than 0.';
-    } else {
-        try {
-            $studentModel = \App\Models\Student::find($studentId);
-            if ($studentModel) {
-                \App\Services\FeeAllocationService::addAdditionalCharge($studentModel, $fee_name, $charge_amount, $reason);
-                $message = "Additional charge of ₦" . number_format($charge_amount, 2) . " ('{$fee_name}') added and calculated successfully in student profile.";
+        if ($fee_name === '' || $charge_amount <= 0) {
+            $_SESSION['flash_error'] = 'Please enter a valid fee name and amount greater than 0.';
+        } else {
+            try {
+                $studentModel = \App\Models\Student::find($studentId);
+                if ($studentModel) {
+                    \App\Services\FeeAllocationService::addAdditionalCharge($studentModel, $fee_name, $charge_amount, $reason);
+                    $_SESSION['flash_message'] = "Additional charge of ₦" . number_format($charge_amount, 2) . " ('{$fee_name}') added and calculated successfully in student profile.";
+                } else {
+                    $_SESSION['flash_error'] = 'Student profile record not found.';
+                }
+            } catch (\Throwable $e) {
+                $_SESSION['flash_error'] = 'Failed to add additional charge: ' . $e->getMessage();
             }
-        } catch (\Throwable $e) {
-            $error = 'Failed to add additional charge: ' . $e->getMessage();
         }
+        $performRedirect();
     }
-}
 
-if ($isPost && $hasDeleteCharge) {
-    $charge_id = (int) ($_POST['charge_id'] ?? request('charge_id') ?? 0);
-    if ($charge_id > 0) {
-        try {
-            \App\Services\FeeAllocationService::removeAdditionalCharge($charge_id);
-            $message = "Additional fee charge removed and balance recalculated successfully.";
-        } catch (\Throwable $e) {
-            $error = 'Failed to remove additional charge: ' . $e->getMessage();
-        }
-    }
-}
-
-if ($isPost && $hasDeletePayment) {
-    $delete_payment_id = filter_input(INPUT_POST, 'payment_id', FILTER_VALIDATE_INT) ?: (int) ($_POST['payment_id'] ?? request('payment_id') ?? 0);
-
-    if (!$delete_payment_id) {
-        $error = 'Invalid payment transaction ID for deletion.';
-    } else {
-        try {
-            $pdo->beginTransaction();
-
-            // Fetch payment record
-            $payment_stmt = $pdo->prepare("SELECT * FROM payments WHERE id = ? FOR UPDATE");
-            $payment_stmt->execute([$delete_payment_id]);
-            $payment_to_delete = $payment_stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$payment_to_delete) {
-                throw new Exception('Payment record not found.');
+    if ($hasDeleteCharge) {
+        $charge_id = (int) ($_POST['charge_id'] ?? request('charge_id') ?? 0);
+        if ($charge_id > 0) {
+            try {
+                \App\Services\FeeAllocationService::removeAdditionalCharge($charge_id);
+                $_SESSION['flash_message'] = "Additional fee charge removed and balance recalculated successfully.";
+            } catch (\Throwable $e) {
+                $_SESSION['flash_error'] = 'Failed to remove additional charge: ' . $e->getMessage();
             }
+        }
+        $performRedirect();
+    }
 
-            $deleted_amount = (float) ($payment_to_delete['amount'] ?? 0);
-            $pType = $payment_to_delete['payable_type'];
-            $pId = (int) ($payment_to_delete['payable_id'] ?? 0);
+    if ($hasDeletePayment) {
+        $delete_payment_id = filter_input(INPUT_POST, 'payment_id', FILTER_VALIDATE_INT) ?: (int) ($_POST['payment_id'] ?? request('payment_id') ?? 0);
 
-            // Delete transaction from payments table
-            $del_stmt = $pdo->prepare("DELETE FROM payments WHERE id = ?");
-            $del_stmt->execute([$delete_payment_id]);
+        if (!$delete_payment_id) {
+            $_SESSION['flash_error'] = 'Invalid payment transaction ID for deletion.';
+        } else {
+            try {
+                $pdo->beginTransaction();
 
-            if (in_array($pType, ['additional_charge', 'App\\Models\\AdditionalCharge'])) {
-                $charge = \App\Models\AdditionalCharge::find($pId);
-                if ($charge) {
-                    $chargePayments = (float) \App\Models\Payment::where(function($q) use ($charge) {
-                        $q->where('payable_type', 'additional_charge')
-                          ->orWhere('payable_type', 'App\\Models\\AdditionalCharge');
-                    })->where('payable_id', $charge->id)->where('status', 'completed')->sum('amount');
+                // Fetch payment record
+                $payment_stmt = $pdo->prepare("SELECT * FROM payments WHERE id = ? FOR UPDATE");
+                $payment_stmt->execute([$delete_payment_id]);
+                $payment_to_delete = $payment_stmt->fetch(PDO::FETCH_ASSOC);
 
-                    $charge->amount_paid = $chargePayments;
-                    $charge->balance = max(0.00, (float) $charge->amount - $chargePayments);
-                    $charge->status = ($charge->balance <= 0.001) ? 'paid' : ($charge->amount_paid > 0 ? 'partially_paid' : 'unpaid');
-                    $charge->save();
+                if (!$payment_to_delete) {
+                    throw new Exception('Payment record not found.');
+                }
 
-                    if ($charge->studentFee) {
-                        $charge->studentFee->recalculateTotals();
+                $deleted_amount = (float) ($payment_to_delete['amount'] ?? 0);
+                $pType = $payment_to_delete['payable_type'];
+                $pId = (int) ($payment_to_delete['payable_id'] ?? 0);
+
+                // Delete transaction from payments table
+                $del_stmt = $pdo->prepare("DELETE FROM payments WHERE id = ?");
+                $del_stmt->execute([$delete_payment_id]);
+
+                if (in_array($pType, ['additional_charge', 'App\\Models\\AdditionalCharge'])) {
+                    $charge = \App\Models\AdditionalCharge::find($pId);
+                    if ($charge) {
+                        $chargePayments = (float) \App\Models\Payment::where(function($q) use ($charge) {
+                            $q->where('payable_type', 'additional_charge')
+                              ->orWhere('payable_type', 'App\\Models\\AdditionalCharge');
+                        })->where('payable_id', $charge->id)->where('status', 'completed')->sum('amount');
+
+                        $charge->amount_paid = $chargePayments;
+                        $charge->balance = max(0.00, (float) $charge->amount - $chargePayments);
+                        $charge->status = ($charge->balance <= 0.001) ? 'paid' : ($charge->amount_paid > 0 ? 'partially_paid' : 'unpaid');
+                        $charge->save();
+
+                        if ($charge->studentFee) {
+                            $charge->studentFee->recalculateTotals();
+                        }
                     }
-                }
-            } else {
-                $fee = \App\Models\StudentFee::find($pId);
-                if ($fee) {
-                    $fee->recalculateTotals();
-                }
-            }
-
-            $pdo->commit();
-            $message = "Payment transaction of ₦" . number_format($deleted_amount, 2) . " deleted successfully and fee balances updated.";
-
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $error = 'Failed to delete payment transaction: ' . $e->getMessage();
-        }
-    }
-}
-
-if ($isPost && $hasProcessPayment) {
-    $payable_type = trim((string) ($_POST['payable_type'] ?? request('payable_type') ?? ''));
-    $payable_id = filter_input(INPUT_POST, 'payable_id', FILTER_VALIDATE_INT) ?: (int) ($_POST['payable_id'] ?? request('payable_id') ?? 0);
-
-    // Fallback if legacy form submission sent fee_id
-    if ($payable_type === '' && isset($_POST['fee_id'])) {
-        $payable_type = 'student_fee';
-        $payable_id = (int) $_POST['fee_id'];
-    }
-
-    $payment_amount = (float) ($_POST['payment_amount'] ?? request('payment_amount') ?? 0);
-    $payment_method = trim((string) ($_POST['payment_method'] ?? request('payment_method') ?? ''));
-    $payment_description = trim((string) ($_POST['payment_description'] ?? request('payment_description') ?? ''));
-
-    // Validation
-    if ($payment_amount <= 0 || $payment_method === '') {
-        $error = 'Please enter a valid payment amount greater than 0 and select a payment method.';
-    } elseif (!$payable_id || !in_array($payable_type, ['student_fee', 'additional_charge'])) {
-        $error = 'Please select a valid payable fee or extra charge item.';
-    } else {
-        try {
-            $pdo->beginTransaction();
-
-            $receipt_number = 'RCP' . date('Y') . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
-            $paymentMethodForStorage = ($payment_method === 'pos') ? 'card' : $payment_method;
-            $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
-
-            if ($payable_type === 'additional_charge') {
-                // Lock and fetch additional_charges record
-                $charge_stmt = $pdo->prepare("SELECT * FROM additional_charges WHERE id = ? AND student_id = ? FOR UPDATE");
-                $charge_stmt->execute([$payable_id, $studentId]);
-                $charge = $charge_stmt->fetch(PDO::FETCH_ASSOC);
-
-                if (!$charge) {
-                    throw new Exception('Additional charge not found or does not belong to this student.');
-                }
-
-                $chargeAmount = (float) ($charge['amount'] ?? 0);
-                $chargePaid = (float) ($charge['amount_paid'] ?? 0);
-                $chargeBalance = (float) ($charge['balance'] ?? max(0.00, $chargeAmount - $chargePaid));
-
-                if ($payment_amount > ($chargeBalance + 0.001)) {
-                    throw new Exception('Payment amount (₦' . number_format($payment_amount, 2) . ') cannot exceed the charge balance of ₦' . number_format($chargeBalance, 2));
-                }
-
-                $newChargePaid = $chargePaid + $payment_amount;
-                $newChargeBalance = max(0.00, $chargeAmount - $newChargePaid);
-                $chargeStatus = ($newChargeBalance <= 0.001) ? 'paid' : ($newChargePaid > 0 ? 'partially_paid' : 'unpaid');
-
-                $update_charge_stmt = $pdo->prepare("UPDATE additional_charges SET amount_paid = ?, balance = ?, status = ?, updated_at = NOW() WHERE id = ?");
-                $update_charge_stmt->execute([$newChargePaid, $newChargeBalance, $chargeStatus, $charge['id']]);
-
-                // Insert into payments table with payable_type = 'additional_charge'
-                $desc = $payment_description ?: ('Payment for ' . $charge['fee_name'] . ' - Receipt #' . $receipt_number);
-                $payment_insert_stmt = $pdo->prepare("INSERT INTO payments (
-                    payment_reference,
-                    payable_type,
-                    payable_id,
-                    amount,
-                    payment_method,
-                    payment_date,
-                    payer_name,
-                    payer_phone,
-                    description,
-                    status,
-                    created_at,
-                    updated_at
-                ) VALUES (?, 'additional_charge', ?, ?, ?, CURDATE(), ?, ?, ?, 'completed', NOW(), NOW())");
-
-                $payment_insert_stmt->execute([
-                    $receipt_number,
-                    $charge['id'],
-                    $payment_amount,
-                    $paymentMethodForStorage,
-                    $studentFullName,
-                    $student['phone'] ?? null,
-                    $desc
-                ]);
-
-                // Recalculate parent StudentFee totals
-                if (!empty($charge['student_fee_id'])) {
-                    $parentFee = \App\Models\StudentFee::find($charge['student_fee_id']);
-                    if ($parentFee) {
-                        $parentFee->recalculateTotals();
+                } else {
+                    $fee = \App\Models\StudentFee::find($pId);
+                    if ($fee) {
+                        $fee->recalculateTotals();
                     }
                 }
 
                 $pdo->commit();
-                $payment_success = true;
-                $message = "Payment of ₦" . number_format($payment_amount, 2) . " for '{$charge['fee_name']}' processed successfully! Receipt Number: " . $receipt_number;
+                $_SESSION['flash_message'] = "Payment transaction of ₦" . number_format($deleted_amount, 2) . " deleted successfully and fee balances updated.";
 
-            } else {
-                // Base tuition student_fee payment
-                $fee_stmt = $pdo->prepare("SELECT * FROM student_fees WHERE id = ? AND student_id = ? FOR UPDATE");
-                $fee_stmt->execute([$payable_id, $studentId]);
-                $existing_fee = $fee_stmt->fetch(PDO::FETCH_ASSOC);
-
-                if (!$existing_fee) {
-                    throw new Exception('Fee record not found or does not belong to this student.');
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
                 }
-
-                $baseFeeStmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE (payable_type = 'student_fee' OR payable_type = 'App\\\\Models\\\\StudentFee') AND payable_id = ? AND status = 'completed'");
-                $baseFeeStmt->execute([$existing_fee['id']]);
-                $currentBasePaid = (float) $baseFeeStmt->fetchColumn();
-
-                $baseAmount = (float) ($existing_fee['base_amount'] ?? 0);
-                $baseBalance = max(0.00, $baseAmount - $currentBasePaid);
-
-                if ($payment_amount > ($baseBalance + 0.001)) {
-                    throw new Exception('Payment amount (₦' . number_format($payment_amount, 2) . ') cannot exceed the base tuition balance of ₦' . number_format($baseBalance, 2));
-                }
-
-                // Insert into payments table
-                $desc = $payment_description ?: ('Tuition Fee Payment - Receipt #' . $receipt_number);
-                $payment_insert_stmt = $pdo->prepare("INSERT INTO payments (
-                    payment_reference,
-                    payable_type,
-                    payable_id,
-                    amount,
-                    payment_method,
-                    payment_date,
-                    payer_name,
-                    payer_phone,
-                    description,
-                    status,
-                    created_at,
-                    updated_at
-                ) VALUES (?, 'student_fee', ?, ?, ?, CURDATE(), ?, ?, ?, 'completed', NOW(), NOW())");
-
-                $payment_insert_stmt->execute([
-                    $receipt_number,
-                    $existing_fee['id'],
-                    $payment_amount,
-                    $paymentMethodForStorage,
-                    $studentFullName,
-                    $student['phone'] ?? null,
-                    $desc
-                ]);
-
-                // Recalculate totals on StudentFee
-                $studentFeeModel = \App\Models\StudentFee::find($existing_fee['id']);
-                if ($studentFeeModel) {
-                    $studentFeeModel->recalculateTotals();
-                }
-
-                $pdo->commit();
-                $payment_success = true;
-                $message = "Payment of ₦" . number_format($payment_amount, 2) . " processed successfully! Receipt Number: " . $receipt_number;
+                $_SESSION['flash_error'] = 'Failed to delete payment transaction: ' . $e->getMessage();
             }
-
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $error = 'Payment processing failed: ' . $e->getMessage();
         }
+        $performRedirect();
+    }
+
+    if ($hasProcessPayment) {
+        $payable_type = trim((string) ($_POST['payable_type'] ?? request('payable_type') ?? ''));
+        $payable_id = filter_input(INPUT_POST, 'payable_id', FILTER_VALIDATE_INT) ?: (int) ($_POST['payable_id'] ?? request('payable_id') ?? 0);
+
+        // Fallback if legacy form submission sent fee_id
+        if ($payable_type === '' && isset($_POST['fee_id'])) {
+            $payable_type = 'student_fee';
+            $payable_id = (int) $_POST['fee_id'];
+        }
+
+        $payment_amount = (float) ($_POST['payment_amount'] ?? request('payment_amount') ?? 0);
+        $payment_method = trim((string) ($_POST['payment_method'] ?? request('payment_method') ?? ''));
+        $payment_description = trim((string) ($_POST['payment_description'] ?? request('payment_description') ?? ''));
+
+        // Validation
+        if ($payment_amount <= 0 || $payment_method === '') {
+            $_SESSION['flash_error'] = 'Please enter a valid payment amount greater than 0 and select a payment method.';
+        } elseif (!$payable_id || !in_array($payable_type, ['student_fee', 'additional_charge'])) {
+            $_SESSION['flash_error'] = 'Please select a valid payable fee or extra charge item.';
+        } else {
+            try {
+                $pdo->beginTransaction();
+
+                $receipt_number = 'RCP' . date('Y') . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
+                $paymentMethodForStorage = ($payment_method === 'pos') ? 'card' : $payment_method;
+                $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
+
+                if ($payable_type === 'additional_charge') {
+                    // Lock and fetch additional_charges record
+                    $charge_stmt = $pdo->prepare("SELECT * FROM additional_charges WHERE id = ? AND student_id = ? FOR UPDATE");
+                    $charge_stmt->execute([$payable_id, $studentId]);
+                    $charge = $charge_stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$charge) {
+                        throw new Exception('Additional charge not found or does not belong to this student.');
+                    }
+
+                    $chargeAmount = (float) ($charge['amount'] ?? 0);
+                    $chargePaid = (float) ($charge['amount_paid'] ?? 0);
+                    $chargeBalance = (float) ($charge['balance'] ?? max(0.00, $chargeAmount - $chargePaid));
+
+                    if ($payment_amount > ($chargeBalance + 0.001)) {
+                        throw new Exception('Payment amount (₦' . number_format($payment_amount, 2) . ') cannot exceed the charge balance of ₦' . number_format($chargeBalance, 2));
+                    }
+
+                    $newChargePaid = $chargePaid + $payment_amount;
+                    $newChargeBalance = max(0.00, $chargeAmount - $newChargePaid);
+                    $chargeStatus = ($newChargeBalance <= 0.001) ? 'paid' : ($newChargePaid > 0 ? 'partially_paid' : 'unpaid');
+
+                    $update_charge_stmt = $pdo->prepare("UPDATE additional_charges SET amount_paid = ?, balance = ?, status = ?, updated_at = NOW() WHERE id = ?");
+                    $update_charge_stmt->execute([$newChargePaid, $newChargeBalance, $chargeStatus, $charge['id']]);
+
+                    // Insert into payments table with payable_type = 'additional_charge'
+                    $desc = $payment_description ?: ('Payment for ' . $charge['fee_name'] . ' - Receipt #' . $receipt_number);
+                    $payment_insert_stmt = $pdo->prepare("INSERT INTO payments (
+                        payment_reference,
+                        payable_type,
+                        payable_id,
+                        amount,
+                        payment_method,
+                        payment_date,
+                        payer_name,
+                        payer_phone,
+                        description,
+                        status,
+                        created_at,
+                        updated_at
+                    ) VALUES (?, 'additional_charge', ?, ?, ?, CURDATE(), ?, ?, ?, 'completed', NOW(), NOW())");
+
+                    $payment_insert_stmt->execute([
+                        $receipt_number,
+                        $charge['id'],
+                        $payment_amount,
+                        $paymentMethodForStorage,
+                        $studentFullName,
+                        $student['phone'] ?? null,
+                        $desc
+                    ]);
+
+                    // Recalculate parent StudentFee totals
+                    if (!empty($charge['student_fee_id'])) {
+                        $parentFee = \App\Models\StudentFee::find($charge['student_fee_id']);
+                        if ($parentFee) {
+                            $parentFee->recalculateTotals();
+                        }
+                    }
+
+                    $pdo->commit();
+                    $_SESSION['flash_message'] = "Payment of ₦" . number_format($payment_amount, 2) . " for '{$charge['fee_name']}' processed successfully! Receipt Number: " . $receipt_number;
+                    $_SESSION['flash_receipt'] = $receipt_number;
+                    $_SESSION['flash_payment_success'] = true;
+                    $_SESSION['flash_payment_amount'] = $payment_amount;
+
+                } else {
+                    // Base tuition student_fee payment
+                    $fee_stmt = $pdo->prepare("SELECT * FROM student_fees WHERE id = ? AND student_id = ? FOR UPDATE");
+                    $fee_stmt->execute([$payable_id, $studentId]);
+                    $existing_fee = $fee_stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$existing_fee) {
+                        throw new Exception('Fee record not found or does not belong to this student.');
+                    }
+
+                    $baseFeeStmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE (payable_type = 'student_fee' OR payable_type = 'App\\\\Models\\\\StudentFee') AND payable_id = ? AND status = 'completed'");
+                    $baseFeeStmt->execute([$existing_fee['id']]);
+                    $currentBasePaid = (float) $baseFeeStmt->fetchColumn();
+
+                    $baseAmount = (float) ($existing_fee['base_amount'] ?? 0);
+                    $baseBalance = max(0.00, $baseAmount - $currentBasePaid);
+
+                    if ($payment_amount > ($baseBalance + 0.001)) {
+                        throw new Exception('Payment amount (₦' . number_format($payment_amount, 2) . ') cannot exceed the base tuition balance of ₦' . number_format($baseBalance, 2));
+                    }
+
+                    // Insert into payments table
+                    $desc = $payment_description ?: ('Tuition Fee Payment - Receipt #' . $receipt_number);
+                    $payment_insert_stmt = $pdo->prepare("INSERT INTO payments (
+                        payment_reference,
+                        payable_type,
+                        payable_id,
+                        amount,
+                        payment_method,
+                        payment_date,
+                        payer_name,
+                        payer_phone,
+                        description,
+                        status,
+                        created_at,
+                        updated_at
+                    ) VALUES (?, 'student_fee', ?, ?, ?, CURDATE(), ?, ?, ?, 'completed', NOW(), NOW())");
+
+                    $payment_insert_stmt->execute([
+                        $receipt_number,
+                        $existing_fee['id'],
+                        $payment_amount,
+                        $paymentMethodForStorage,
+                        $studentFullName,
+                        $student['phone'] ?? null,
+                        $desc
+                    ]);
+
+                    // Recalculate totals on StudentFee
+                    $studentFeeModel = \App\Models\StudentFee::find($existing_fee['id']);
+                    if ($studentFeeModel) {
+                        $studentFeeModel->recalculateTotals();
+                    }
+
+                    $pdo->commit();
+                    $_SESSION['flash_message'] = "Payment of ₦" . number_format($payment_amount, 2) . " processed successfully! Receipt Number: " . $receipt_number;
+                    $_SESSION['flash_receipt'] = $receipt_number;
+                    $_SESSION['flash_payment_success'] = true;
+                    $_SESSION['flash_payment_amount'] = $payment_amount;
+                }
+
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $_SESSION['flash_error'] = 'Payment processing failed: ' . $e->getMessage();
+            }
+        }
+        $performRedirect();
     }
 }
 
@@ -1654,6 +1688,25 @@ $gradeAverage = student_grade_average($studentId);
       });
       return false;
     }
+
+    <?php if ($flashPaymentSuccess && $flashReceipt): ?>
+    $(document).ready(function() {
+      Swal.fire({
+        title: "Payment Successful!",
+        html: `Payment of <strong>₦<?php echo number_format($flashPaymentAmount, 2); ?></strong> processed successfully.<br><br><strong>Receipt Number:</strong> <code style="font-size: 16px; font-weight: bold;"><?php echo htmlspecialchars($flashReceipt); ?></code>`,
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonColor: "#15803d",
+        cancelButtonColor: "#6c757d",
+        confirmButtonText: '<i class="fas fa-print me-1"></i> Print Receipt',
+        cancelButtonText: 'Done'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.open('/admin/print_receipt.php?receipt=<?php echo urlencode($flashReceipt); ?>', '_blank');
+        }
+      });
+    });
+    <?php endif; ?>
 </script>
 
 </body>

@@ -58,7 +58,7 @@ $students = QueryDB("SELECT * FROM students ORDER BY id DESC")->fetchAll();
                                                     <th>Admission No</th>
                                                     <th>First Name</th>
                                                     <th>Last Name</th>
-                                                    <th>Email</th>
+                                                    <!-- <th>Email</th> -->
                                                     <th>Status</th>
                                                     <th class="text-center" style="width: 120px;">Actions</th>
                                                 </tr>
@@ -70,7 +70,7 @@ $students = QueryDB("SELECT * FROM students ORDER BY id DESC")->fetchAll();
                                                         <td><code><?php echo htmlspecialchars((string)$student['admission_no']); ?></code></td>
                                                         <td class="fw-bold"><?php echo htmlspecialchars((string)$student['first_name']); ?></td>
                                                         <td><?php echo htmlspecialchars((string)$student['last_name']); ?></td>
-                                                        <td><?php echo htmlspecialchars((string)$student['email']); ?></td>
+                                                        <!-- <td><?php //echo htmlspecialchars((string)$student['email']); ?></td> -->
                                                         <td>
                                                             <span class="badge bg-<?php echo ($student['status'] ?? 'active') === 'active' ? 'success' : 'secondary'; ?>">
                                                                 <?php echo ucfirst((string)($student['status'] ?? 'active')); ?>

@@ -93,7 +93,7 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
                           <th>Full Name</th>
                           <th>Class</th>
                           <th>Session</th>
-                          <th>Email</th>
+                          <!-- <th>Email</th> -->
                           <th>Status</th>
                           <th>Actions</th>
                         </tr>
@@ -114,7 +114,7 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
                               }
                             ?>
                           </td>
-                          <td><?php echo htmlspecialchars((string) ($student['email'] ?? 'N/A')); ?></td>
+                          <!-- <td><?php //echo htmlspecialchars((string) ($student['email'] ?? 'N/A')); ?></td> -->
                           <td>
                             <span class="badge bg-<?php echo ($student['status'] ?? '') === 'active' ? 'success' : 'warning'; ?>">
                               <?php echo ucfirst((string) ($student['status'] ?? 'Active')); ?>
