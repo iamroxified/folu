@@ -37,9 +37,6 @@ class Student extends Model
         'current_class_id',
         'current_session_id',
         'current_term_id',
-        'class_link',
-        'academic_session_link',
-        'term_link',
     ];
 
     protected $casts = [
@@ -96,5 +93,35 @@ class Student extends Model
     public function complaints()
     {
         return $this->hasMany(Complaint::class);
+    }
+
+    public function getClassLinkAttribute()
+    {
+        return $this->current_class_id;
+    }
+
+    public function setClassLinkAttribute($value)
+    {
+        $this->attributes['current_class_id'] = $value;
+    }
+
+    public function getAcademicSessionLinkAttribute()
+    {
+        return $this->current_session_id;
+    }
+
+    public function setAcademicSessionLinkAttribute($value)
+    {
+        $this->attributes['current_session_id'] = $value;
+    }
+
+    public function getTermLinkAttribute()
+    {
+        return $this->current_term_id;
+    }
+
+    public function setTermLinkAttribute($value)
+    {
+        $this->attributes['current_term_id'] = $value;
     }
 }

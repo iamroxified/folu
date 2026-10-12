@@ -7,8 +7,14 @@ if (!isset($_SESSION['adid'])) {
     exit;
 }
 
-$message = '';
-$error = '';
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
+
+$message = $_SESSION['flash_message'] ?? '';
+$error = $_SESSION['flash_error'] ?? '';
+unset($_SESSION['flash_message'], $_SESSION['flash_error']);
+
 $selectedSessionId = (int) ($_REQUEST['academic_session_link'] ?? (get_current_academic_session_id() ?? 0));
 $selectedTermId = (int) ($_REQUEST['term_link'] ?? (get_current_academic_term_id($selectedSessionId) ?? 0));
 
@@ -24,11 +30,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         QueryDB(
-            'UPDATE students SET class_link = ?, academic_session_link = ?, term_link = ?, updated_at = NOW() WHERE id = ?',
+            'UPDATE students SET current_class_id = ?, current_session_id = ?, current_term_id = ?, updated_at = NOW() WHERE id = ?',
             [$classId, $selectedSessionId, $selectedTermId, $studentId]
         );
 
-        $message = 'Student placement updated successfully.';
+        $_SESSION['flash_message'] = 'Student placement updated successfully.';
+        $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/admin/assign_students.php', PHP_URL_PATH) ?: '/admin/assign_students.php';
+        $redirectUrl = $currentPath . '?academic_session_link=' . $selectedSessionId . '&term_link=' . $selectedTermId;
+        if (!headers_sent()) {
+            header("Location: " . $redirectUrl, true, 303);
+            exit;
+        } else {
+            echo "<script>window.location.replace(" . json_encode($redirectUrl) . ");</script>";
+            exit;
+        }
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
@@ -37,8 +52,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if (isset($_GET['unassign'])) {
     try {
         $studentId = (int) $_GET['unassign'];
-        QueryDB('UPDATE students SET class_link = NULL, updated_at = NOW() WHERE id = ?', [$studentId]);
-        $message = 'Student unassigned from class successfully.';
+        QueryDB('UPDATE students SET current_class_id = NULL, updated_at = NOW() WHERE id = ?', [$studentId]);
+        $_SESSION['flash_message'] = 'Student unassigned from class successfully.';
+        $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/admin/assign_students.php', PHP_URL_PATH) ?: '/admin/assign_students.php';
+        $redirectUrl = $currentPath . '?academic_session_link=' . $selectedSessionId . '&term_link=' . $selectedTermId;
+        if (!headers_sent()) {
+            header("Location: " . $redirectUrl, true, 303);
+            exit;
+        } else {
+            echo "<script>window.location.replace(" . json_encode($redirectUrl) . ");</script>";
+            exit;
+        }
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }

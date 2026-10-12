@@ -1,20 +1,26 @@
 <?php
-// Start session
+// Start session safely
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
 
 // Include database configuration and functions
 require_once base_path('db/config.php');
 require_once base_path('db/functions.php');
 require_once resource_path('views/admin/school_functions.php');
 
-
 // Check if user is logged in
-if (!isset($_SESSION['adid'])) {
+if (!isset($_SESSION['adid']) && !auth()->check()) {
     header('Location: /admin/login.php');
     exit;
 }
 
+$success = $_SESSION['flash_success'] ?? null;
+$error = $_SESSION['flash_error'] ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
 // Fetch student information
-$studentId = $_GET['id'] ?? null;
+$studentId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT) ?: (int) ($_GET['id'] ?? request('id') ?? 0);
 if ($studentId) {
     $student_stmt = $pdo->prepare("SELECT s.*, u.status as user_status FROM students s LEFT JOIN users u ON s.user_link = u.id WHERE s.id = ?");
     $student_stmt->execute([$studentId]);
@@ -26,6 +32,7 @@ if ($studentId) {
 } else {
     die('Student ID is required');
 }
+
 // Update student
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Sanitize and validate inputs
@@ -52,18 +59,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            // Update students table
+            // Update students table (use current_class_id and current_session_id since class_link and academic_session_link are virtual generated columns)
             $stmt = $pdo->prepare(
                 'UPDATE students SET
                     first_name = ?, last_name = ?, other_names = ?, date_of_birth = ?, gender = ?,
-                    state_of_origin = ?, lga = ?, home_address = ?, class_link = ?, academic_session_link = ?,
-                    admission_date = ?, student_type = ?, blood_group = ?, genotype = ?, status = ?
+                    state_of_origin = ?, lga = ?, address = ?, home_address = ?, current_class_id = ?, current_session_id = ?,
+                    admission_date = ?, enrollment_date = ?, student_type = ?, blood_group = ?, genotype = ?, status = ?,
+                    updated_at = NOW()
                  WHERE id = ?'
             );
             $stmt->execute([
                 $first_name, $last_name, $other_names, $date_of_birth, $gender,
-                $state_of_origin, $lga, $home_address, $class_link, $academic_session_link,
-                $admission_date, $student_type, $blood_group, $genotype, $status,
+                $state_of_origin, $lga, $home_address, $home_address, $class_link, $academic_session_link,
+                $admission_date, $admission_date, $student_type, $blood_group, $genotype, $status,
                 $studentId
             ]);
 
@@ -74,11 +82,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $pdo->commit();
-            $success = 'Student updated successfully';
+            $_SESSION['flash_success'] = 'Student updated successfully';
 
-            // Refresh student data
-            $student_stmt->execute([$studentId]);
-            $student = $student_stmt->fetch();
+            // Post/Redirect/Get pattern to prevent form resubmission on page refresh
+            $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/admin/edit_students.php', PHP_URL_PATH) ?: '/admin/edit_students.php';
+            $redirectUrl = $currentPath . '?id=' . $studentId;
+            if (!headers_sent()) {
+                header("Location: " . $redirectUrl, true, 303);
+                exit;
+            } else {
+                echo "<script>window.location.replace(" . json_encode($redirectUrl) . ");</script>";
+                exit;
+            }
 
         } catch (Exception $e) {
             $pdo->rollBack();
