@@ -176,6 +176,8 @@ class FeeAllocationService
             'term_id' => $termId,
             'fee_name' => $feeName,
             'amount' => $amount,
+            'amount_paid' => 0.00,
+            'balance' => $amount,
             'reason' => $reason,
             'added_by' => auth()->id() ?? ($_SESSION['adid'] ?? null),
             'status' => 'unpaid',

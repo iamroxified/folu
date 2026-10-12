@@ -16,6 +16,8 @@ class AdditionalCharge extends Model
         'term_id',
         'fee_name',
         'amount',
+        'amount_paid',
+        'balance',
         'reason',
         'added_by',
         'status',
@@ -23,7 +25,30 @@ class AdditionalCharge extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'amount_paid' => 'decimal:2',
+        'balance' => 'decimal:2',
     ];
+
+    public function recordPayment(float $paymentAmount): void
+    {
+        $this->amount_paid = (float) $this->amount_paid + $paymentAmount;
+        $this->balance = max(0.00, (float) $this->amount - (float) $this->amount_paid);
+
+        if ($this->balance <= 0.001) {
+            $this->status = 'paid';
+            $this->balance = 0.00;
+        } elseif ($this->amount_paid > 0) {
+            $this->status = 'partially_paid';
+        } else {
+            $this->status = 'unpaid';
+        }
+
+        $this->save();
+
+        if ($this->studentFee) {
+            $this->studentFee->recalculateTotals();
+        }
+    }
 
     public function student()
     {

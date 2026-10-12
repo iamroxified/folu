@@ -73,8 +73,10 @@ class StudentFee extends Model
 
     public function recalculateTotals()
     {
-        $additionalSum = $this->additionalCharges()->sum('amount');
-        $paymentsSum = Payment::where(function($q) {
+        $additionalSum = (float) $this->additionalCharges()->sum('amount');
+        $chargeIds = $this->additionalCharges()->pluck('id')->toArray();
+
+        $directPaymentsSum = (float) Payment::where(function($q) {
             $q->where(function($sub) {
                 $sub->where('payable_type', 'student_fee')
                     ->where('payable_id', $this->id);
@@ -84,11 +86,23 @@ class StudentFee extends Model
             });
         })->where('status', 'completed')->sum('amount');
 
+        $chargePaymentsSum = !empty($chargeIds) ? (float) Payment::where(function($q) use ($chargeIds) {
+            $q->where(function($sub) use ($chargeIds) {
+                $sub->where('payable_type', 'additional_charge')
+                    ->whereIn('payable_id', $chargeIds);
+            })->orWhere(function($sub) use ($chargeIds) {
+                $sub->where('payable_type', 'App\\Models\\AdditionalCharge')
+                    ->whereIn('payable_id', $chargeIds);
+            });
+        })->where('status', 'completed')->sum('amount') : 0.00;
+
+        $paymentsSum = $directPaymentsSum + $chargePaymentsSum;
+
         $this->additional_amount = $additionalSum;
-        $this->total_payable = $this->base_amount + $this->additional_amount;
+        $this->total_payable = (float) $this->base_amount + $this->additional_amount;
         $this->amount_due = $this->total_payable;
         $this->amount_paid = $paymentsSum;
-        $this->amount_owed = $this->total_payable - $this->amount_paid;
+        $this->amount_owed = max(0.00, $this->total_payable - $this->amount_paid);
         $this->balance = $this->amount_owed;
 
         if ($this->amount_paid <= 0) {

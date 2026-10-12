@@ -71,73 +71,144 @@ try {
     }
     $classSelectArm .= "'') AS class_arm";
 
-    $joins = "JOIN student_fees sf ON p.payable_type = 'student_fee' AND p.payable_id = sf.id\n";
-    $joins .= "        JOIN students s ON sf.student_id = s.id\n";
-    $joins .= "        LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id\n";
+    // Check payment record first to support both student_fee and additional_charge polymorphic payments
+    $p_check = $pdo->prepare("SELECT * FROM payments WHERE payment_reference = ? AND status = 'completed'");
+    $p_check->execute([$receipt_number]);
+    $rawPayment = $p_check->fetch(PDO::FETCH_ASSOC);
 
-    if ($hasSchoolClassesTable) {
-        $scOn = [];
-        if (schema_has_column('students', 'current_class_id')) $scOn[] = "s.current_class_id = sc.id";
-        if (schema_has_column('students', 'class_link')) $scOn[] = "s.class_link = sc.id";
-        if (!empty($scOn)) {
-            $joins .= "        LEFT JOIN school_classes sc ON (" . implode(" OR ", $scOn) . ")\n";
+    if (!$rawPayment) {
+        die('Receipt reference "' . htmlspecialchars($receipt_number) . '" not found or not completed.');
+    }
+
+    if (in_array($rawPayment['payable_type'], ['additional_charge', 'App\Models\AdditionalCharge'])) {
+        $joins_ac = "JOIN additional_charges ac ON ac.id = p.payable_id\n";
+        $joins_ac .= "        JOIN students s ON ac.student_id = s.id\n";
+        if (schema_has_table('academic_sessions')) {
+            $joins_ac .= "        LEFT JOIN academic_sessions ac_sess ON ac.session_id = ac_sess.id\n";
         }
-    }
-
-    if ($hasClassTable) {
-        $cOn = [];
-        if (schema_has_column('students', 'current_class_id')) $cOn[] = "s.current_class_id = c.id";
-        if (schema_has_column('students', 'class_link')) $cOn[] = "s.class_link = c.id";
-        if (!empty($cOn)) {
-            $joins .= "        LEFT JOIN classes c ON (" . implode(" OR ", $cOn) . ")\n";
+        if (schema_has_table('academic_terms')) {
+            $joins_ac .= "        LEFT JOIN academic_terms t_ac ON ac.term_id = t_ac.id\n";
+        } elseif (schema_has_table('terms')) {
+            $joins_ac .= "        LEFT JOIN terms t_ac ON ac.term_id = t_ac.id\n";
         }
+
+        if ($hasSchoolClassesTable) {
+            $scOn = [];
+            if (schema_has_column('students', 'current_class_id')) $scOn[] = "s.current_class_id = sc.id";
+            if (schema_has_column('students', 'class_link')) $scOn[] = "s.class_link = sc.id";
+            if (!empty($scOn)) {
+                $joins_ac .= "        LEFT JOIN school_classes sc ON (" . implode(" OR ", $scOn) . ")\n";
+            }
+        }
+
+        if ($hasClassTable) {
+            $cOn = [];
+            if (schema_has_column('students', 'current_class_id')) $cOn[] = "s.current_class_id = c.id";
+            if (schema_has_column('students', 'class_link')) $cOn[] = "s.class_link = c.id";
+            if (!empty($cOn)) {
+                $joins_ac .= "        LEFT JOIN classes c ON (" . implode(" OR ", $cOn) . ")\n";
+            }
+        }
+
+        $termSelectAc = schema_has_table('academic_terms') || schema_has_table('terms') ? "t_ac.term_name" : "NULL AS term_name";
+        $sessionSelectAc = schema_has_table('academic_sessions') ? "ac_sess.session_name" : "NULL AS session_name";
+
+        $payment_stmt = $pdo->prepare("
+            SELECT 
+                p.*,
+                p.payment_reference AS receipt_number,
+                p.amount AS transaction_amount,
+                p.description AS payment_description,
+                p.payment_method,
+                p.payment_date,
+                s.first_name,
+                s.last_name,
+                s.other_names,
+                s.admission_no,
+                {$classSelectName},
+                {$classSelectArm},
+                ac.amount AS amount_due,
+                ac.amount_paid AS total_fee_paid,
+                ac.balance AS fee_balance,
+                ac.status AS fee_status,
+                ac.reason AS fee_description,
+                CONCAT(ac.fee_name, ' (Extra Fee)') AS type_name,
+                {$sessionSelectAc},
+                {$termSelectAc}
+            FROM payments p
+            {$joins_ac}
+            WHERE p.id = ?
+        ");
+        $payment_stmt->execute([$rawPayment['id']]);
+        $payment = $payment_stmt->fetch(PDO::FETCH_ASSOC);
+    } else {
+        $joins = "JOIN student_fees sf ON (p.payable_type = 'student_fee' OR p.payable_type = 'App\\\\Models\\\\StudentFee') AND p.payable_id = sf.id\n";
+        $joins .= "        JOIN students s ON sf.student_id = s.id\n";
+        $joins .= "        LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id\n";
+
+        if ($hasSchoolClassesTable) {
+            $scOn = [];
+            if (schema_has_column('students', 'current_class_id')) $scOn[] = "s.current_class_id = sc.id";
+            if (schema_has_column('students', 'class_link')) $scOn[] = "s.class_link = sc.id";
+            if (!empty($scOn)) {
+                $joins .= "        LEFT JOIN school_classes sc ON (" . implode(" OR ", $scOn) . ")\n";
+            }
+        }
+
+        if ($hasClassTable) {
+            $cOn = [];
+            if (schema_has_column('students', 'current_class_id')) $cOn[] = "s.current_class_id = c.id";
+            if (schema_has_column('students', 'class_link')) $cOn[] = "s.class_link = c.id";
+            if (!empty($cOn)) {
+                $joins .= "        LEFT JOIN classes c ON (" . implode(" OR ", $cOn) . ")\n";
+            }
+        }
+
+        if (schema_has_table('academic_sessions')) {
+            $joins .= "        LEFT JOIN academic_sessions ac ON fs.session_id = ac.id\n";
+        }
+
+        if (schema_has_table('terms')) {
+            $joins .= "        LEFT JOIN terms t ON fs.term_id = t.id\n";
+        } elseif (schema_has_table('academic_terms')) {
+            $joins .= "        LEFT JOIN academic_terms t ON fs.term_id = t.id\n";
+        }
+
+        $termSelect = schema_has_table('terms') || schema_has_table('academic_terms') ? "t.term_name" : "NULL AS term_name";
+        $sessionSelect = schema_has_table('academic_sessions') ? "ac.session_name" : "NULL AS session_name";
+
+        $payment_stmt = $pdo->prepare("
+            SELECT 
+                p.*,
+                p.payment_reference AS receipt_number,
+                p.amount AS transaction_amount,
+                p.description AS payment_description,
+                p.payment_method,
+                p.payment_date,
+                s.first_name,
+                s.last_name,
+                s.other_names,
+                s.admission_no,
+                {$classSelectName},
+                {$classSelectArm},
+                sf.amount_due,
+                sf.amount_paid AS total_fee_paid,
+                sf.balance AS fee_balance,
+                sf.status AS fee_status,
+                fs.description AS fee_description,
+                COALESCE(fs.name, fs.description, 'School Fee') AS type_name,
+                {$sessionSelect},
+                {$termSelect}
+            FROM payments p
+            {$joins}
+            WHERE p.id = ?
+        ");
+        $payment_stmt->execute([$rawPayment['id']]);
+        $payment = $payment_stmt->fetch(PDO::FETCH_ASSOC);
     }
-
-    if (schema_has_table('academic_sessions')) {
-        $joins .= "        LEFT JOIN academic_sessions ac ON fs.session_id = ac.id\n";
-    }
-
-    if (schema_has_table('terms')) {
-        $joins .= "        LEFT JOIN terms t ON fs.term_id = t.id\n";
-    } elseif (schema_has_table('academic_terms')) {
-        $joins .= "        LEFT JOIN academic_terms t ON fs.term_id = t.id\n";
-    }
-
-    $termSelect = schema_has_table('terms') || schema_has_table('academic_terms') ? "t.term_name" : "NULL AS term_name";
-    $sessionSelect = schema_has_table('academic_sessions') ? "ac.session_name" : "NULL AS session_name";
-
-    $payment_stmt = $pdo->prepare("
-        SELECT 
-            p.*,
-            p.payment_reference AS receipt_number,
-            p.amount AS transaction_amount,
-            p.description AS payment_description,
-            p.payment_method,
-            p.payment_date,
-            s.first_name,
-            s.last_name,
-            s.other_names,
-            s.admission_no,
-            {$classSelectName},
-            {$classSelectArm},
-            sf.amount_due,
-            sf.amount_paid AS total_fee_paid,
-            sf.balance AS fee_balance,
-            sf.status AS fee_status,
-            fs.description AS fee_description,
-            COALESCE(fs.name, fs.description, 'School Fee') AS type_name,
-            {$sessionSelect},
-            {$termSelect}
-        FROM payments p
-        {$joins}
-        WHERE p.payment_reference = ? AND p.status = 'completed'
-    ");
-    
-    $payment_stmt->execute([$receipt_number]);
-    $payment = $payment_stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$payment) {
-        die('Receipt reference "' . htmlspecialchars($receipt_number) . '" not found or not completed.');
+        die('Receipt reference "' . htmlspecialchars($receipt_number) . '" could not be formatted.');
     }
 
 } catch (PDOException $e) {

@@ -117,39 +117,36 @@ if ($isPost && $hasDeletePayment) {
             }
 
             $deleted_amount = (float) ($payment_to_delete['amount'] ?? 0);
-            $fee_id = (int) ($payment_to_delete['payable_id'] ?? 0);
-
-            if ($fee_id > 0) {
-                // Fetch existing fee record for lock and rollback
-                $fee_stmt = $pdo->prepare("SELECT * FROM student_fees WHERE id = ? FOR UPDATE");
-                $fee_stmt->execute([$fee_id]);
-                $fee_record = $fee_stmt->fetch(PDO::FETCH_ASSOC);
-
-                if ($fee_record) {
-                    $amount_due = (float) ($fee_record['amount_due'] ?? 0);
-                    $existing_paid = (float) ($fee_record['amount_paid'] ?? 0);
-
-                    // Revert paid amount
-                    $new_paid = max(0.00, $existing_paid - $deleted_amount);
-                    $new_balance = max(0.00, $amount_due - $new_paid);
-
-                    $new_status = 'partial';
-                    if ($new_balance >= ($amount_due - 0.001)) {
-                        $new_status = 'pending';
-                        $new_balance = $amount_due;
-                    } elseif ($new_balance <= 0.001) {
-                        $new_status = 'paid';
-                        $new_balance = 0.00;
-                    }
-
-                    $update_fee_stmt = $pdo->prepare("UPDATE student_fees SET amount_paid = ?, balance = ?, status = ?, updated_at = NOW() WHERE id = ?");
-                    $update_fee_stmt->execute([$new_paid, $new_balance, $new_status, $fee_id]);
-                }
-            }
+            $pType = $payment_to_delete['payable_type'];
+            $pId = (int) ($payment_to_delete['payable_id'] ?? 0);
 
             // Delete transaction from payments table
             $del_stmt = $pdo->prepare("DELETE FROM payments WHERE id = ?");
             $del_stmt->execute([$delete_payment_id]);
+
+            if (in_array($pType, ['additional_charge', 'App\\Models\\AdditionalCharge'])) {
+                $charge = \App\Models\AdditionalCharge::find($pId);
+                if ($charge) {
+                    $chargePayments = (float) \App\Models\Payment::where(function($q) use ($charge) {
+                        $q->where('payable_type', 'additional_charge')
+                          ->orWhere('payable_type', 'App\\Models\\AdditionalCharge');
+                    })->where('payable_id', $charge->id)->where('status', 'completed')->sum('amount');
+
+                    $charge->amount_paid = $chargePayments;
+                    $charge->balance = max(0.00, (float) $charge->amount - $chargePayments);
+                    $charge->status = ($charge->balance <= 0.001) ? 'paid' : ($charge->amount_paid > 0 ? 'partially_paid' : 'unpaid');
+                    $charge->save();
+
+                    if ($charge->studentFee) {
+                        $charge->studentFee->recalculateTotals();
+                    }
+                }
+            } else {
+                $fee = \App\Models\StudentFee::find($pId);
+                if ($fee) {
+                    $fee->recalculateTotals();
+                }
+            }
 
             $pdo->commit();
             $message = "Payment transaction of ₦" . number_format($deleted_amount, 2) . " deleted successfully and fee balances updated.";
@@ -164,7 +161,15 @@ if ($isPost && $hasDeletePayment) {
 }
 
 if ($isPost && $hasProcessPayment) {
-    $fee_id = filter_input(INPUT_POST, 'fee_id', FILTER_VALIDATE_INT) ?: (int) ($_POST['fee_id'] ?? request('fee_id') ?? 0);
+    $payable_type = trim((string) ($_POST['payable_type'] ?? request('payable_type') ?? ''));
+    $payable_id = filter_input(INPUT_POST, 'payable_id', FILTER_VALIDATE_INT) ?: (int) ($_POST['payable_id'] ?? request('payable_id') ?? 0);
+
+    // Fallback if legacy form submission sent fee_id
+    if ($payable_type === '' && isset($_POST['fee_id'])) {
+        $payable_type = 'student_fee';
+        $payable_id = (int) $_POST['fee_id'];
+    }
+
     $payment_amount = (float) ($_POST['payment_amount'] ?? request('payment_amount') ?? 0);
     $payment_method = trim((string) ($_POST['payment_method'] ?? request('payment_method') ?? ''));
     $payment_description = trim((string) ($_POST['payment_description'] ?? request('payment_description') ?? ''));
@@ -172,85 +177,138 @@ if ($isPost && $hasProcessPayment) {
     // Validation
     if ($payment_amount <= 0 || $payment_method === '') {
         $error = 'Please enter a valid payment amount greater than 0 and select a payment method.';
-    } elseif (!$fee_id) {
-        $error = 'Please select an allocated fee to process a payment.';
+    } elseif (!$payable_id || !in_array($payable_type, ['student_fee', 'additional_charge'])) {
+        $error = 'Please select a valid payable fee or extra charge item.';
     } else {
         try {
             $pdo->beginTransaction();
 
-            // Fetch existing fee record for this student
-            $existing_fee_stmt = $pdo->prepare("SELECT * FROM student_fees WHERE id = ? AND student_id = ? FOR UPDATE");
-            $existing_fee_stmt->execute([$fee_id, $studentId]);
-            $existing_fee = $existing_fee_stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$existing_fee) {
-                throw new Exception('Fee record not found or does not belong to this student.');
-            }
-
-            $currentBalance = (float) ($existing_fee['balance'] ?? 0);
-            $currentAmountDue = (float) ($existing_fee['amount_due'] ?? 0);
-            $currentAmountPaid = (float) ($existing_fee['amount_paid'] ?? 0);
-
-            // Validate payment amount doesn't exceed current outstanding balance
-            if ($payment_amount > ($currentBalance + 0.001)) {
-                throw new Exception('Payment amount (₦' . number_format($payment_amount, 2) . ') cannot exceed the outstanding balance of ₦' . number_format($currentBalance, 2));
-            }
-
-            // Calculate new totals (INCREMENT existing payment amount so past payments are never overwritten)
-            $new_amount_paid = $currentAmountPaid + $payment_amount;
-            $new_balance = max(0.00, $currentAmountDue - $new_amount_paid);
-
-            $status = 'partial';
-            if ($new_balance <= 0.001) {
-                $status = 'paid';
-                $new_balance = 0.00;
-            } elseif ($new_amount_paid <= 0) {
-                $status = 'pending';
-            }
-
-            // Update student_fees table
-            $update_fee_stmt = $pdo->prepare("UPDATE student_fees SET amount_paid = ?, balance = ?, status = ?, updated_at = NOW() WHERE id = ?");
-            $update_fee_stmt->execute([
-                $new_amount_paid,
-                $new_balance,
-                $status,
-                $existing_fee['id']
-            ]);
-
-            // Generate receipt reference and record transaction entry in payments table
             $receipt_number = 'RCP' . date('Y') . str_pad(rand(1, 999999), 6, '0', STR_PAD_LEFT);
             $paymentMethodForStorage = ($payment_method === 'pos') ? 'card' : $payment_method;
-
             $studentFullName = trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
 
-            $payment_insert_stmt = $pdo->prepare("INSERT INTO payments (
-                payment_reference,
-                payable_type,
-                payable_id,
-                amount,
-                payment_method,
-                payment_date,
-                payer_name,
-                payer_phone,
-                description,
-                status,
-                created_at,
-                updated_at
-            ) VALUES (?, 'student_fee', ?, ?, ?, CURDATE(), ?, ?, ?, 'completed', NOW(), NOW())");
+            if ($payable_type === 'additional_charge') {
+                // Lock and fetch additional_charges record
+                $charge_stmt = $pdo->prepare("SELECT * FROM additional_charges WHERE id = ? AND student_id = ? FOR UPDATE");
+                $charge_stmt->execute([$payable_id, $studentId]);
+                $charge = $charge_stmt->fetch(PDO::FETCH_ASSOC);
 
-            $payment_insert_stmt->execute([
-                $receipt_number,
-                $existing_fee['id'],
-                $payment_amount,
-                $paymentMethodForStorage,
-                $studentFullName,
-                $student['phone'] ?? null,
-                $payment_description ?: ('Fee Payment - Receipt #' . $receipt_number)
-            ]);
+                if (!$charge) {
+                    throw new Exception('Additional charge not found or does not belong to this student.');
+                }
 
-            $pdo->commit();
-            $payment_success = true;
-            $message = "Payment of ₦" . number_format($payment_amount, 2) . " processed successfully! Receipt Number: " . $receipt_number;
+                $chargeAmount = (float) ($charge['amount'] ?? 0);
+                $chargePaid = (float) ($charge['amount_paid'] ?? 0);
+                $chargeBalance = (float) ($charge['balance'] ?? max(0.00, $chargeAmount - $chargePaid));
+
+                if ($payment_amount > ($chargeBalance + 0.001)) {
+                    throw new Exception('Payment amount (₦' . number_format($payment_amount, 2) . ') cannot exceed the charge balance of ₦' . number_format($chargeBalance, 2));
+                }
+
+                $newChargePaid = $chargePaid + $payment_amount;
+                $newChargeBalance = max(0.00, $chargeAmount - $newChargePaid);
+                $chargeStatus = ($newChargeBalance <= 0.001) ? 'paid' : ($newChargePaid > 0 ? 'partially_paid' : 'unpaid');
+
+                $update_charge_stmt = $pdo->prepare("UPDATE additional_charges SET amount_paid = ?, balance = ?, status = ?, updated_at = NOW() WHERE id = ?");
+                $update_charge_stmt->execute([$newChargePaid, $newChargeBalance, $chargeStatus, $charge['id']]);
+
+                // Insert into payments table with payable_type = 'additional_charge'
+                $desc = $payment_description ?: ('Payment for ' . $charge['fee_name'] . ' - Receipt #' . $receipt_number);
+                $payment_insert_stmt = $pdo->prepare("INSERT INTO payments (
+                    payment_reference,
+                    payable_type,
+                    payable_id,
+                    amount,
+                    payment_method,
+                    payment_date,
+                    payer_name,
+                    payer_phone,
+                    description,
+                    status,
+                    created_at,
+                    updated_at
+                ) VALUES (?, 'additional_charge', ?, ?, ?, CURDATE(), ?, ?, ?, 'completed', NOW(), NOW())");
+
+                $payment_insert_stmt->execute([
+                    $receipt_number,
+                    $charge['id'],
+                    $payment_amount,
+                    $paymentMethodForStorage,
+                    $studentFullName,
+                    $student['phone'] ?? null,
+                    $desc
+                ]);
+
+                // Recalculate parent StudentFee totals
+                if (!empty($charge['student_fee_id'])) {
+                    $parentFee = \App\Models\StudentFee::find($charge['student_fee_id']);
+                    if ($parentFee) {
+                        $parentFee->recalculateTotals();
+                    }
+                }
+
+                $pdo->commit();
+                $payment_success = true;
+                $message = "Payment of ₦" . number_format($payment_amount, 2) . " for '{$charge['fee_name']}' processed successfully! Receipt Number: " . $receipt_number;
+
+            } else {
+                // Base tuition student_fee payment
+                $fee_stmt = $pdo->prepare("SELECT * FROM student_fees WHERE id = ? AND student_id = ? FOR UPDATE");
+                $fee_stmt->execute([$payable_id, $studentId]);
+                $existing_fee = $fee_stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$existing_fee) {
+                    throw new Exception('Fee record not found or does not belong to this student.');
+                }
+
+                $baseFeeStmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE (payable_type = 'student_fee' OR payable_type = 'App\\\\Models\\\\StudentFee') AND payable_id = ? AND status = 'completed'");
+                $baseFeeStmt->execute([$existing_fee['id']]);
+                $currentBasePaid = (float) $baseFeeStmt->fetchColumn();
+
+                $baseAmount = (float) ($existing_fee['base_amount'] ?? 0);
+                $baseBalance = max(0.00, $baseAmount - $currentBasePaid);
+
+                if ($payment_amount > ($baseBalance + 0.001)) {
+                    throw new Exception('Payment amount (₦' . number_format($payment_amount, 2) . ') cannot exceed the base tuition balance of ₦' . number_format($baseBalance, 2));
+                }
+
+                // Insert into payments table
+                $desc = $payment_description ?: ('Tuition Fee Payment - Receipt #' . $receipt_number);
+                $payment_insert_stmt = $pdo->prepare("INSERT INTO payments (
+                    payment_reference,
+                    payable_type,
+                    payable_id,
+                    amount,
+                    payment_method,
+                    payment_date,
+                    payer_name,
+                    payer_phone,
+                    description,
+                    status,
+                    created_at,
+                    updated_at
+                ) VALUES (?, 'student_fee', ?, ?, ?, CURDATE(), ?, ?, ?, 'completed', NOW(), NOW())");
+
+                $payment_insert_stmt->execute([
+                    $receipt_number,
+                    $existing_fee['id'],
+                    $payment_amount,
+                    $paymentMethodForStorage,
+                    $studentFullName,
+                    $student['phone'] ?? null,
+                    $desc
+                ]);
+
+                // Recalculate totals on StudentFee
+                $studentFeeModel = \App\Models\StudentFee::find($existing_fee['id']);
+                if ($studentFeeModel) {
+                    $studentFeeModel->recalculateTotals();
+                }
+
+                $pdo->commit();
+                $payment_success = true;
+                $message = "Payment of ₦" . number_format($payment_amount, 2) . " processed successfully! Receipt Number: " . $receipt_number;
+            }
 
         } catch (Exception $e) {
             if ($pdo->inTransaction()) {
@@ -297,7 +355,7 @@ try {
     $additional_charges_stmt->execute([$studentId]);
     $additional_charges = $additional_charges_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 4. Get recent payment history
+    // 4. Get recent payment history (both base tuition and individual extra charges)
     $payment_history_stmt = $pdo->prepare("
         SELECT 
             p.id AS payment_id,
@@ -305,25 +363,50 @@ try {
             p.payment_date,
             p.amount AS transaction_amount,
             p.payment_method,
-            sf.status AS fee_status,
-            sf.amount_due,
-            sf.amount_paid AS total_fee_paid,
-            sf.balance AS current_balance,
-            COALESCE(fs.name, fs.description, 'School Fee') AS type_name,
-            ac.session_name,
-            t.term_name AS session_term,
-            t.term_name AS term
+            p.payable_type,
+            p.payable_id,
+            p.description AS payment_description,
+            CASE 
+                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN CONCAT(ac.fee_name, ' (Extra Fee)')
+                ELSE COALESCE(fs.name, fs.description, 'School Tuition Fee')
+            END AS type_name,
+            CASE 
+                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN 'Extra Charge'
+                ELSE 'Tuition Fee'
+            END AS item_category,
+            CASE 
+                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.amount
+                ELSE sf.amount_due
+            END AS amount_due,
+            CASE 
+                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.amount_paid
+                ELSE sf.amount_paid
+            END AS total_fee_paid,
+            CASE 
+                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.balance
+                ELSE sf.balance
+            END AS current_balance,
+            CASE 
+                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.status
+                ELSE sf.status
+            END AS fee_status,
+            COALESCE(sess_sf.session_name, sess_ac.session_name, 'N/A') AS session_name,
+            COALESCE(t_sf.term_name, t_ac.term_name, '') AS session_term
         FROM payments p
-        JOIN student_fees sf ON p.payable_type = 'student_fee' AND p.payable_id = sf.id
+        LEFT JOIN student_fees sf ON (p.payable_type IN ('student_fee', 'App\\Models\\StudentFee') AND p.payable_id = sf.id)
         LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
-        LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
-        LEFT JOIN academic_terms t ON fs.term_id = t.id
-        WHERE sf.student_id = ?
-        AND p.status = 'completed'
+        LEFT JOIN academic_sessions sess_sf ON fs.session_id = sess_sf.id
+        LEFT JOIN academic_terms t_sf ON fs.term_id = t_sf.id
+        LEFT JOIN additional_charges ac ON (p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') AND p.payable_id = ac.id)
+        LEFT JOIN academic_sessions sess_ac ON ac.session_id = sess_ac.id
+        LEFT JOIN academic_terms t_ac ON ac.term_id = t_ac.id
+        WHERE ((p.payable_type IN ('student_fee', 'App\\Models\\StudentFee') AND sf.student_id = :sid1)
+            OR (p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') AND ac.student_id = :sid2))
+          AND p.status = 'completed'
         ORDER BY COALESCE(p.payment_date, p.created_at) DESC, p.id DESC
-        LIMIT 20
+        LIMIT 50
     ");
-    $payment_history_stmt->execute([$studentId]);
+    $payment_history_stmt->execute(['sid1' => $studentId, 'sid2' => $studentId]);
     $payment_history = $payment_history_stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // 5. Get outstanding fees
@@ -346,11 +429,68 @@ try {
     $outstanding_stmt->execute([$studentId]);
     $outstanding_fees = $outstanding_stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // 6. Build Individual Payable Items list (DO NOT lump sum tuition with additional charges)
+    $payable_items = [];
+
+    // A. Base Tuition Fees (Itemized per student fee record)
+    foreach ($outstanding_fees as $fee) {
+        $direct_fee_paid_stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE (payable_type = 'student_fee' OR payable_type = 'App\\\\Models\\\\StudentFee') AND payable_id = ? AND status = 'completed'");
+        $direct_fee_paid_stmt->execute([$fee['id']]);
+        $base_fee_paid = (float) $direct_fee_paid_stmt->fetchColumn();
+
+        $base_amount = (float) ($fee['base_amount'] ?? 0);
+        $base_balance = max(0.00, $base_amount - $base_fee_paid);
+
+        if ($base_balance > 0.001) {
+            $payable_items[] = [
+                'item_key' => 'fee_' . $fee['id'],
+                'payable_type' => 'student_fee',
+                'payable_id' => (int) $fee['id'],
+                'title' => $fee['type_name'] ?? 'School Tuition Fee',
+                'badge' => 'Tuition / Base Fee',
+                'badge_class' => 'bg-primary text-white',
+                'description' => $fee['fee_description'] ?? 'Base Term / Session Fee',
+                'session_name' => $fee['session_name'] ?? 'Current Session',
+                'term_name' => $fee['session_term'] ?? '',
+                'amount_due' => $base_amount,
+                'amount_paid' => $base_fee_paid,
+                'balance' => $base_balance,
+                'status' => ($base_balance <= 0.001) ? 'paid' : ($base_fee_paid > 0 ? 'partially_paid' : 'unpaid'),
+            ];
+        }
+    }
+
+    // B. Individual Additional Charges (Each extra fee charge is an independent payable item)
+    foreach ($additional_charges as $charge) {
+        $charge_amount = (float) ($charge['amount'] ?? 0);
+        $charge_paid = (float) ($charge['amount_paid'] ?? 0);
+        $charge_balance = (float) ($charge['balance'] ?? max(0.00, $charge_amount - $charge_paid));
+
+        if ($charge_balance > 0.001) {
+            $payable_items[] = [
+                'item_key' => 'charge_' . $charge['id'],
+                'payable_type' => 'additional_charge',
+                'payable_id' => (int) $charge['id'],
+                'title' => $charge['fee_name'],
+                'badge' => 'Extra Charge',
+                'badge_class' => 'bg-warning text-dark',
+                'description' => !empty($charge['reason']) ? $charge['reason'] : 'Additional Fee Charge',
+                'session_name' => $charge['session_name'] ?? 'Current Session',
+                'term_name' => $charge['term_name'] ?? '',
+                'amount_due' => $charge_amount,
+                'amount_paid' => $charge_paid,
+                'balance' => $charge_balance,
+                'status' => $charge['status'] ?? 'unpaid',
+            ];
+        }
+    }
+
 } catch (PDOException $e) {
     $fee_summary = ['total_due' => 0, 'total_paid' => 0, 'total_balance' => 0];
     $additional_charges = [];
     $payment_history = [];
     $outstanding_fees = [];
+    $payable_items = [];
 }
 
 // Get additional student metrics
@@ -593,19 +733,28 @@ $gradeAverage = student_grade_average($studentId);
                             <th style="width: 40px;">#</th>
                             <th>Fee Name</th>
                             <th>Reason / Description</th>
-                            <th>Amount (₦)</th>
+                            <th>Amount Due (₦)</th>
+                            <th>Paid (₦)</th>
+                            <th>Balance (₦)</th>
                             <th>Session / Term</th>
                             <th>Date Added</th>
                             <th>Status</th>
-                            <th class="text-end" style="width: 80px;">Action</th>
+                            <th class="text-end" style="min-width: 130px;">Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           <?php 
                             $sn = 1; 
-                            $total_extra = 0;
+                            $total_extra_due = 0;
+                            $total_extra_paid = 0;
+                            $total_extra_bal = 0;
                             foreach ($additional_charges as $charge): 
-                              $total_extra += (float) ($charge['amount'] ?? 0);
+                              $c_amount = (float) ($charge['amount'] ?? 0);
+                              $c_paid = (float) ($charge['amount_paid'] ?? 0);
+                              $c_bal = (float) ($charge['balance'] ?? max(0.00, $c_amount - $c_paid));
+                              $total_extra_due += $c_amount;
+                              $total_extra_paid += $c_paid;
+                              $total_extra_bal += $c_bal;
                           ?>
                           <tr>
                             <td><?php echo $sn++; ?></td>
@@ -616,7 +765,13 @@ $gradeAverage = student_grade_average($studentId);
                               <small class="text-muted"><?php echo htmlspecialchars((string) ($charge['reason'] ?? 'N/A')); ?></small>
                             </td>
                             <td class="fw-bold text-dark">
-                              ₦<?php echo number_format((float) ($charge['amount'] ?? 0), 2); ?>
+                              ₦<?php echo number_format($c_amount, 2); ?>
+                            </td>
+                            <td class="fw-bold text-success">
+                              ₦<?php echo number_format($c_paid, 2); ?>
+                            </td>
+                            <td class="fw-bold text-danger">
+                              ₦<?php echo number_format($c_bal, 2); ?>
                             </td>
                             <td>
                               <small>
@@ -632,18 +787,28 @@ $gradeAverage = student_grade_average($studentId);
                               </small>
                             </td>
                             <td>
-                              <span class="badge bg-<?php echo ($charge['status'] ?? 'unpaid') === 'paid' ? 'success' : 'warning'; ?> text-dark">
+                              <span class="badge bg-<?php echo ($charge['status'] ?? 'unpaid') === 'paid' ? 'success' : (($charge['status'] ?? '') === 'partially_paid' ? 'info' : 'warning'); ?> text-dark">
                                 <?php echo ucfirst((string) ($charge['status'] ?? 'unpaid')); ?>
                               </span>
                             </td>
                             <td class="text-end">
-                              <form method="POST" action="" class="d-inline" onsubmit="return confirm('Are you sure you want to remove this additional fee charge? Total due and outstanding balance will be recalculated automatically.');">
-                                <input type="hidden" name="delete_additional_charge" value="1">
-                                <input type="hidden" name="charge_id" value="<?php echo (int) $charge['id']; ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove Charge">
-                                  <i class="fas fa-trash"></i>
-                                </button>
-                              </form>
+                              <div class="d-flex justify-content-end gap-1">
+                                <?php if ($c_bal > 0.001): ?>
+                                  <button type="button" 
+                                          class="btn btn-sm btn-success text-white pay-item-direct-btn"
+                                          data-item-key="charge_<?php echo (int) $charge['id']; ?>"
+                                          title="Pay this specific extra charge">
+                                    <i class="fas fa-credit-card me-1"></i> Pay
+                                  </button>
+                                <?php endif; ?>
+                                <form method="POST" action="" class="d-inline" onsubmit="return confirm('Are you sure you want to remove this additional fee charge? Total due and outstanding balance will be recalculated automatically.');">
+                                  <input type="hidden" name="delete_additional_charge" value="1">
+                                  <input type="hidden" name="charge_id" value="<?php echo (int) $charge['id']; ?>">
+                                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove Charge">
+                                    <i class="fas fa-trash"></i>
+                                  </button>
+                                </form>
+                              </div>
                             </td>
                           </tr>
                           <?php endforeach; ?>
@@ -651,7 +816,9 @@ $gradeAverage = student_grade_average($studentId);
                         <tfoot class="table-light">
                           <tr>
                             <td colspan="3" class="fw-bold text-end">Total Extra Charges:</td>
-                            <td class="fw-bold text-dark">₦<?php echo number_format($total_extra, 2); ?></td>
+                            <td class="fw-bold text-dark">₦<?php echo number_format($total_extra_due, 2); ?></td>
+                            <td class="fw-bold text-success">₦<?php echo number_format($total_extra_paid, 2); ?></td>
+                            <td class="fw-bold text-danger">₦<?php echo number_format($total_extra_bal, 2); ?></td>
                             <td colspan="4"></td>
                           </tr>
                         </tfoot>
@@ -679,9 +846,11 @@ $gradeAverage = student_grade_average($studentId);
                       <table class="datatable table table-hover mb-0 datatable">
                         <thead class="bg-light">
                           <tr>
-                            <th>Fee Type</th>
+                            <th style="width: 40px;">#</th>
+                            <th>Fee Item</th>
+                            <th>Category</th>
                             <th>Session / Term</th>
-                            <th>Total Fee (₦)</th>
+                            <th>Item Due (₦)</th>
                             <th>Paid in Txn (₦)</th>
                             <th>Current Balance (₦)</th>
                             <th>Status</th>
@@ -692,8 +861,18 @@ $gradeAverage = student_grade_average($studentId);
                         <tbody>
                           <?php $sn = 1; ?><?php foreach ($payment_history as $payment): ?>
                           <tr>
-                                                         <td><?php echo $sn++; ?></td>
-                            <td><strong><?php echo htmlspecialchars((string) ($payment['type_name'] ?? 'School Fee')); ?></strong></td>
+                            <td><?php echo $sn++; ?></td>
+                            <td>
+                              <strong class="text-dark"><?php echo htmlspecialchars((string) ($payment['type_name'] ?? 'School Fee')); ?></strong>
+                              <?php if (!empty($payment['payment_description'])): ?>
+                                <br><small class="text-muted"><?php echo htmlspecialchars((string) $payment['payment_description']); ?></small>
+                              <?php endif; ?>
+                            </td>
+                            <td>
+                              <span class="badge bg-<?php echo ($payment['item_category'] ?? '') === 'Extra Charge' ? 'warning text-dark' : 'primary'; ?>">
+                                <?php echo htmlspecialchars((string) ($payment['item_category'] ?? 'Tuition Fee')); ?>
+                              </span>
+                            </td>
                             <td>
                               <small class="text-muted">
                                 <?php echo htmlspecialchars((string) ($payment['session_name'] ?? 'N/A')); ?>
@@ -708,7 +887,7 @@ $gradeAverage = student_grade_average($studentId);
                             <td>
                               <span class="badge bg-<?php 
                                   echo ($payment['fee_status'] ?? '') === 'paid' ? 'success' : 
-                                      (($payment['fee_status'] ?? '') === 'partial' ? 'warning' : 'secondary'); 
+                                      (($payment['fee_status'] ?? '') === 'partial' || ($payment['fee_status'] ?? '') === 'partially_paid' ? 'warning' : 'secondary'); 
                               ?> text-dark">
                                 <?php echo ucfirst((string) ($payment['fee_status'] ?? 'completed')); ?>
                               </span>
@@ -908,52 +1087,64 @@ $gradeAverage = student_grade_average($studentId);
                   <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                  <?php if (!empty($outstanding_fees)): ?>
-                  <!-- Outstanding Fees Selection -->
+                  <?php if (!empty($payable_items)): ?>
+                  <!-- Individual Payable Items Selection -->
                   <div class="row">
                     <div class="col-lg-7">
-                      <h5 class="text-danger mb-3">
-                        <i class="fas fa-exclamation-triangle me-2"></i>Select Allocated Fee to Pay
-                      </h5>
-                      <p class="text-muted mb-4">Select an allocated fee below. Payments strictly update and increment existing payments on the selected fee without overwriting prior payment history.</p>
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="text-danger mb-0 fw-bold">
+                          <i class="fas fa-list-check me-2"></i>Select Individual Fee / Charge
+                        </h5>
+                        <span class="badge bg-danger"><?php echo count($payable_items); ?> unpaid items</span>
+                      </div>
+                      <p class="text-muted small mb-3">Tuition fees and individual extra charges are handled separately (not lump-summed). Select an individual payable item below to make a payment towards it.</p>
 
-                      <div class="outstanding-fees-list">
-                        <?php $sn = 1; ?><?php foreach ($outstanding_fees as $index => $fee): ?>
-                        <div class="card mb-3 fee-item" 
-                             data-fee-id="<?php echo (int) $fee['id']; ?>"
-                             data-fee-name="<?php echo htmlspecialchars((string) ($fee['type_name'] ?? 'Fee')); ?>"
-                             data-session="<?php echo htmlspecialchars((string) ($fee['session_name'] ?? 'N/A')); ?>"
-                             data-term="<?php echo htmlspecialchars((string) ($fee['session_term'] ?? '')); ?>"
-                             data-amount-due="<?php echo (float) ($fee['amount_due'] ?? 0); ?>"
-                             data-amount-paid="<?php echo (float) ($fee['amount_paid'] ?? 0); ?>"
-                             data-balance="<?php echo (float) ($fee['balance'] ?? 0); ?>" 
-                             data-status="<?php echo htmlspecialchars((string) ($fee['status'] ?? 'pending')); ?>">
+                      <div class="payable-items-list" style="max-height: 480px; overflow-y: auto; padding-right: 5px;">
+                        <?php foreach ($payable_items as $index => $item): ?>
+                        <div class="card mb-3 payable-item-card border" 
+                             id="card_<?php echo $item['item_key']; ?>"
+                             data-item-key="<?php echo $item['item_key']; ?>"
+                             data-payable-type="<?php echo $item['payable_type']; ?>"
+                             data-payable-id="<?php echo (int) $item['payable_id']; ?>"
+                             data-title="<?php echo htmlspecialchars($item['title']); ?>"
+                             data-badge="<?php echo htmlspecialchars($item['badge']); ?>"
+                             data-badge-class="<?php echo htmlspecialchars($item['badge_class']); ?>"
+                             data-session="<?php echo htmlspecialchars($item['session_name']); ?>"
+                             data-term="<?php echo htmlspecialchars($item['term_name']); ?>"
+                             data-amount-due="<?php echo (float) $item['amount_due']; ?>"
+                             data-amount-paid="<?php echo (float) $item['amount_paid']; ?>"
+                             data-balance="<?php echo (float) $item['balance']; ?>" 
+                             data-status="<?php echo htmlspecialchars($item['status']); ?>"
+                             style="cursor: pointer; transition: all 0.2s ease;">
                           <div class="card-body py-3">
                             <div class="form-check">
-                              <input class="form-check-input fee-selector" type="radio" name="selected_fee" id="fee_<?php echo $index; ?>" value="<?php echo (int) $fee['id']; ?>">
-                              <label class="form-check-label w-100" for="fee_<?php echo $index; ?>">
+                              <input class="form-check-input payable-selector" 
+                                     type="radio" 
+                                     name="selected_item" 
+                                     id="item_radio_<?php echo $item['item_key']; ?>" 
+                                     value="<?php echo $item['item_key']; ?>">
+                              <label class="form-check-label w-100" for="item_radio_<?php echo $item['item_key']; ?>" style="cursor: pointer;">
                                 <div class="d-flex justify-content-between align-items-start">
                                   <div>
-                                    <h6 class="mb-1 text-primary"><?php echo htmlspecialchars((string) ($fee['type_name'] ?? 'Fee')); ?></h6>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                      <span class="badge <?php echo $item['badge_class']; ?>"><?php echo $item['badge']; ?></span>
+                                      <h6 class="mb-0 text-primary fw-bold"><?php echo htmlspecialchars($item['title']); ?></h6>
+                                    </div>
+                                    <small class="text-muted d-block">
+                                      <?php echo htmlspecialchars($item['description']); ?>
+                                    </small>
                                     <small class="text-muted">
-                                      <?php echo htmlspecialchars((string) ($fee['session_name'] ?? 'N/A')); ?>
-                                      <?php if (!empty($fee['session_term'])): ?>
-                                        - <?php echo htmlspecialchars((string) $fee['session_term']); ?>
+                                      <i class="far fa-calendar-alt me-1"></i><?php echo htmlspecialchars($item['session_name']); ?>
+                                      <?php if (!empty($item['term_name'])): ?>
+                                        - <?php echo htmlspecialchars($item['term_name']); ?>
                                       <?php endif; ?>
                                     </small>
-                                    <br>
-                                    <span class="badge bg-<?php echo ($fee['status'] ?? '') === 'overdue' ? 'danger' : 'warning'; ?> text-dark mt-1">
-                                      <?php echo ucfirst((string) ($fee['status'] ?? 'pending')); ?>
-                                    </span>
                                   </div>
-                                  <div class="text-end">
-                                    <div class="small text-muted">Amount Due</div>
-                                    <div class="fw-bold">₦<?php echo number_format((float) ($fee['amount_due'] ?? 0), 2); ?></div>
-                                    <?php if ((float) ($fee['additional_amount'] ?? 0) > 0): ?>
-                                      <div class="small text-muted" style="font-size: 11px;">(Base: ₦<?php echo number_format((float) $fee['base_amount'], 2); ?> + Extra: ₦<?php echo number_format((float) $fee['additional_amount'], 2); ?>)</div>
-                                    <?php endif; ?>
-                                    <div class="small text-success">Paid: ₦<?php echo number_format((float) ($fee['amount_paid'] ?? 0), 2); ?></div>
-                                    <div class="small text-danger">Balance: ₦<?php echo number_format((float) ($fee['balance'] ?? 0), 2); ?></div>
+                                  <div class="text-end ps-2">
+                                    <div class="small text-muted">Item Due</div>
+                                    <div class="fw-bold text-dark">₦<?php echo number_format((float) $item['amount_due'], 2); ?></div>
+                                    <div class="small text-success">Paid: ₦<?php echo number_format((float) $item['amount_paid'], 2); ?></div>
+                                    <div class="small fw-bold text-danger">Balance: ₦<?php echo number_format((float) $item['balance'], 2); ?></div>
                                   </div>
                                 </div>
                               </label>
@@ -966,28 +1157,50 @@ $gradeAverage = student_grade_average($studentId);
 
                     <div class="col-lg-5">
                       <!-- Payment Form -->
-                      <div class="card border-primary">
-                        <div class="card-header bg-light">
-                          <h6 class="mb-0">
-                            <i class="fas fa-money-bill-wave me-2"></i>Payment Details
+                      <div class="card border-primary shadow-sm">
+                        <div class="card-header bg-light py-2">
+                          <h6 class="mb-0 fw-bold text-dark">
+                            <i class="fas fa-money-bill-wave me-2 text-primary"></i>Payment Details
                           </h6>
                         </div>
                         <div class="card-body">
                           <form method="POST" action="" id="modalPaymentForm">
-                            <!-- Hidden fields for selected fee context -->
+                            <!-- Hidden fields for selected item context -->
+                            <input type="hidden" id="modal_payable_type" name="payable_type" value="">
+                            <input type="hidden" id="modal_payable_id" name="payable_id" value="">
                             <input type="hidden" id="modal_fee_id" name="fee_id" value="">
                             <input type="hidden" name="process_payment" value="1">
 
-                            <!-- Selected Fee Summary -->
-                            <div id="selected-fee-summary" class="alert alert-info" style="display: none;">
-                              <h6 class="alert-heading mb-2">Selected Fee</h6>
-                              <div id="fee-summary-content"></div>
+                            <!-- Selected Item Summary -->
+                            <div id="selected-fee-summary" class="alert alert-light border border-primary mb-3" style="display: none;">
+                              <div class="d-flex justify-content-between align-items-start mb-1">
+                                <strong id="summary-title" class="text-primary fs-6"></strong>
+                                <span id="summary-badge" class="badge"></span>
+                              </div>
+                              <div id="summary-session" class="small text-muted mb-2"></div>
+                              <div class="row text-center border-top pt-2">
+                                <div class="col-4">
+                                  <small class="text-muted d-block" style="font-size: 11px;">Due</small>
+                                  <strong id="summary-due" class="text-dark" style="font-size: 13px;">₦0.00</strong>
+                                </div>
+                                <div class="col-4">
+                                  <small class="text-muted d-block" style="font-size: 11px;">Paid</small>
+                                  <strong id="summary-paid" class="text-success" style="font-size: 13px;">₦0.00</strong>
+                                </div>
+                                <div class="col-4">
+                                  <small class="text-muted d-block" style="font-size: 11px;">Balance</small>
+                                  <strong id="summary-balance" class="text-danger" style="font-size: 13px;">₦0.00</strong>
+                                </div>
+                              </div>
                             </div>
 
                             <div class="form-group mb-3">
                               <label for="modal_payment_amount" class="form-label fw-bold">Payment Amount (₦) <span class="text-danger">*</span></label>
-                              <input type="number" step="0.01" min="0.01" class="form-control form-control-lg" id="modal_payment_amount" name="payment_amount" placeholder="0.00" required disabled>
-                              <small class="form-text text-muted">Maximum Payable: <span id="max-amount" class="fw-bold text-danger">₦0.00</span></small>
+                              <input type="number" step="0.01" min="0.01" class="form-control form-control-lg fw-bold" id="modal_payment_amount" name="payment_amount" placeholder="0.00" required disabled>
+                              <div class="d-flex justify-content-between align-items-center mt-1">
+                                <small class="form-text text-muted">Max Payable: <span id="max-amount" class="fw-bold text-danger">₦0.00</span></small>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" id="btn-pay-full" style="display: none; font-size: 12px;">Pay Full Balance</button>
+                              </div>
                             </div>
 
                             <div class="form-group mb-3">
@@ -1003,8 +1216,8 @@ $gradeAverage = student_grade_average($studentId);
                             </div>
 
                             <div class="form-group mb-4">
-                              <label for="modal_payment_description" class="form-label fw-bold">Payment Description</label>
-                              <textarea class="form-control" id="modal_payment_description" name="payment_description" rows="3" placeholder="Optional notes or receipt remark" disabled></textarea>
+                              <label for="modal_payment_description" class="form-label fw-bold">Payment Description / Notes</label>
+                              <textarea class="form-control" id="modal_payment_description" name="payment_description" rows="2" placeholder="Optional notes or receipt remark" disabled></textarea>
                             </div>
 
                             <div class="d-grid">
@@ -1020,8 +1233,8 @@ $gradeAverage = student_grade_average($studentId);
                   <?php else: ?>
                   <div class="text-center py-5">
                     <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
-                    <h4 class="text-success mt-3">No Outstanding Allocated Fees</h4>
-                    <p class="text-muted">This student has no outstanding fee balances at the moment.</p>
+                    <h4 class="text-success mt-3">All Fees & Charges Settled!</h4>
+                    <p class="text-muted">This student has no outstanding fee or charge balances at the moment.</p>
                     <div class="d-flex justify-content-center gap-2 mt-3">
                       <a href="/admin/fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-primary">
                         <i class="fas fa-plus-circle me-1"></i> Allocate Fee Structure
@@ -1044,84 +1257,129 @@ $gradeAverage = student_grade_average($studentId);
     </div>
   </div>
 
-      <script>
+  <script>
     $(document).ready(function () {
-      // Handle fee selection in modal
-      $('.fee-selector').on('change', function () {
-        if (this.checked) {
-          const feeItem = $(this).closest('.fee-item');
-          const feeId = feeItem.data('fee-id');
-          const feeName = feeItem.data('fee-name');
-          const session = feeItem.data('session');
-          const term = feeItem.data('term');
-          const amountDue = parseFloat(feeItem.data('amount-due')) || 0;
-          const amountPaid = parseFloat(feeItem.data('amount-paid')) || 0;
-          const balance = parseFloat(feeItem.data('balance')) || 0;
+      let activeItemBalance = 0;
 
-          // Populate hidden fields
-          $('#modal_fee_id').val(feeId);
+      // Handle item card click or radio selection
+      function selectPayableItem(card) {
+        $('.payable-item-card').removeClass('border-primary shadow-sm bg-light');
+        card.addClass('border-primary shadow-sm bg-light');
 
-          // Show and populate fee summary
-          $('#fee-summary-content').html(`
-            <strong>${feeName}</strong><br>
-            <small class="text-muted">${session} ${term ? '- ' + term : ''}</small><br>
-            <div class="mt-2">
-              <div class="row text-center">
-                <div class="col-4"><small class="text-muted">Total Due</small><br><strong>₦${amountDue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></div>
-                <div class="col-4"><small class="text-muted">Paid So Far</small><br><strong class="text-success">₦${amountPaid.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></div>
-                <div class="col-4"><small class="text-muted">Balance</small><br><strong class="text-danger">₦${balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></div>
-              </div>
-            </div>
-          `);
-          $('#selected-fee-summary').show();
+        const radio = card.find('.payable-selector');
+        radio.prop('checked', true);
 
-          // Set maximum payment amount and enable form fields
-          $('#modal_payment_amount').attr('max', balance).val('').prop('disabled', false);
-          $('#modal_payment_method').prop('disabled', false);
-          $('#modal_payment_description').prop('disabled', false);
-          $('#modal-submit-btn').prop('disabled', false);
-          $('#max-amount').text('₦' + balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+        const payableType = card.data('payable-type');
+        const payableId = card.data('payable-id');
+        const title = card.data('title');
+        const badge = card.data('badge');
+        const badgeClass = card.data('badge-class');
+        const session = card.data('session');
+        const term = card.data('term');
+        const amountDue = parseFloat(card.data('amount-due')) || 0;
+        const amountPaid = parseFloat(card.data('amount-paid')) || 0;
+        const balance = parseFloat(card.data('balance')) || 0;
+        activeItemBalance = balance;
 
-          // Validate payment amount on input
-          $('#modal_payment_amount').off('input').on('input', function () {
-            const paymentAmount = parseFloat($(this).val()) || 0;
-            if (paymentAmount > balance) {
-              $(this).val(balance);
-              Swal.fire({
-                title: "Amount Exceeded",
-                text: `Payment amount cannot exceed the outstanding balance of ₦${balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,
-                icon: "warning",
-                confirmButtonColor: "#720922"
-              });
-            }
-          });
+        // Populate hidden fields
+        $('#modal_payable_type').val(payableType);
+        $('#modal_payable_id').val(payableId);
+        $('#modal_fee_id').val(payableId);
+
+        // Populate summary
+        $('#summary-title').text(title);
+        $('#summary-badge').attr('class', 'badge ' + badgeClass).text(badge);
+        $('#summary-session').text(`${session} ${term ? '- ' + term : ''}`);
+        $('#summary-due').text('₦' + amountDue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+        $('#summary-paid').text('₦' + amountPaid.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+        $('#summary-balance').text('₦' + balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+        $('#selected-fee-summary').slideDown(200);
+
+        // Set maximum payment amount and enable form fields
+        $('#modal_payment_amount').attr('max', balance).val(balance.toFixed(2)).prop('disabled', false);
+        $('#modal_payment_method').prop('disabled', false);
+        $('#modal_payment_description').prop('disabled', false);
+        $('#modal-submit-btn').prop('disabled', false);
+        $('#max-amount').text('₦' + balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+        $('#btn-pay-full').show();
+
+        // Validate on input
+        $('#modal_payment_amount').off('input').on('input', function () {
+          const val = parseFloat($(this).val()) || 0;
+          if (val > (activeItemBalance + 0.001)) {
+            $(this).val(activeItemBalance.toFixed(2));
+            Swal.fire({
+              title: "Amount Exceeded",
+              text: `Payment amount cannot exceed the balance of ₦${activeItemBalance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,
+              icon: "warning",
+              confirmButtonColor: "#720922"
+            });
+          }
+        });
+      }
+
+      // Delegate click on card
+      $('.payable-item-card').on('click', function (e) {
+        selectPayableItem($(this));
+      });
+
+      // Delegate change on radio
+      $('.payable-selector').on('change', function () {
+        selectPayableItem($(this).closest('.payable-item-card'));
+      });
+
+      // Pay Full button
+      $('#btn-pay-full').on('click', function () {
+        if (activeItemBalance > 0) {
+          $('#modal_payment_amount').val(activeItemBalance.toFixed(2)).trigger('input');
         }
+      });
+
+      // Direct pay button from Additional Charges table
+      $('.pay-item-direct-btn').on('click', function (e) {
+        e.preventDefault();
+        const key = $(this).data('item-key');
+        const modalEl = document.getElementById('paymentModal');
+        const bsModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        bsModal.show();
+
+        setTimeout(function () {
+          const targetCard = $(`#card_${key}`);
+          if (targetCard.length) {
+            selectPayableItem(targetCard);
+            targetCard[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }, 300);
       });
 
       // Reset modal when closed
       $('#paymentModal').on('hidden.bs.modal', function () {
-        $('.fee-selector').prop('checked', false);
+        $('.payable-selector').prop('checked', false);
+        $('.payable-item-card').removeClass('border-primary shadow-sm bg-light');
         $('#selected-fee-summary').hide();
+        $('#btn-pay-full').hide();
         $('#modalPaymentForm')[0].reset();
+        $('#modal_payable_type, #modal_payable_id, #modal_fee_id').val('');
         $('#modal_payment_amount, #modal_payment_method, #modal_payment_description, #modal-submit-btn').prop('disabled', true);
+        activeItemBalance = 0;
       });
 
       // Form validation and confirmation for modal form
       $('#modalPaymentForm').on('submit', function (e) {
         e.preventDefault();
 
-        const selectedFee = $('.fee-selector:checked');
-        if (selectedFee.length === 0) {
+        const selectedRadio = $('.payable-selector:checked');
+        if (selectedRadio.length === 0) {
           Swal.fire({
-            title: "No Fee Selected",
-            text: "Please select a fee to make a payment",
+            title: "No Item Selected",
+            text: "Please select an individual fee or extra charge item to make a payment",
             icon: "error",
             confirmButtonColor: "#720922"
           });
           return false;
         }
 
-        let amount = parseFloat($('#modal_payment_amount').val()) || 0;
+        const amount = parseFloat($('#modal_payment_amount').val()) || 0;
         if (amount <= 0) {
           Swal.fire({
             title: "Invalid Amount",
@@ -1132,11 +1390,10 @@ $gradeAverage = student_grade_average($studentId);
           return false;
         }
 
-        const balance = parseFloat(selectedFee.closest('.fee-item').data('balance')) || 0;
-        if (amount > (balance + 0.001)) {
+        if (amount > (activeItemBalance + 0.001)) {
           Swal.fire({
             title: "Amount Exceeded",
-            text: `Payment amount cannot exceed the outstanding balance of ₦${balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,
+            text: `Payment amount cannot exceed the balance of ₦${activeItemBalance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,
             icon: "error",
             confirmButtonColor: "#720922"
           });
@@ -1155,12 +1412,14 @@ $gradeAverage = student_grade_average($studentId);
         }
 
         const form = this;
-        const feeName = selectedFee.closest('.fee-item').data('fee-name');
+        const card = selectedRadio.closest('.payable-item-card');
+        const itemTitle = card.data('title');
+        const itemBadge = card.data('badge');
         const studentName = <?php echo json_encode(trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''))); ?>;
 
         Swal.fire({
           title: "Confirm Payment",
-          text: `Process payment of ₦${amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} for ${feeName} (${studentName})?`,
+          text: `Process payment of ₦${amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} for ${itemTitle} (${itemBadge}) for ${studentName}?`,
           icon: "question",
           showCancelButton: true,
           confirmButtonColor: "#720922",
