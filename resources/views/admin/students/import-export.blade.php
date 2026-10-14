@@ -46,6 +46,7 @@ $feeStructuresList = schema_has_table('fee_structures')
     ? QueryDB("SELECT id, name, fee_type, amount, class_id FROM fee_structures WHERE is_active = 1 ORDER BY fee_type ASC, name ASC")->fetchAll(PDO::FETCH_ASSOC)
     : [];
 
+$definedEnumOptions = schema_enum_values('fee_structures', 'fee_type');
 $feeTypeEnumOptions = [
     'tuition' => 'Tuition / School Fees',
     'uniform' => 'Uniform Fee',
@@ -57,6 +58,11 @@ $feeTypeEnumOptions = [
     'laboratory' => 'Laboratory / Science Fee',
     'other' => 'Other Charges / Miscellaneous',
 ];
+foreach ($definedEnumOptions as $enumVal) {
+    if (!isset($feeTypeEnumOptions[$enumVal])) {
+        $feeTypeEnumOptions[$enumVal] = ucwords(str_replace('_', ' ', $enumVal)) . ' Fee';
+    }
+}
 
 // Handle Sample CSV Downloads
 if (isset($_GET['download_sample']) && $_GET['download_sample'] === 'payment_csv') {
@@ -306,7 +312,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
                 if (!$studentFee) {
                     $typeLabel = ucwords(str_replace('_', ' ', $targetFeeType));
                     $fs = \App\Models\FeeStructure::where('fee_type', $targetFeeType)->first();
-                    if (!$fs && in_array($targetFeeType, ['tuition', 'registration', 'transport', 'library', 'sports', 'laboratory', 'uniform', 'exam', 'other'], true)) {
+                    if (!$fs && in_array($targetFeeType, schema_enum_values('fee_structures', 'fee_type'), true)) {
                         $fs = \App\Models\FeeStructure::create([
                             'name' => $typeLabel . ' Fee',
                             'description' => "Standard {$typeLabel} Fee",

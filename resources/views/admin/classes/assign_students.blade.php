@@ -77,6 +77,7 @@ $assignments = QueryDB(
             s.first_name,
             s.last_name,
             s.admission_no,
+            s.category,
             s.academic_session_link,
             s.term_link,
             c.class_name,
@@ -138,9 +139,12 @@ $assignments = QueryDB(
                                             <label for="student_id">Student</label>
                                             <select class="form-control" id="student_id" name="student_id" required>
                                                 <option value="">Choose a student...</option>
-                                                <?php $sn = 1; ?><?php $sn = 1; ?><?php foreach ($students as $student): ?>
+                                                <?php foreach ($students as $student): 
+                                                    $stCat = strtoupper(trim((string) ($student['category'] ?? 'NI')));
+                                                    $catCode = ($stCat === 'OS' || $stCat === 'RETURNING') ? 'OS' : 'NI';
+                                                ?>
                                                     <option value="<?php echo (int) $student['id']; ?>">
-                                                        <?php echo htmlspecialchars((string) ($student['admission_no'] ?? 'N/A')); ?> - <?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''))); ?>
+                                                        [<?php echo $catCode; ?>] <?php echo htmlspecialchars((string) ($student['admission_no'] ?? 'N/A')); ?> - <?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''))); ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
@@ -235,6 +239,7 @@ $assignments = QueryDB(
                                                     <th style="width: 50px;">S/N</th>
                                                         <th>Admission No</th>
                                                         <th>Student</th>
+                                                        <th>Category</th>
                                                         <th>Class</th>
                                                         <th>Session</th>
                                                         <th>Term</th>
@@ -243,11 +248,19 @@ $assignments = QueryDB(
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <?php $sn = 1; ?><?php foreach ($assignments as $assignment): ?>
+                                                    <?php $sn = 1; foreach ($assignments as $assignment): 
+                                                        $cat = strtoupper(trim((string) ($assignment['category'] ?? 'NI')));
+                                                        $isOS = ($cat === 'OS' || $cat === 'RETURNING');
+                                                    ?>
                                                         <tr>
                                                          <td><?php echo $sn++; ?></td>
-                                                            <td><?php echo htmlspecialchars((string) ($assignment['admission_no'] ?? 'N/A')); ?></td>
-                                                            <td><?php echo htmlspecialchars(trim(($assignment['first_name'] ?? '') . ' ' . ($assignment['last_name'] ?? ''))); ?></td>
+                                                            <td><code><?php echo htmlspecialchars((string) ($assignment['admission_no'] ?? 'N/A')); ?></code></td>
+                                                            <td class="fw-bold"><?php echo htmlspecialchars(trim(($assignment['first_name'] ?? '') . ' ' . ($assignment['last_name'] ?? ''))); ?></td>
+                                                            <td>
+                                                                <span class="badge <?php echo $isOS ? 'bg-primary text-white' : 'bg-info text-dark'; ?>" title="<?php echo $isOS ? 'Returning Student (OS)' : 'New Intake (NI)'; ?>">
+                                                                    <?php echo $isOS ? 'OS (Returning)' : 'NI (New Intake)'; ?>
+                                                                </span>
+                                                            </td>
                                                             <td><?php echo htmlspecialchars(trim(($assignment['class_name'] ?? '') . ' ' . ($assignment['class_arm'] ?? ''))); ?></td>
                                                             <td><?php echo htmlspecialchars((string) ($assignment['session_name'] ?? 'N/A')); ?></td>
                                                             <td><?php echo htmlspecialchars((string) ($assignment['term_name'] ?? 'N/A')); ?></td>

@@ -300,6 +300,13 @@ if ($selectedClass) {
                                                             <a href="/admin/view_students.php?id=<?php echo (int) $st['id']; ?>" class="fw-bold text-dark">
                                                                 <?php echo htmlspecialchars(trim($st['first_name'] . ' ' . $st['last_name'] . ' ' . ($st['other_names'] ?? ''))); ?>
                                                             </a>
+                                                            <?php 
+                                                                $stCat = strtoupper(trim((string) ($st['category'] ?? 'NI')));
+                                                                $isOs = ($stCat === 'OS' || $stCat === 'RETURNING');
+                                                            ?>
+                                                            <span class="badge <?php echo $isOs ? 'bg-primary text-white' : 'bg-info text-dark'; ?> ms-1" style="font-size: 10px;" title="<?php echo $isOs ? 'Returning Student (OS)' : 'New Intake (NI)'; ?>">
+                                                                <?php echo $isOs ? 'OS' : 'NI'; ?>
+                                                            </span>
                                                         </td>
                                                         <td>
                                                             <?php if ($stDept === 'science'): ?>
@@ -426,6 +433,13 @@ if ($selectedClass) {
                                                             <a href="/admin/view_students.php?id=<?php echo (int) $st['id']; ?>" class="fw-bold text-dark">
                                                                 <?php echo htmlspecialchars(trim($st['first_name'] . ' ' . $st['last_name'] . ' ' . ($st['other_names'] ?? ''))); ?>
                                                             </a>
+                                                            <?php 
+                                                                $stCat = strtoupper(trim((string) ($st['category'] ?? 'NI')));
+                                                                $isOs = ($stCat === 'OS' || $stCat === 'RETURNING');
+                                                            ?>
+                                                            <span class="badge <?php echo $isOs ? 'bg-primary text-white' : 'bg-info text-dark'; ?> ms-1" style="font-size: 10px;" title="<?php echo $isOs ? 'Returning Student (OS)' : 'New Intake (NI)'; ?>">
+                                                                <?php echo $isOs ? 'OS' : 'NI'; ?>
+                                                            </span>
                                                         </td>
                                                         <td>
                                                             <!-- Quick stream category changer form -->

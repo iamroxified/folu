@@ -258,7 +258,7 @@ class AdminController extends Controller
             'description' => 'nullable|string',
             'amount' => 'required|numeric|min:0',
             'frequency' => 'required|in:one_time,monthly,quarterly,semi_annual,annual',
-            'fee_type' => 'required|in:tuition,registration,transport,library,sports,laboratory,uniform,exam,other',
+            'fee_type' => 'required|in:' . implode(',', schema_enum_values('fee_structures', 'fee_type')),
             'effective_from' => 'required|date',
             'effective_to' => 'nullable|date|after:effective_from',
             'category' => 'required|in:NI,OS',
@@ -315,7 +315,7 @@ class AdminController extends Controller
             'description' => 'nullable|string',
             'amount' => 'required|numeric|min:0',
             'frequency' => 'required|in:one_time,monthly,quarterly,semi_annual,annual',
-            'fee_type' => 'required|in:tuition,registration,transport,library,sports,laboratory,uniform,exam,other',
+            'fee_type' => 'required|in:' . implode(',', schema_enum_values('fee_structures', 'fee_type')),
             'effective_from' => 'required|date',
             'effective_to' => 'nullable|date|after:effective_from',
             'category' => 'required|in:NI,OS',
@@ -761,7 +761,7 @@ class AdminController extends Controller
                 if (!$studentFee) {
                     $typeLabel = ucwords(str_replace('_', ' ', $targetFeeType));
                     $fs = FeeStructure::where('fee_type', $targetFeeType)->first();
-                    if (!$fs && in_array($targetFeeType, ['tuition', 'registration', 'transport', 'library', 'sports', 'laboratory', 'uniform', 'exam', 'other'], true)) {
+                    if (!$fs && in_array($targetFeeType, schema_enum_values('fee_structures', 'fee_type'), true)) {
                         $fs = FeeStructure::create([
                             'name' => $typeLabel . ' Fee',
                             'description' => "Standard {$typeLabel} Fee",

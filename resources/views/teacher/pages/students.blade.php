@@ -96,6 +96,7 @@ $subjectAssignments = $selectedClassId > 0 ? get_teacher_accessible_subjects((in
                       <tr>
                         <th>Admission No</th>
                         <th>Name</th>
+                        <th>Category</th>
                         <th>Gender</th>
                         <th>Status</th>
                         <th>Attendance %</th>
@@ -103,10 +104,18 @@ $subjectAssignments = $selectedClassId > 0 ? get_teacher_accessible_subjects((in
                       </tr>
                     </thead>
                     <tbody>
-                      <?php foreach ($students as $student): ?>
+                      <?php foreach ($students as $student): 
+                        $cat = strtoupper(trim((string) ($student['category'] ?? 'NI')));
+                        $isOS = ($cat === 'OS' || $cat === 'RETURNING');
+                      ?>
                         <tr>
-                          <td><?php echo htmlspecialchars((string) $student['admission_no']); ?></td>
-                          <td><?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? '') . ' ' . ($student['other_names'] ?? ''))); ?></td>
+                          <td><code><?php echo htmlspecialchars((string) $student['admission_no']); ?></code></td>
+                          <td class="fw-bold"><?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? '') . ' ' . ($student['other_names'] ?? ''))); ?></td>
+                          <td>
+                            <span class="badge <?php echo $isOS ? 'bg-primary text-white' : 'bg-info text-dark'; ?>" title="<?php echo $isOS ? 'Returning Student (OS)' : 'New Intake (NI)'; ?>">
+                              <?php echo $isOS ? 'OS (Returning)' : 'NI (New Intake)'; ?>
+                            </span>
+                          </td>
                           <td><?php echo htmlspecialchars(ucfirst((string) ($student['gender'] ?? 'n/a'))); ?></td>
                           <td><span class="badge badge-<?php echo ($student['status'] ?? '') === 'active' ? 'success' : 'warning'; ?>"><?php echo htmlspecialchars(ucfirst((string) ($student['status'] ?? 'unknown'))); ?></span></td>
                           <td><?php echo number_format((float) student_attendance_percentage((int) $student['id']), 1); ?>%</td>

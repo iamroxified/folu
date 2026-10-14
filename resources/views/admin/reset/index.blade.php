@@ -822,8 +822,8 @@
                                                             </span>
                                                         </td>
                                                         <td>
-                                                            <span class="badge {{ $student->category === 'NI' ? 'bg-info' : 'bg-primary' }}">
-                                                                {{ $student->category === 'NI' ? 'New Intake' : 'Returning' }}
+                                                            <span class="badge {{ $student->category === 'NI' ? 'bg-info text-dark' : 'bg-primary text-white' }}" title="{{ $student->category === 'NI' ? 'New Intake (NI)' : 'Returning Student (OS)' }}">
+                                                                {{ $student->category === 'NI' ? 'NI (New Intake)' : 'OS (Returning)' }}
                                                             </span>
                                                         </td>
                                                         <td>
@@ -1217,8 +1217,8 @@
                                                             </span>
                                                         </td>
                                                         <td>
-                                                            <span class="badge {{ $student->category === 'NI' ? 'bg-info' : 'bg-primary' }}">
-                                                                {{ $student->category === 'NI' ? 'New Intake' : 'Returning' }}
+                                                            <span class="badge {{ $student->category === 'NI' ? 'bg-info text-dark' : 'bg-primary text-white' }}" title="{{ $student->category === 'NI' ? 'New Intake (NI)' : 'Returning Student (OS)' }}">
+                                                                {{ $student->category === 'NI' ? 'NI (New Intake)' : 'OS (Returning)' }}
                                                             </span>
                                                         </td>
                                                         <td>

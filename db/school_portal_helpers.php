@@ -427,12 +427,12 @@ function generate_unique_username(string $base): string
     }
 }
 
-function schema_table_column_details(string $table): array
+function schema_table_column_details(string $table, bool $fresh = false): array
 {
     static $cache = [];
     $cacheKey = strtolower($table);
 
-    if (!isset($cache[$cacheKey])) {
+    if ($fresh || !isset($cache[$cacheKey])) {
         $cache[$cacheKey] = [];
 
         if (!schema_has_table($table)) {
@@ -455,19 +455,116 @@ function schema_column_is_generated(string $table, string $column): bool
     return stripos($extra, 'generated') !== false;
 }
 
-function schema_enum_values(string $table, string $column): array
+function schema_enum_values(string $table, string $column, bool $fresh = false): array
 {
-    $columns = schema_table_column_details($table);
+    $columns = schema_table_column_details($table, $fresh);
     $type = (string) ($columns[$column]['Type'] ?? '');
 
     if (!preg_match("/^enum\\((.*)\\)$/i", $type, $matches)) {
         return [];
     }
 
-    $rawValues = str_getcsv($matches[1], ',', "'");
+    $rawValues = str_getcsv($matches[1], ',', "'", "\\");
 
     return array_values(array_filter(array_map('trim', $rawValues), static fn ($value) => $value !== ''));
 }
+
+function schema_normalize_enum_identifier(string $value): string
+{
+    $val = trim(strtolower($value));
+    $val = preg_replace('/[^a-z0-9_]+/i', '_', $val);
+    $val = trim($val, '_');
+    return $val;
+}
+
+function schema_add_enum_value(string $table, string $column, string $value): bool
+{
+    $val = schema_normalize_enum_identifier($value);
+    if ($val === '') {
+        throw new InvalidArgumentException("Enum value cannot be empty.");
+    }
+
+    $currentValues = schema_enum_values($table, $column, true);
+    if (in_array($val, $currentValues, true)) {
+        return true; // Already exists
+    }
+
+    $newValues = array_merge($currentValues, [$val]);
+    $quoted = implode(', ', array_map(static fn ($v) => "'" . addslashes($v) . "'", $newValues));
+
+    QueryDB("ALTER TABLE `{$table}` MODIFY COLUMN `{$column}` ENUM({$quoted}) NOT NULL");
+    schema_table_column_details($table, true);
+
+    return true;
+}
+
+function schema_rename_enum_value(string $table, string $column, string $oldValue, string $newValue): bool
+{
+    $oldVal = schema_normalize_enum_identifier($oldValue);
+    $newVal = schema_normalize_enum_identifier($newValue);
+
+    if ($oldVal === '' || $newVal === '') {
+        throw new InvalidArgumentException("Enum value cannot be empty.");
+    }
+
+    if ($oldVal === $newVal) {
+        return true;
+    }
+
+    $currentValues = schema_enum_values($table, $column, true);
+    if (!in_array($oldVal, $currentValues, true)) {
+        throw new RuntimeException("Original enum value '{$oldVal}' does not exist on `{$table}`.`{$column}`.");
+    }
+
+    // 1. Expand enum to include new value if not already present
+    $expanded = array_values(array_unique(array_merge($currentValues, [$newVal])));
+    $quotedExpanded = implode(', ', array_map(static fn ($v) => "'" . addslashes($v) . "'", $expanded));
+    QueryDB("ALTER TABLE `{$table}` MODIFY COLUMN `{$column}` ENUM({$quotedExpanded}) NOT NULL");
+
+    // 2. Migrate existing records from old value to new value
+    QueryDB("UPDATE `{$table}` SET `{$column}` = ? WHERE `{$column}` = ?", [$newVal, $oldVal]);
+
+    // 3. Remove old value from enum
+    $finalValues = array_values(array_filter($expanded, static fn ($v) => $v !== $oldVal));
+    if (empty($finalValues)) {
+        throw new RuntimeException("Cannot leave enum with zero options.");
+    }
+    $quotedFinal = implode(', ', array_map(static fn ($v) => "'" . addslashes($v) . "'", $finalValues));
+    QueryDB("ALTER TABLE `{$table}` MODIFY COLUMN `{$column}` ENUM({$quotedFinal}) NOT NULL");
+
+    schema_table_column_details($table, true);
+
+    return true;
+}
+
+function schema_delete_enum_value(string $table, string $column, string $value): bool
+{
+    $val = schema_normalize_enum_identifier($value);
+    $currentValues = schema_enum_values($table, $column, true);
+
+    if (!in_array($val, $currentValues, true)) {
+        return true;
+    }
+
+    // Verify no records are using this value
+    $usageCount = (int) QueryDB("SELECT COUNT(*) FROM `{$table}` WHERE `{$column}` = ?", [$val])->fetchColumn();
+    if ($usageCount > 0) {
+        throw new RuntimeException("Cannot delete enum value '{$val}' because it is currently used by {$usageCount} record(s).");
+    }
+
+    $finalValues = array_values(array_filter($currentValues, static fn ($v) => $v !== $val));
+    if (empty($finalValues)) {
+        throw new RuntimeException("Cannot delete all values from enum.");
+    }
+
+    $quotedFinal = implode(', ', array_map(static fn ($v) => "'" . addslashes($v) . "'", $finalValues));
+    QueryDB("ALTER TABLE `{$table}` MODIFY COLUMN `{$column}` ENUM({$quotedFinal}) NOT NULL");
+
+    schema_table_column_details($table, true);
+
+    return true;
+}
+
 
 function get_role_id_by_name(string $roleName): ?int
 {

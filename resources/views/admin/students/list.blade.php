@@ -94,16 +94,20 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
                           <th>Class</th>
                           <th>Session</th>
                           <!-- <th>Email</th> -->
+                          <th>Category</th>
                           <th>Status</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <?php $sn = 1; foreach ($students as $student): ?>
+                        <?php $sn = 1; foreach ($students as $student): 
+                          $cat = strtoupper(trim((string) ($student['category'] ?? 'NI')));
+                          $isOS = ($cat === 'OS' || $cat === 'RETURNING');
+                        ?>
                         <tr>
                           <td><?php echo $sn++; ?></td>
-                          <td><?php echo htmlspecialchars((string) ($student['admission_no'] ?? '')); ?></td>
-                          <td><?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['other_names'] ?? '') . ' ' . ($student['last_name'] ?? ''))); ?></td>
+                          <td><code><?php echo htmlspecialchars((string) ($student['admission_no'] ?? '')); ?></code></td>
+                          <td class="fw-bold"><?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['other_names'] ?? '') . ' ' . ($student['last_name'] ?? ''))); ?></td>
                           <td><?php echo htmlspecialchars(trim(($student['class_name'] ?? '') . ' ' . ($student['class_arm'] ?? ''))); ?></td>
                           <td>
                             <?php
@@ -115,6 +119,11 @@ $students = getStudents($searchParam, $class_filter, $session_filter);
                             ?>
                           </td>
                           <!-- <td><?php //echo htmlspecialchars((string) ($student['email'] ?? 'N/A')); ?></td> -->
+                          <td>
+                            <span class="badge <?php echo $isOS ? 'bg-primary text-white' : 'bg-info text-dark'; ?>" title="<?php echo $isOS ? 'Returning Student (OS)' : 'New Intake (NI)'; ?>">
+                              <?php echo $isOS ? 'OS (Returning)' : 'NI (New Intake)'; ?>
+                            </span>
+                          </td>
                           <td>
                             <span class="badge bg-<?php echo ($student['status'] ?? '') === 'active' ? 'success' : 'warning'; ?>">
                               <?php echo ucfirst((string) ($student['status'] ?? 'Active')); ?>
