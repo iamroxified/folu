@@ -72,24 +72,24 @@ try {
     $classSelectArm .= "'') AS class_arm";
 
     // Check payment record first to support both student_fee and additional_charge polymorphic payments
-    $p_check = $pdo->prepare("SELECT * FROM payments WHERE payment_reference = ? AND status = 'completed'");
+    $p_check = $pdo->prepare("SELECT * FROM payments WHERE payment_reference = ?");
     $p_check->execute([$receipt_number]);
     $rawPayment = $p_check->fetch(PDO::FETCH_ASSOC);
 
     if (!$rawPayment && schema_has_table('receipts')) {
-        $r_check = $pdo->prepare("SELECT p.* FROM receipts r JOIN payments p ON r.payment_id = p.id WHERE r.receipt_number = ? AND p.status = 'completed' LIMIT 1");
+        $r_check = $pdo->prepare("SELECT p.* FROM receipts r JOIN payments p ON r.payment_id = p.id WHERE r.receipt_number = ? LIMIT 1");
         $r_check->execute([$receipt_number]);
         $rawPayment = $r_check->fetch(PDO::FETCH_ASSOC);
     }
 
     if (!$rawPayment && is_numeric($receipt_number)) {
-        $pid_check = $pdo->prepare("SELECT * FROM payments WHERE id = ? AND status = 'completed' LIMIT 1");
+        $pid_check = $pdo->prepare("SELECT * FROM payments WHERE id = ? LIMIT 1");
         $pid_check->execute([$receipt_number]);
         $rawPayment = $pid_check->fetch(PDO::FETCH_ASSOC);
     }
 
     if (!$rawPayment) {
-        die('Receipt reference "' . htmlspecialchars($receipt_number) . '" not found or not completed.');
+        die('Receipt reference "' . htmlspecialchars($receipt_number) . '" not found.');
     }
 
     if (in_array($rawPayment['payable_type'], ['additional_charge', 'App\Models\AdditionalCharge'])) {
@@ -255,6 +255,11 @@ try {
         $totalCumulativeBalance = (float) $cum_stmt->fetchColumn();
     }
 
+    // Completed status and payment balance flags
+    $isCompleted = strtolower(trim((string) ($payment['status'] ?? $rawPayment['status'] ?? ''))) === 'completed';
+    $itemBalance = (float) ($payment['fee_balance'] ?? 0);
+    $isFullyPaid = $itemBalance <= 0.001;
+
 } catch (PDOException $e) {
     die('Database error: ' . $e->getMessage());
 }
@@ -278,6 +283,7 @@ try {
             padding: 30px 15px;
         }
         .receipt-card {
+            position: relative;
             max-width: 800px;
             margin: 0 auto;
             background: #ffffff;
@@ -511,7 +517,183 @@ try {
         .btn-close-window:hover {
             background-color: #cbd5e1;
         }
+        /* ==================== COMPLETED STAMP & WATERMARK STYLES ==================== */
+        .watermark-container {
+            position: absolute;
+            top: 52%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-24deg);
+            pointer-events: none;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            opacity: 0.12;
+            width: 100%;
+        }
+        .watermark-box {
+            border: 6px dashed #15803d;
+            border-radius: 20px;
+            padding: 16px 48px;
+            text-align: center;
+            background: rgba(240, 253, 244, 0.4);
+        }
+        .watermark-main-text {
+            font-size: 68px;
+            font-weight: 900;
+            font-family: 'Arial Black', Impact, 'Segoe UI Black', sans-serif;
+            color: #15803d;
+            letter-spacing: 8px;
+            line-height: 1;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .watermark-sub-text {
+            font-size: 14px;
+            font-weight: 800;
+            color: #166534;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            margin-top: 8px;
+            border-top: 2px solid #166534;
+            padding-top: 4px;
+            white-space: nowrap;
+        }
+
+        .completed-badge-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background-color: #22c55e;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .stamp-banner-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 3;
+        }
+        .official-stamp-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border: 3.5px double #15803d;
+            border-radius: 10px;
+            background: rgba(240, 253, 244, 0.95);
+            box-shadow: 0 0 0 2px #bbf7d0, 0 4px 14px rgba(21, 128, 61, 0.15);
+            transform: rotate(-5deg);
+            text-align: center;
+            user-select: none;
+        }
+        .stamp-badge-inner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .stamp-school-name {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            color: #166534;
+            text-transform: uppercase;
+        }
+        .stamp-stars {
+            font-size: 8px;
+            letter-spacing: 3px;
+            color: #15803d;
+            margin: 1px 0;
+        }
+        .stamp-status-word {
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: 2.5px;
+            color: #15803d;
+            border-top: 2px solid #15803d;
+            border-bottom: 2px solid #15803d;
+            padding: 3px 14px;
+            margin: 2px 0;
+            text-transform: uppercase;
+            font-family: 'Arial Black', Impact, sans-serif;
+            line-height: 1.1;
+        }
+        .stamp-date-line {
+            font-size: 9.5px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: #166534;
+            margin-top: 2px;
+        }
+        .stamp-sub-text {
+            font-size: 7.5px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #15803d;
+            opacity: 0.9;
+            text-transform: uppercase;
+        }
+
+        .stamp-box.stamp-box-completed {
+            border: 2px solid #15803d !important;
+            background: #f0fdf4 !important;
+            color: #15803d !important;
+            padding: 8px 12px !important;
+            box-shadow: 0 0 0 2px #dcfce7 !important;
+            transform: rotate(-3deg);
+        }
+        .seal-ring {
+            border: 1.5px dashed #16a34a;
+            border-radius: 6px;
+            padding: 6px 4px;
+        }
+        .seal-icon {
+            font-size: 16px;
+            font-weight: 900;
+            color: #15803d;
+            line-height: 1;
+        }
+        .seal-title {
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            color: #15803d;
+            margin-top: 2px;
+        }
+        .seal-org {
+            font-size: 8px;
+            font-weight: 700;
+            color: #166534;
+            letter-spacing: 0.5px;
+        }
+        .seal-date {
+            font-size: 8px;
+            font-weight: 700;
+            color: #15803d;
+            margin-top: 1px;
+        }
+        .seal-caption {
+            font-size: 8px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: #15803d;
+            margin-top: 4px;
+            text-transform: uppercase;
+        }
+
         @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
             body {
                 background-color: #ffffff;
                 padding: 0;
@@ -519,6 +701,17 @@ try {
             .receipt-card {
                 box-shadow: none;
                 border: 1px solid #cbd5e1;
+            }
+            .watermark-container {
+                opacity: 0.14 !important;
+            }
+            .official-stamp-badge {
+                border-color: #15803d !important;
+                background-color: #f0fdf4 !important;
+            }
+            .stamp-box-completed {
+                border-color: #15803d !important;
+                background-color: #f0fdf4 !important;
             }
             .action-bar {
                 display: none !important;
@@ -529,6 +722,15 @@ try {
 <body>
 
     <div class="receipt-card">
+        <?php if ($isCompleted): ?>
+            <div class="watermark-container" aria-hidden="true">
+                <div class="watermark-box">
+                    <div class="watermark-main-text"><?php echo ($isFullyPaid || $totalCumulativeBalance <= 0.001) ? 'PAID IN FULL' : 'PAYMENT COMPLETED'; ?></div>
+                    <div class="watermark-sub-text">OFFICIAL RECEIPT • VALIDATED</div>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <!-- Header with Brand Logo & School Info -->
         <div class="receipt-header">
             <div class="brand-section">
@@ -543,10 +745,30 @@ try {
             <div class="receipt-badge">
                 <div class="title">Official Payment Receipt</div>
                 <div class="ref-no"><?php echo htmlspecialchars($payment['receipt_number']); ?></div>
+                <?php if ($isCompleted): ?>
+                    <div style="margin-top: 6px;">
+                        <span class="completed-badge-pill">
+                            <span style="font-size: 13px; line-height: 1;">✓</span> PAYMENT COMPLETED
+                        </span>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
-        <div class="receipt-body">
+        <div class="receipt-body" style="position: relative; z-index: 2;">
+            <?php if ($isCompleted): ?>
+                <div class="stamp-banner-row">
+                    <div class="official-stamp-badge">
+                        <div class="stamp-badge-inner">
+                            <div class="stamp-school-name"><?php echo htmlspecialchars($schoolName); ?></div>
+                            <div class="stamp-stars">★ ★ ★ ★ ★</div>
+                            <div class="stamp-status-word"><?php echo ($isFullyPaid ? 'PAID IN FULL' : 'PAYMENT COMPLETED'); ?></div>
+                            <div class="stamp-date-line">OFFICIALLY VERIFIED • <?php echo date('d M Y', strtotime($payment['payment_date'] ?? 'now')); ?></div>
+                            <div class="stamp-sub-text">BURSARY &amp; ACCOUNTS DEPARTMENT</div>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
             <!-- Student & Transaction Metadata -->
             <div class="meta-grid">
                 <div class="meta-item">
@@ -629,9 +851,19 @@ try {
                     <p style="margin: 0 0 4px 0; font-weight: 700; color: #334155;">Thank you for your payment!</p>
                     <p style="margin: 0; font-size: 10px;">This is an officially generated electronic receipt. Generated on <?php echo date('Y-m-d H:i:s'); ?>.</p>
                 </div>
-                <div class="stamp-box">
-                    <div style="height: 30px;"></div>
-                    Authorized Stamp &amp; Signature
+                <div class="stamp-box <?php echo $isCompleted ? 'stamp-box-completed' : ''; ?>">
+                    <?php if ($isCompleted): ?>
+                        <div class="seal-ring">
+                            <div class="seal-icon">✓</div>
+                            <div class="seal-title">PAYMENT COMPLETED</div>
+                            <div class="seal-org"><?php echo htmlspecialchars($schoolName); ?></div>
+                            <div class="seal-date"><?php echo date('d-M-Y', strtotime($payment['payment_date'] ?? 'now')); ?></div>
+                        </div>
+                        <div class="seal-caption">BURSARY VALIDATED</div>
+                    <?php else: ?>
+                        <div style="height: 30px;"></div>
+                        Authorized Stamp &amp; Signature
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
