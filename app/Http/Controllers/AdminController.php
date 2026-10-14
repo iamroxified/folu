@@ -566,6 +566,7 @@ class AdminController extends Controller
         $handle = fopen($filePath, 'r');
         $totalProcessed = 0;
         $successCount = 0;
+        $ignoredCount = 0;
         $totalPaidAmount = 0.0;
         $importedRows = [];
         $failedRows = [];
@@ -625,26 +626,16 @@ class AdminController extends Controller
                 continue;
             }
 
+            // If the row or student name is blank, ignore it
             if ($rawName === '') {
-                $failedRows[] = [
-                    'row' => $rowNumber,
-                    'sn' => $rawSn,
-                    'name' => 'N/A',
-                    'paid' => $rawPaid,
-                    'reason' => 'Student name is missing or blank',
-                ];
                 continue;
             }
 
-            $cleanPaid = (float) preg_replace('/[^0-9.]/', '', $rawPaid);
-            if ($cleanPaid <= 0) {
-                $failedRows[] = [
-                    'row' => $rowNumber,
-                    'sn' => $rawSn,
-                    'name' => $rawName,
-                    'paid' => $rawPaid,
-                    'reason' => 'Paid amount must be greater than 0',
-                ];
+            // If the paid value is blank, empty, '0', or <= 0, ignore the student (they didn't pay any money)
+            $trimmedPaid = trim($rawPaid);
+            $cleanPaid = (float) preg_replace('/[^0-9.]/', '', $trimmedPaid);
+            if ($trimmedPaid === '' || in_array(strtolower($trimmedPaid), ['0', '0.0', '0.00', '-', 'nil', 'null', 'none', 'n/a'], true) || $cleanPaid <= 0.0001) {
+                $ignoredCount++;
                 continue;
             }
 
@@ -803,6 +794,7 @@ class AdminController extends Controller
         $summary = [
             'total' => $totalProcessed,
             'success' => $successCount,
+            'ignored' => $ignoredCount,
             'total_amount' => $totalPaidAmount,
             'failed' => count($failedRows),
             'records' => $importedRows,
@@ -811,7 +803,12 @@ class AdminController extends Controller
 
         session(['balance_import_summary' => $summary]);
 
-        return redirect()->back()->with('balance_import_success', "Imported {$successCount} actual balance payment(s) successfully totaling ₦" . number_format($totalPaidAmount, 2) . " with official receipts generated.")->with('balance_import_summary', $summary);
+        $successMsg = "Imported {$successCount} actual balance payment(s) successfully totaling ₦" . number_format($totalPaidAmount, 2) . " with official receipts generated.";
+        if ($ignoredCount > 0) {
+            $successMsg .= " ({$ignoredCount} student(s) with ₦0 or blank were ignored as no payment was made).";
+        }
+
+        return redirect()->back()->with('balance_import_success', $successMsg)->with('balance_import_summary', $summary);
     }
 
     public function downloadSamplePaymentCsv()

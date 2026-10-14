@@ -89,6 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
         $bHandle = fopen($balPath, 'r');
         $bTotal = 0;
         $bSuccess = 0;
+        $bIgnoredCount = 0;
         $bTotalPaid = 0.0;
         $bImportedRows = [];
         $bFailedRows = [];
@@ -146,26 +147,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
                 continue;
             }
 
+            // If the row or student name is blank, ignore it
             if ($rName === '') {
-                $bFailedRows[] = [
-                    'row' => $bRowNum,
-                    'sn' => $rSn,
-                    'name' => 'N/A',
-                    'paid' => $rPaid,
-                    'reason' => 'Student name is missing or blank',
-                ];
                 continue;
             }
 
-            $cleanPaid = (float) preg_replace('/[^0-9.]/', '', $rPaid);
-            if ($cleanPaid <= 0) {
-                $bFailedRows[] = [
-                    'row' => $bRowNum,
-                    'sn' => $rSn,
-                    'name' => $rName,
-                    'paid' => $rPaid,
-                    'reason' => 'Paid amount must be greater than 0',
-                ];
+            // If the paid value is blank, empty, '0', or <= 0, ignore the student (they didn't pay any money)
+            $trimmedPaid = trim($rPaid);
+            $cleanPaid = (float) preg_replace('/[^0-9.]/', '', $trimmedPaid);
+            if ($trimmedPaid === '' || in_array(strtolower($trimmedPaid), ['0', '0.0', '0.00', '-', 'nil', 'null', 'none', 'n/a'], true) || $cleanPaid <= 0.0001) {
+                $bIgnoredCount++;
                 continue;
             }
 
@@ -324,12 +315,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
         $balanceImportSummary = [
             'total' => $bTotal,
             'success' => $bSuccess,
+            'ignored' => $bIgnoredCount,
             'total_amount' => $bTotalPaid,
             'failed' => count($bFailedRows),
             'records' => $bImportedRows,
             'failed_records' => $bFailedRows,
         ];
-        $balanceImportSuccess = "Imported {$bSuccess} actual balance payment(s) successfully totaling ₦" . number_format($bTotalPaid, 2) . " with official receipts generated.";
+        $bSuccessMsg = "Imported {$bSuccess} actual balance payment(s) successfully totaling ₦" . number_format($bTotalPaid, 2) . " with official receipts generated.";
+        if ($bIgnoredCount > 0) {
+            $bSuccessMsg .= " ({$bIgnoredCount} student(s) with ₦0 or blank were ignored as no payment was made).";
+        }
+        $balanceImportSuccess = $bSuccessMsg;
     } else {
         $balanceRowErrors[] = 'Please upload a valid CSV file for actual balance payments.';
     }
@@ -607,6 +603,9 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                                         <div class="mt-2 mt-md-0">
                                             <span class="badge bg-light text-dark me-1 py-2 px-3">Processed: {{ $balanceImportSummary['total'] ?? 0 }}</span>
                                             <span class="badge bg-light text-success me-1 py-2 px-3">Successful Deductions: {{ $balanceImportSummary['success'] ?? 0 }}</span>
+                                            @if(!empty($balanceImportSummary['ignored']) && $balanceImportSummary['ignored'] > 0)
+                                                <span class="badge bg-light text-secondary me-1 py-2 px-3">Ignored (₦0 / Blank): {{ $balanceImportSummary['ignored'] }}</span>
+                                            @endif
                                             <span class="badge bg-light text-primary me-1 py-2 px-3">Total Paid: ₦{{ number_format((float) ($balanceImportSummary['total_amount'] ?? 0), 2) }}</span>
                                             @if(!empty($balanceImportSummary['failed']) && $balanceImportSummary['failed'] > 0)
                                                 <span class="badge bg-danger text-white py-2 px-3">Failed: {{ $balanceImportSummary['failed'] }}</span>
@@ -800,6 +799,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                                     <p class="text-muted small">Upload CSV with columns: <strong>sn,name,paid</strong>. The paid column will be deducted from each student's allocated fees.</p>
                                     <div class="alert alert-light border small text-dark py-2 mb-3">
                                         <i class="fas fa-calculator text-success me-1"></i> <strong>How it works:</strong> If the allocation is ₦59,500, the uploaded paid value (e.g. ₦40,000) will be recorded as a payment and deducted from it, leaving a balance of ₦19,500. Each student has a receipt generated.
+                                        <div class="mt-1 text-muted"><i class="fas fa-info-circle text-info me-1"></i> <em>Rows with blank or 0 paid values are automatically ignored (indicating the student didn't pay any money).</em></div>
                                     </div>
 
                                     <form method="POST" action="{{ route('admin.students.import_actual_balance') }}" enctype="multipart/form-data">
@@ -942,6 +942,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                             <div class="modal-body">
                                 <div class="alert alert-info border small py-2">
                                     <i class="fas fa-info-circle me-1"></i> <strong>Balance Deduction:</strong> The uploaded <code>paid</code> column will be recorded as actual payment and deducted from the student's allocated fees (e.g. Allocation ₦59,500 minus Paid ₦40,000 leaves Balance ₦19,500). An official receipt will be generated for each student.
+                                    <div class="mt-1"><i class="fas fa-check-circle me-1"></i> <em>Rows with blank or 0 paid values are automatically ignored (indicating the student didn't pay any money).</em></div>
                                 </div>
 
                                 <div class="row mb-3">
