@@ -151,7 +151,7 @@ class ResetController extends Controller
 
             $tabData['count'] = (clone $pQuery)->count();
             $tabData['sum'] = (float) (clone $pQuery)->sum('amount');
-            $tabData['items'] = $pQuery->with('payable')->orderBy('payment_date', 'desc')->orderBy('id', 'desc')->paginate(30)->appends($request->all());
+            $tabData['items'] = $pQuery->with('payable')->orderBy('payment_date', 'desc')->orderBy('id', 'desc')->get();
 
             // Preload student context for each payment
             $feeIds = [];
@@ -206,7 +206,7 @@ class ResetController extends Controller
             $tabData['total_payable'] = (float) (clone $allocQuery)->sum('total_payable');
             $tabData['total_paid'] = (float) (clone $allocQuery)->sum('amount_paid');
             $tabData['total_balance'] = (float) (clone $allocQuery)->sum('balance');
-            $tabData['items'] = $allocQuery->orderBy('id', 'desc')->paginate(30)->appends($request->all());
+            $tabData['items'] = $allocQuery->orderBy('id', 'desc')->get();
         }
 
         // Tab: Students
@@ -242,7 +242,7 @@ class ResetController extends Controller
             $tabData['count'] = (clone $sQuery)->count();
             $tabData['active_count'] = (clone $sQuery)->where('status', 'active')->count();
             $tabData['inactive_count'] = (clone $sQuery)->where('status', '!=', 'active')->count();
-            $tabData['items'] = $sQuery->orderBy('first_name')->orderBy('last_name')->paginate(30)->appends($request->all());
+            $tabData['items'] = $sQuery->orderBy('first_name')->orderBy('last_name')->get();
         }
 
         // Tab: Classes

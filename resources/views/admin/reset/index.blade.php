@@ -34,6 +34,34 @@
         .card-reset-highlight {
             border-top: 4px solid #e74c3c;
         }
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_filter {
+            padding: 12px 16px;
+        }
+        .dataTables_wrapper .dataTables_info,
+        .dataTables_wrapper .dataTables_paginate {
+            padding: 12px 16px;
+        }
+        .dataTables_wrapper .dataTables_filter input {
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+            padding: 5px 12px;
+            margin-left: 8px;
+            outline: none;
+        }
+        .dataTables_wrapper .dataTables_filter input:focus {
+            border-color: #e74c3c;
+            box-shadow: 0 0 0 0.2rem rgba(231, 76, 60, 0.2);
+        }
+        .dataTables_wrapper .dataTables_length select {
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+            padding: 4px 8px;
+            margin: 0 4px;
+        }
+        table.dataTable tbody td {
+            vertical-align: middle !important;
+        }
     </style>
 </head>
 <body>
@@ -360,7 +388,7 @@
                                     <input type="hidden" name="confirm_phrase" id="inputConfirmPhraseSelectedPayments" value="">
 
                                     <div class="table-responsive">
-                                        <table class="table table-hover align-middle mb-0 no-datatable">
+                                        <table id="tablePayments" class="table table-hover align-middle mb-0 no-datatable">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th width="40" class="text-center">
@@ -377,7 +405,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @forelse($tabData['items'] as $pmt)
+                                                @foreach($tabData['items'] as $pmt)
                                                     @php
                                                         $feeContext = null;
                                                         $chargeContext = null;
@@ -441,25 +469,12 @@
                                                             </span>
                                                         </td>
                                                     </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td colspan="9" class="text-center py-5">
-                                                            <i class="fas fa-receipt fa-3x text-muted mb-2 d-block"></i>
-                                                            <h5 class="text-dark fw-bold">No Payments Found</h5>
-                                                            <p class="text-muted small">No payment transactions match the selected session, term, or class filters.</p>
-                                                        </td>
-                                                    </tr>
-                                                @endforelse
+                                                @endforeach
                                             </tbody>
                                         </table>
                                     </div>
                                 </form>
                             </div>
-                            @if($tabData['items']->hasPages())
-                                <div class="card-footer bg-white d-flex justify-content-end py-2">
-                                    {{ $tabData['items']->links() }}
-                                </div>
-                            @endif
                         </div>
 
                         <!-- Modal: Reset Selected Payments -->
@@ -562,7 +577,7 @@
                                     <input type="hidden" name="confirm_phrase" id="inputConfirmPhraseSelectedAllocations" value="">
 
                                     <div class="table-responsive">
-                                        <table class="table table-hover align-middle mb-0 no-datatable">
+                                        <table id="tableAllocations" class="table table-hover align-middle mb-0 no-datatable">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th width="40" class="text-center">
@@ -579,7 +594,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @forelse($tabData['items'] as $alloc)
+                                                @foreach($tabData['items'] as $alloc)
                                                     @php
                                                         $s = $alloc->student;
                                                     @endphp
@@ -628,25 +643,12 @@
                                                             </span>
                                                         </td>
                                                     </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td colspan="9" class="text-center py-5">
-                                                            <i class="fas fa-file-invoice-dollar fa-3x text-muted mb-2 d-block"></i>
-                                                            <h5 class="text-dark fw-bold">No Fee Allocations Found</h5>
-                                                            <p class="text-muted small">No allocations match the selected criteria.</p>
-                                                        </td>
-                                                    </tr>
-                                                @endforelse
+                                                @endforeach
                                             </tbody>
                                         </table>
                                     </div>
                                 </form>
                             </div>
-                            @if($tabData['items']->hasPages())
-                                <div class="card-footer bg-white d-flex justify-content-end py-2">
-                                    {{ $tabData['items']->links() }}
-                                </div>
-                            @endif
                         </div>
 
                         <!-- Modal: Process Selected Allocations -->
@@ -779,7 +781,7 @@
                                     <input type="hidden" name="confirm_phrase" id="inputConfirmPhraseSelectedStudents" value="">
 
                                     <div class="table-responsive">
-                                        <table class="table table-hover align-middle mb-0 no-datatable">
+                                        <table id="tableStudents" class="table table-hover align-middle mb-0 no-datatable">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th width="40" class="text-center">
@@ -795,7 +797,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @forelse($tabData['items'] as $student)
+                                                @foreach($tabData['items'] as $student)
                                                     <tr>
                                                         <td class="text-center">
                                                             <input type="checkbox" name="student_ids[]" value="{{ $student->id }}" class="form-check-input student-checkbox">
@@ -841,25 +843,12 @@
                                                             </span>
                                                         </td>
                                                     </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td colspan="8" class="text-center py-5">
-                                                            <i class="fas fa-user-graduate fa-3x text-muted mb-2 d-block"></i>
-                                                            <h5 class="text-dark fw-bold">No Students Found</h5>
-                                                            <p class="text-muted small">No student records match the selected class, session, or term.</p>
-                                                        </td>
-                                                    </tr>
-                                                @endforelse
+                                                @endforeach
                                             </tbody>
                                         </table>
                                     </div>
                                 </form>
                             </div>
-                            @if($tabData['items']->hasPages())
-                                <div class="card-footer bg-white d-flex justify-content-end py-2">
-                                    {{ $tabData['items']->links() }}
-                                </div>
-                            @endif
                         </div>
 
                         <!-- Modal: Delete Selected Students -->
@@ -978,7 +967,7 @@
                                     <input type="hidden" name="confirm_phrase" id="inputConfirmPhraseClasses" value="">
 
                                     <div class="table-responsive">
-                                        <table class="table table-hover align-middle mb-0 no-datatable">
+                                        <table id="tableClasses" class="table table-hover align-middle mb-0 no-datatable">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th width="40" class="text-center">
@@ -992,7 +981,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @forelse($tabData['items'] as $class)
+                                                @foreach($tabData['items'] as $class)
                                                     <tr>
                                                         <td class="text-center">
                                                             <input type="checkbox" name="class_ids[]" value="{{ $class->id }}" class="form-check-input class-checkbox" data-students="{{ $class->students_count }}">
@@ -1019,14 +1008,7 @@
                                                             @endif
                                                         </td>
                                                     </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td colspan="6" class="text-center py-5">
-                                                            <i class="fas fa-school fa-3x text-muted mb-2 d-block"></i>
-                                                            <h5 class="text-dark fw-bold">No Classes Found</h5>
-                                                        </td>
-                                                    </tr>
-                                                @endforelse
+                                                @endforeach
                                             </tbody>
                                         </table>
                                     </div>
@@ -1091,7 +1073,7 @@
                                     <input type="hidden" name="confirm_phrase" id="inputConfirmPhraseSubjects" value="">
 
                                     <div class="table-responsive">
-                                        <table class="table table-hover align-middle mb-0 no-datatable">
+                                        <table id="tableSubjects" class="table table-hover align-middle mb-0 no-datatable">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th width="40" class="text-center">
@@ -1106,7 +1088,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @forelse($tabData['items'] as $sub)
+                                                @foreach($tabData['items'] as $sub)
                                                     <tr>
                                                         <td class="text-center">
                                                             <input type="checkbox" name="subject_ids[]" value="{{ $sub->id }}" class="form-check-input subject-checkbox">
@@ -1132,14 +1114,7 @@
                                                             </span>
                                                         </td>
                                                     </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td colspan="7" class="text-center py-5">
-                                                            <i class="fas fa-book fa-3x text-muted mb-2 d-block"></i>
-                                                            <h5 class="text-dark fw-bold">No Subjects Found</h5>
-                                                        </td>
-                                                    </tr>
-                                                @endforelse
+                                                @endforeach
                                             </tbody>
                                         </table>
                                     </div>
@@ -1207,7 +1182,7 @@
                                     <input type="hidden" name="fee_structure_id" id="inputBulkFeeStructureId" value="0">
 
                                     <div class="table-responsive">
-                                        <table class="table table-hover align-middle mb-0 no-datatable">
+                                        <table id="tableBulkAllocate" class="table table-hover align-middle mb-0 no-datatable">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th width="40" class="text-center">
@@ -1222,7 +1197,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @forelse($tabData['items'] as $student)
+                                                @foreach($tabData['items'] as $student)
                                                     @php
                                                         $isAllocated = $student->studentFees->isNotEmpty();
                                                     @endphp
@@ -1262,15 +1237,7 @@
                                                             @endif
                                                         </td>
                                                     </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td colspan="7" class="text-center py-5">
-                                                            <i class="fas fa-users-slash fa-3x text-muted mb-2 d-block"></i>
-                                                            <h5 class="text-dark fw-bold">No Students Available</h5>
-                                                            <p class="text-muted small">No active students match the selected class or criteria.</p>
-                                                        </td>
-                                                    </tr>
-                                                @endforelse
+                                                @endforeach
                                             </tbody>
                                         </table>
                                     </div>
@@ -1321,156 +1288,304 @@
         </div>
     </div>
 
-    <!-- Client-side script for Checkbox management & Safety confirmation logic -->
+    <!-- Client-side script for DataTables & Cross-Page Checkbox selection -->
     <script>
         $(document).ready(function() {
-            // Check All Toggle helper
-            function setupCheckAll(masterId, itemClass, countBadgeId, actionBtnId) {
-                $('#' + masterId).on('change', function() {
-                    var isChecked = $(this).is(':checked');
-                    $('.' + itemClass).prop('checked', isChecked);
-                    updateCount();
-                });
+            /**
+             * Initialize a reset DataTable with robust cross-page checkbox selection.
+             * Tracks selected IDs in a Set so pagination, searching, sorting, and redraws
+             * never lose the checked state.
+             */
+            function initResetDataTable(config) {
+                var tableEl = $('#' + config.tableId);
+                if (!tableEl.length) return null;
 
-                $(document).on('change', '.' + itemClass, function() {
-                    var total = $('.' + itemClass).length;
-                    var checked = $('.' + itemClass + ':checked').length;
-                    $('#' + masterId).prop('checked', total > 0 && total === checked);
-                    updateCount();
-                });
-
-                function updateCount() {
-                    var checked = $('.' + itemClass + ':checked').length;
-                    if ($('#' + countBadgeId).length) {
-                        $('#' + countBadgeId).text(checked);
+                var dt = tableEl.DataTable({
+                    pageLength: 25,
+                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                    columnDefs: [
+                        { targets: 0, orderable: false, searchable: false }
+                    ],
+                    order: [],
+                    autoWidth: false,
+                    retrieve: true,
+                    language: {
+                        search: "_INPUT_",
+                        searchPlaceholder: "Search table records...",
+                        lengthMenu: "Show _MENU_ entries",
+                        info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                        infoEmpty: "Showing 0 to 0 of 0 entries",
+                        infoFiltered: "(filtered from _MAX_ total entries)",
+                        zeroRecords: "No matching records found in table"
                     }
-                    if ($('#' + actionBtnId).length) {
-                        $('#' + actionBtnId).prop('disabled', checked === 0);
+                });
+
+                var masterCheck = $('#' + config.masterCheckId);
+                var itemClass = config.itemClass;
+                var countBadge = config.countBadgeId ? $('#' + config.countBadgeId) : null;
+                var actionBtn = config.actionBtnId ? $('#' + config.actionBtnId) : null;
+                var selectedIds = new Set();
+
+                // Initial collection of checked checkboxes (e.g. Bulk Allocate tab starts checked)
+                dt.$('input.' + itemClass + ':checked').each(function() {
+                    selectedIds.add($(this).val());
+                });
+
+                function syncUI() {
+                    var totalRows = dt.$('input.' + itemClass).length;
+                    var checkedCount = selectedIds.size;
+
+                    if (masterCheck.length) {
+                        masterCheck.prop('checked', totalRows > 0 && checkedCount === totalRows);
+                        masterCheck.prop('indeterminate', checkedCount > 0 && checkedCount < totalRows);
+                    }
+                    if (countBadge && countBadge.length) {
+                        countBadge.text(checkedCount);
+                    }
+                    if (actionBtn && actionBtn.length) {
+                        actionBtn.prop('disabled', checkedCount === 0);
                     }
                 }
-                updateCount();
+
+                // Master Checkbox: Select/Deselect ALL across ALL pages of the DataTable
+                masterCheck.on('change', function() {
+                    var isChecked = $(this).is(':checked');
+                    // Query all rows in the DataTable (across all pages)
+                    dt.$('input.' + itemClass).each(function() {
+                        var val = $(this).val();
+                        if (isChecked) {
+                            selectedIds.add(val);
+                            $(this).prop('checked', true);
+                        } else {
+                            selectedIds.delete(val);
+                            $(this).prop('checked', false);
+                        }
+                    });
+                    syncUI();
+                });
+
+                // Individual row checkbox click (delegated via table container)
+                tableEl.on('change', 'input.' + itemClass, function() {
+                    var val = $(this).val();
+                    if ($(this).is(':checked')) {
+                        selectedIds.add(val);
+                    } else {
+                        selectedIds.delete(val);
+                    }
+                    syncUI();
+                });
+
+                // Keep DOM checkboxes in sync whenever DataTables redraws (pagination, sort, search)
+                dt.on('draw', function() {
+                    tableEl.find('input.' + itemClass).each(function() {
+                        $(this).prop('checked', selectedIds.has($(this).val()));
+                    });
+                    syncUI();
+                });
+
+                // Run initial sync
+                syncUI();
+
+                return {
+                    dt: dt,
+                    selectedIds: selectedIds,
+                    getCheckedCount: function() {
+                        return selectedIds.size;
+                    },
+                    hasAnyAttribute: function(attrName) {
+                        var found = false;
+                        dt.$('input.' + itemClass + ':checked').each(function() {
+                            if (parseInt($(this).data(attrName), 10) > 0) {
+                                found = true;
+                            }
+                        });
+                        return found;
+                    },
+                    submitFormWithChecked: function(formId, fieldName) {
+                        var $form = $('#' + formId);
+                        $form.find('.dt-injected-input').remove();
+
+                        // Disable DOM checkboxes so only injected inputs submit clean values
+                        $form.find('input.' + itemClass).prop('disabled', true);
+
+                        // Inject an input for every selected ID across all pages
+                        selectedIds.forEach(function(id) {
+                            $('<input>').attr({
+                                type: 'hidden',
+                                name: fieldName,
+                                class: 'dt-injected-input',
+                                value: id
+                            }).appendTo($form);
+                        });
+
+                        $form[0].submit();
+                    }
+                };
             }
 
             // 1. Payments Tab
-            setupCheckAll('checkAllPayments', 'payment-checkbox', 'countSelectedPayments', 'btnResetSelectedPayments');
-            $('#btnResetSelectedPayments').on('click', function() {
-                var checked = $('.payment-checkbox:checked').length;
-                $('#modalSelectedPaymentsCount').text(checked);
-                $('#inputResetSelectedConfirm').val('');
-                $('#btnSubmitSelectedPayments').prop('disabled', true);
+            var paymentsManager = initResetDataTable({
+                tableId: 'tablePayments',
+                masterCheckId: 'checkAllPayments',
+                itemClass: 'payment-checkbox',
+                countBadgeId: 'countSelectedPayments',
+                actionBtnId: 'btnResetSelectedPayments'
             });
-            $('#inputResetSelectedConfirm').on('input', function() {
-                $('#btnSubmitSelectedPayments').prop('disabled', $(this).val().trim().toUpperCase() !== 'RESET');
-            });
-            $('#btnSubmitSelectedPayments').on('click', function() {
-                $('#inputConfirmPhraseSelectedPayments').val('RESET');
-                $('#formPaymentsReset').submit();
-            });
+            if (paymentsManager) {
+                $('#btnResetSelectedPayments').on('click', function() {
+                    var count = paymentsManager.getCheckedCount();
+                    $('#modalSelectedPaymentsCount').text(count);
+                    $('#inputResetSelectedConfirm').val('');
+                    $('#btnSubmitSelectedPayments').prop('disabled', true);
+                });
+                $('#inputResetSelectedConfirm').on('input', function() {
+                    $('#btnSubmitSelectedPayments').prop('disabled', $(this).val().trim().toUpperCase() !== 'RESET');
+                });
+                $('#btnSubmitSelectedPayments').on('click', function() {
+                    $('#inputConfirmPhraseSelectedPayments').val('RESET');
+                    paymentsManager.submitFormWithChecked('formPaymentsReset', 'payment_ids[]');
+                });
+            }
             $('#inputResetAllConfirm').on('input', function() {
                 $('#btnSubmitAllPayments').prop('disabled', $(this).val().trim().toUpperCase() !== 'RESET');
             });
 
             // 2. Allocations Tab
-            setupCheckAll('checkAllAllocations', 'allocation-checkbox', 'countSelectedAllocations', 'btnResetSelectedAllocations');
-            $('#btnResetSelectedAllocations').on('click', function() {
-                var checked = $('.allocation-checkbox:checked').length;
-                $('#modalSelectedAllocationsCount').text(checked);
-                $('#inputResetSelectedAllocConfirm').val('');
-                $('#btnSubmitSelectedAllocations').prop('disabled', true);
+            var allocationsManager = initResetDataTable({
+                tableId: 'tableAllocations',
+                masterCheckId: 'checkAllAllocations',
+                itemClass: 'allocation-checkbox',
+                countBadgeId: 'countSelectedAllocations',
+                actionBtnId: 'btnResetSelectedAllocations'
             });
-            $('#inputResetSelectedAllocConfirm').on('input', function() {
-                var val = $(this).val().trim().toUpperCase();
-                $('#btnSubmitSelectedAllocations').prop('disabled', val !== 'RESET' && val !== 'DELETE');
-            });
-            $('#btnSubmitSelectedAllocations').on('click', function() {
-                var mode = $('input[name="modal_alloc_mode"]:checked').val();
-                $('#inputAllocModeSelected').val(mode);
-                $('#inputConfirmPhraseSelectedAllocations').val('RESET');
-                $('#formAllocationsReset').submit();
-            });
+            if (allocationsManager) {
+                $('#btnResetSelectedAllocations').on('click', function() {
+                    var count = allocationsManager.getCheckedCount();
+                    $('#modalSelectedAllocationsCount').text(count);
+                    $('#inputResetSelectedAllocConfirm').val('');
+                    $('#btnSubmitSelectedAllocations').prop('disabled', true);
+                });
+                $('#inputResetSelectedAllocConfirm').on('input', function() {
+                    var val = $(this).val().trim().toUpperCase();
+                    $('#btnSubmitSelectedAllocations').prop('disabled', val !== 'RESET' && val !== 'DELETE');
+                });
+                $('#btnSubmitSelectedAllocations').on('click', function() {
+                    var mode = $('input[name="modal_alloc_mode"]:checked').val();
+                    $('#inputAllocModeSelected').val(mode);
+                    $('#inputConfirmPhraseSelectedAllocations').val('RESET');
+                    allocationsManager.submitFormWithChecked('formAllocationsReset', 'allocation_ids[]');
+                });
+            }
             $('#inputResetAllAllocConfirm').on('input', function() {
                 var val = $(this).val().trim().toUpperCase();
                 $('#btnSubmitAllAllocations').prop('disabled', val !== 'RESET' && val !== 'DELETE');
             });
 
             // 3. Students Tab
-            setupCheckAll('checkAllStudents', 'student-checkbox', 'countSelectedStudents', 'btnDeleteSelectedStudents');
-            $('#btnDeleteSelectedStudents').on('click', function() {
-                var checked = $('.student-checkbox:checked').length;
-                $('#modalSelectedStudentsCount').text(checked);
-                $('#inputDeleteSelectedStudentConfirm').val('');
-                $('#btnSubmitSelectedStudents').prop('disabled', true);
+            var studentsManager = initResetDataTable({
+                tableId: 'tableStudents',
+                masterCheckId: 'checkAllStudents',
+                itemClass: 'student-checkbox',
+                countBadgeId: 'countSelectedStudents',
+                actionBtnId: 'btnDeleteSelectedStudents'
             });
-            $('#inputDeleteSelectedStudentConfirm').on('input', function() {
-                $('#btnSubmitSelectedStudents').prop('disabled', $(this).val().trim().toUpperCase() !== 'DELETE');
-            });
-            $('#btnSubmitSelectedStudents').on('click', function() {
-                var mode = $('input[name="modal_student_mode"]:checked').val();
-                $('#inputStudentModeSelected').val(mode);
-                $('#inputConfirmPhraseSelectedStudents').val('DELETE');
-                $('#formStudentsDelete').submit();
-            });
+            if (studentsManager) {
+                $('#btnDeleteSelectedStudents').on('click', function() {
+                    var count = studentsManager.getCheckedCount();
+                    $('#modalSelectedStudentsCount').text(count);
+                    $('#inputDeleteSelectedStudentConfirm').val('');
+                    $('#btnSubmitSelectedStudents').prop('disabled', true);
+                });
+                $('#inputDeleteSelectedStudentConfirm').on('input', function() {
+                    $('#btnSubmitSelectedStudents').prop('disabled', $(this).val().trim().toUpperCase() !== 'DELETE');
+                });
+                $('#btnSubmitSelectedStudents').on('click', function() {
+                    var mode = $('input[name="modal_student_mode"]:checked').val();
+                    $('#inputStudentModeSelected').val(mode);
+                    $('#inputConfirmPhraseSelectedStudents').val('DELETE');
+                    studentsManager.submitFormWithChecked('formStudentsDelete', 'student_ids[]');
+                });
+            }
             $('#inputDeleteAllStudentConfirm').on('input', function() {
                 $('#btnSubmitAllStudents').prop('disabled', $(this).val().trim().toUpperCase() !== 'DELETE');
             });
 
             // 4. Classes Tab
-            setupCheckAll('checkAllClasses', 'class-checkbox', 'countSelectedClasses', 'btnDeleteSelectedClasses');
-            $('#btnDeleteSelectedClasses').on('click', function() {
-                var checked = $('.class-checkbox:checked').length;
-                $('#modalSelectedClassesCount').text(checked);
-                $('#inputDeleteClassesConfirm').val('');
-                $('#btnSubmitDeleteClasses').prop('disabled', true);
+            var classesManager = initResetDataTable({
+                tableId: 'tableClasses',
+                masterCheckId: 'checkAllClasses',
+                itemClass: 'class-checkbox',
+                countBadgeId: 'countSelectedClasses',
+                actionBtnId: 'btnDeleteSelectedClasses'
+            });
+            if (classesManager) {
+                $('#btnDeleteSelectedClasses').on('click', function() {
+                    var count = classesManager.getCheckedCount();
+                    $('#modalSelectedClassesCount').text(count);
+                    $('#inputDeleteClassesConfirm').val('');
+                    $('#btnSubmitDeleteClasses').prop('disabled', true);
 
-                var hasStudents = false;
-                $('.class-checkbox:checked').each(function() {
-                    if (parseInt($(this).data('students'), 10) > 0) {
-                        hasStudents = true;
+                    var hasStudents = classesManager.hasAnyAttribute('students');
+                    if (hasStudents) {
+                        $('#alertClassesHaveStudents').removeClass('d-none');
+                    } else {
+                        $('#alertClassesHaveStudents').addClass('d-none');
                     }
                 });
-                if (hasStudents) {
-                    $('#alertClassesHaveStudents').removeClass('d-none');
-                } else {
-                    $('#alertClassesHaveStudents').addClass('d-none');
-                }
-            });
-            $('#inputDeleteClassesConfirm').on('input', function() {
-                $('#btnSubmitDeleteClasses').prop('disabled', $(this).val().trim().toUpperCase() !== 'DELETE');
-            });
-            $('#btnSubmitDeleteClasses').on('click', function() {
-                var unassign = $('#checkUnassignStudentsModal').is(':checked') ? '1' : '0';
-                $('#inputUnassignStudents').val(unassign);
-                $('#inputConfirmPhraseClasses').val('DELETE');
-                $('#formClassesDelete').submit();
-            });
+                $('#inputDeleteClassesConfirm').on('input', function() {
+                    $('#btnSubmitDeleteClasses').prop('disabled', $(this).val().trim().toUpperCase() !== 'DELETE');
+                });
+                $('#btnSubmitDeleteClasses').on('click', function() {
+                    var unassign = $('#checkUnassignStudentsModal').is(':checked') ? '1' : '0';
+                    $('#inputUnassignStudents').val(unassign);
+                    $('#inputConfirmPhraseClasses').val('DELETE');
+                    classesManager.submitFormWithChecked('formClassesDelete', 'class_ids[]');
+                });
+            }
 
             // 5. Subjects Tab
-            setupCheckAll('checkAllSubjects', 'subject-checkbox', 'countSelectedSubjects', 'btnDeleteSelectedSubjects');
-            $('#btnDeleteSelectedSubjects').on('click', function() {
-                var checked = $('.subject-checkbox:checked').length;
-                $('#modalSelectedSubjectsCount').text(checked);
-                $('#inputDeleteSubjectsConfirm').val('');
-                $('#btnSubmitDeleteSubjects').prop('disabled', true);
+            var subjectsManager = initResetDataTable({
+                tableId: 'tableSubjects',
+                masterCheckId: 'checkAllSubjects',
+                itemClass: 'subject-checkbox',
+                countBadgeId: 'countSelectedSubjects',
+                actionBtnId: 'btnDeleteSelectedSubjects'
             });
-            $('#inputDeleteSubjectsConfirm').on('input', function() {
-                $('#btnSubmitDeleteSubjects').prop('disabled', $(this).val().trim().toUpperCase() !== 'DELETE');
-            });
-            $('#btnSubmitDeleteSubjects').on('click', function() {
-                $('#inputConfirmPhraseSubjects').val('DELETE');
-                $('#formSubjectsDelete').submit();
-            });
+            if (subjectsManager) {
+                $('#btnDeleteSelectedSubjects').on('click', function() {
+                    var count = subjectsManager.getCheckedCount();
+                    $('#modalSelectedSubjectsCount').text(count);
+                    $('#inputDeleteSubjectsConfirm').val('');
+                    $('#btnSubmitDeleteSubjects').prop('disabled', true);
+                });
+                $('#inputDeleteSubjectsConfirm').on('input', function() {
+                    $('#btnSubmitDeleteSubjects').prop('disabled', $(this).val().trim().toUpperCase() !== 'DELETE');
+                });
+                $('#btnSubmitDeleteSubjects').on('click', function() {
+                    $('#inputConfirmPhraseSubjects').val('DELETE');
+                    subjectsManager.submitFormWithChecked('formSubjectsDelete', 'subject_ids[]');
+                });
+            }
 
             // 6. Bulk Allocate Tab
-            setupCheckAll('checkAllBulkStudents', 'bulk-student-checkbox', null, null);
-            $('#btnRunBulkAllocation').on('click', function() {
-                var checked = $('.bulk-student-checkbox:checked').length;
-                $('#modalBulkStudentCount').text(checked);
+            var bulkAllocateManager = initResetDataTable({
+                tableId: 'tableBulkAllocate',
+                masterCheckId: 'checkAllBulkStudents',
+                itemClass: 'bulk-student-checkbox',
+                countBadgeId: null,
+                actionBtnId: null
             });
-            $('#btnConfirmBulkAllocation').on('click', function() {
-                var fsId = $('#modalSelectFeeStructure').val();
-                $('#inputBulkFeeStructureId').val(fsId);
-                $('#formBulkAllocate').submit();
-            });
+            if (bulkAllocateManager) {
+                $('#btnRunBulkAllocation').on('click', function() {
+                    var count = bulkAllocateManager.getCheckedCount();
+                    $('#modalBulkStudentCount').text(count);
+                });
+                $('#btnConfirmBulkAllocation').on('click', function() {
+                    var fsId = $('#modalSelectFeeStructure').val();
+                    $('#inputBulkFeeStructureId').val(fsId);
+                    bulkAllocateManager.submitFormWithChecked('formBulkAllocate', 'student_ids[]');
+                });
+            }
         });
     </script>
 </body>
