@@ -42,6 +42,22 @@ $termsList = schema_has_table('terms')
         ['id' => 3, 'term_name' => 'Third Term', 'is_active' => 0],
     ];
 
+$feeStructuresList = schema_has_table('fee_structures')
+    ? QueryDB("SELECT id, name, fee_type, amount, class_id FROM fee_structures WHERE is_active = 1 ORDER BY fee_type ASC, name ASC")->fetchAll(PDO::FETCH_ASSOC)
+    : [];
+
+$feeTypeEnumOptions = [
+    'tuition' => 'Tuition / School Fees',
+    'uniform' => 'Uniform Fee',
+    'transport' => 'Transport / Bus Fee',
+    'exam' => 'Examination Fee',
+    'registration' => 'Registration Fee',
+    'library' => 'Library / Books Fee',
+    'sports' => 'Sports Fee',
+    'laboratory' => 'Laboratory / Science Fee',
+    'other' => 'Other Charges / Miscellaneous',
+];
+
 // Handle Sample CSV Downloads
 if (isset($_GET['download_sample']) && $_GET['download_sample'] === 'payment_csv') {
     if (ob_get_level()) { ob_end_clean(); }
@@ -79,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
     $balFile = $_FILES['balance_csv_file'] ?? $_FILES['csv_file'] ?? null;
     $targetSessionId = filter_input(INPUT_POST, 'session_id', FILTER_VALIDATE_INT) ?: (int) ($sessionsList[0]['id'] ?? 2);
     $targetTermId = filter_input(INPUT_POST, 'term_id', FILTER_VALIDATE_INT) ?: 1;
+    $targetFeeType = trim((string) ($_POST['fee_type'] ?? 'tuition')) ?: 'tuition';
     $paymentMethod = trim((string) ($_POST['payment_method'] ?? 'bank_transfer')) ?: 'bank_transfer';
     $paymentDate = trim((string) ($_POST['payment_date'] ?? date('Y-m-d'))) ?: date('Y-m-d');
 
@@ -200,31 +217,124 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
             try {
                 \Illuminate\Support\Facades\DB::beginTransaction();
 
-                $studentFee = \App\Models\StudentFee::where('student_id', $student->id)
-                    ->where('session_id', $targetSessionId)
-                    ->where(function($q) use ($targetTermId) {
-                        $q->where('term_id', $targetTermId)->orWhereNull('term_id');
-                    })
-                    ->orderByDesc('id')
-                    ->first();
+                $isSpecificStructure = str_starts_with($targetFeeType, 'structure:') || (is_numeric($targetFeeType) && (int)$targetFeeType > 0);
+                $specificStructureId = $isSpecificStructure ? (int) str_replace('structure:', '', $targetFeeType) : null;
+                $studentFee = null;
 
-                if (!$studentFee) {
-                    $studentFee = \App\Services\FeeAllocationService::allocateFeeForStudent($student, $targetSessionId, $targetTermId);
+                if ($specificStructureId) {
+                    $studentFee = \App\Models\StudentFee::where('student_id', $student->id)
+                        ->where('fee_structure_id', $specificStructureId)
+                        ->where(function($q) use ($targetSessionId) {
+                            if ($targetSessionId) {
+                                $q->where('session_id', $targetSessionId)->orWhereNull('session_id');
+                            }
+                        })
+                        ->orderByDesc('id')
+                        ->first();
+
+                    if (!$studentFee) {
+                        $studentFee = \App\Services\FeeAllocationService::allocateSpecificFeeForStudent($student, $specificStructureId, $targetSessionId, $targetTermId);
+                    }
+                } else {
+                    // Match by fee_type in student's allocated fees for this session/term
+                    $studentFee = \App\Models\StudentFee::where('student_id', $student->id)
+                        ->where(function($q) use ($targetSessionId) {
+                            if ($targetSessionId) {
+                                $q->where('session_id', $targetSessionId)->orWhereNull('session_id');
+                            }
+                        })
+                        ->where(function($q) use ($targetTermId) {
+                            if ($targetTermId) {
+                                $q->where('term_id', $targetTermId)->orWhereNull('term_id');
+                            }
+                        })
+                        ->whereHas('feeStructure', function($q) use ($targetFeeType) {
+                            $q->where('fee_type', $targetFeeType);
+                        })
+                        ->orderByDesc('id')
+                        ->first();
+
+                    if (!$studentFee) {
+                        // Check if any student fee exists for this fee_type regardless of session/term
+                        $studentFee = \App\Models\StudentFee::where('student_id', $student->id)
+                            ->whereHas('feeStructure', function($q) use ($targetFeeType) {
+                                $q->where('fee_type', $targetFeeType);
+                            })
+                            ->orderByDesc('id')
+                            ->first();
+                    }
+
+                    if (!$studentFee) {
+                        // Find matching fee structure by class, category, gender
+                        $category = in_array(strtoupper((string) $student->category), ['NI', 'NEW_INTAKE', 'NEW']) ? 'NI' : 'OS';
+                        $gender = strtoupper(substr((string) $student->gender, 0, 1));
+                        if (!in_array($gender, ['M', 'F'])) $gender = 'M';
+
+                        $candidates = \App\Models\FeeStructure::where('fee_type', $targetFeeType)
+                            ->where('is_active', true)
+                            ->where(function($q) use ($targetSessionId) {
+                                if ($targetSessionId) {
+                                    $q->where('session_id', $targetSessionId)->orWhereNull('session_id');
+                                }
+                            })
+                            ->get();
+
+                        $matchedFs = null;
+                        if ($candidates->isNotEmpty()) {
+                            $matchedFs = $candidates->sortByDesc(function($s) use ($student, $gender, $category, $targetTermId) {
+                                $score = 0;
+                                if ($student->current_class_id && $s->class_id == $student->current_class_id) $score += 20;
+                                if ($s->category === $category) $score += 10;
+                                if ($s->gender === $gender || $s->gender === 'All') $score += 5;
+                                if ($targetTermId && $s->term_id == $targetTermId) $score += 5;
+                                return $score;
+                            })->first();
+                        }
+
+                        if (!$matchedFs) {
+                            $matchedFs = \App\Models\FeeStructure::where('fee_type', $targetFeeType)->where('is_active', true)->first();
+                        }
+
+                        if ($matchedFs) {
+                            $studentFee = \App\Services\FeeAllocationService::allocateSpecificFeeForStudent($student, $matchedFs->id, $targetSessionId, $targetTermId);
+                        } elseif ($targetFeeType === 'tuition') {
+                            $studentFee = \App\Services\FeeAllocationService::allocateFeeForStudent($student, $targetSessionId, $targetTermId);
+                        }
+                    }
                 }
 
                 if (!$studentFee) {
-                    $studentFee = \App\Models\StudentFee::where('student_id', $student->id)->orderByDesc('id')->first();
+                    $typeLabel = ucwords(str_replace('_', ' ', $targetFeeType));
+                    $fs = \App\Models\FeeStructure::where('fee_type', $targetFeeType)->first();
+                    if (!$fs && in_array($targetFeeType, ['tuition', 'registration', 'transport', 'library', 'sports', 'laboratory', 'uniform', 'exam', 'other'], true)) {
+                        $fs = \App\Models\FeeStructure::create([
+                            'name' => $typeLabel . ' Fee',
+                            'description' => "Standard {$typeLabel} Fee",
+                            'fee_type' => $targetFeeType,
+                            'amount' => 59500.00,
+                            'frequency' => 'annual',
+                            'effective_from' => now()->toDateString(),
+                            'session_id' => $targetSessionId,
+                            'term_id' => $targetTermId,
+                            'category' => in_array(strtoupper((string) $student->category), ['NI', 'NEW_INTAKE', 'NEW']) ? 'NI' : 'OS',
+                            'gender' => 'All',
+                            'is_mandatory' => true,
+                            'is_active' => true,
+                        ]);
+                    }
+                    if ($fs) {
+                        $studentFee = \App\Services\FeeAllocationService::allocateSpecificFeeForStudent($student, $fs->id, $targetSessionId, $targetTermId);
+                    }
                 }
 
                 if (!$studentFee) {
-                    $fs = \App\Models\FeeStructure::where('session_id', $targetSessionId)->where('is_active', true)->first()
-                        ?: \App\Models\FeeStructure::where('is_active', true)->first();
-                    $baseAmt = $fs ? (float) $fs->amount : 59500.00;
+                    $typeLabel = ucwords(str_replace('_', ' ', $targetFeeType));
+                    $baseAmt = 59500.00;
                     $studentFee = \App\Models\StudentFee::create([
                         'student_id' => $student->id,
                         'session_id' => $targetSessionId,
                         'term_id' => $targetTermId,
-                        'fee_structure_id' => $fs ? $fs->id : null,
+                        'fee_structure_id' => null,
                         'base_amount' => $baseAmt,
                         'additional_amount' => 0.00,
                         'total_payable' => $baseAmt,
@@ -234,11 +344,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
                         'balance' => $baseAmt,
                         'due_date' => now()->addDays(30),
                         'status' => 'unpaid',
-                        'notes' => 'Auto-allocated fee for balance import',
+                        'notes' => "Auto-allocated {$typeLabel} fee for balance import",
                     ]);
                 }
 
+                if ((float)$studentFee->base_amount <= 0.001) {
+                    if ($studentFee->feeStructure && (float)$studentFee->feeStructure->amount > 0) {
+                        $studentFee->base_amount = (float)$studentFee->feeStructure->amount;
+                        $studentFee->total_payable = (float)$studentFee->base_amount + (float)$studentFee->additional_amount;
+                        $studentFee->save();
+                    }
+                }
+
                 $allocatedBefore = (float) $studentFee->total_payable;
+                $feeDisplayName = $studentFee->feeStructure->name ?? (ucwords(str_replace('_', ' ', $targetFeeType)) . ' Fee');
 
                 $payRef = 'PAY-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(6));
                 while (\App\Models\Payment::where('payment_reference', $payRef)->exists()) {
@@ -256,7 +375,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
                     'payment_date' => $paymentDate,
                     'payer_name' => $studentName,
                     'payer_phone' => $student->parent_phone ?? $student->phone ?? null,
-                    'description' => "Actual balance payment import - Fee deduction for " . ($studentFee->feeStructure->name ?? 'School Fees'),
+                    'description' => "Actual balance payment import - Fee deduction for " . $feeDisplayName,
                     'status' => 'completed',
                 ]);
 
@@ -277,7 +396,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
                     'amount_paid' => $cleanPaid,
                     'issued_date' => $paymentDate,
                     'issued_by' => $issuedBy,
-                    'notes' => "Allocated Fee: ₦" . number_format($allocatedBefore, 2) . " | Deducted Paid: ₦" . number_format($cleanPaid, 2) . " | Remaining Balance: ₦" . number_format($studentFee->balance, 2),
+                    'notes' => "Fee: {$feeDisplayName} | Allocated Fee: ₦" . number_format($allocatedBefore, 2) . " | Deducted Paid: ₦" . number_format($cleanPaid, 2) . " | Remaining Balance: ₦" . number_format($studentFee->balance, 2),
                 ]);
 
                 \App\Models\FinancialAuditLog::logAction('imported_actual_balance', $payment, [], [
@@ -299,6 +418,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
                     'student_name' => $studentName,
                     'admission_no' => $student->admission_no ?? $student->student_number ?? 'N/A',
                     'class_name' => $student->schoolClass ? ($student->schoolClass->class_name . ' ' . ($student->schoolClass->section ?? '')) : 'N/A',
+                    'fee_name' => $feeDisplayName,
                     'allocated_fee' => $allocatedBefore,
                     'paid_amount' => $cleanPaid,
                     'balance_remaining' => (float) $studentFee->balance,
@@ -330,7 +450,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['import_actual_balanc
             'records' => $bImportedRows,
             'failed_records' => $bFailedRows,
         ];
-        $bSuccessMsg = "Imported {$bSuccess} actual balance payment(s) successfully totaling ₦" . number_format($bTotalPaid, 2) . " with official receipts generated.";
+        $displayFeeLabel = $isSpecificStructure
+            ? ($studentFee && $studentFee->feeStructure ? $studentFee->feeStructure->name : 'Selected Fee Structure')
+            : (ucwords(str_replace('_', ' ', $targetFeeType)) . ' Fee');
+        $bSuccessMsg = "Imported {$bSuccess} actual balance payment(s) for [{$displayFeeLabel}] successfully totaling ₦" . number_format($bTotalPaid, 2) . " with official receipts generated.";
         if ($bIgnoredCount > 0) {
             $bSuccessMsg .= " ({$bIgnoredCount} student(s) with ₦0 or blank were ignored as no payment was made).";
         }
@@ -658,6 +781,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                                                             <th>Student Name</th>
                                                             <th>Admission No</th>
                                                             <th>Class</th>
+                                                            <th>Fee Type / Structure</th>
                                                             <th>Allocated Fee (₦)</th>
                                                             <th>Paid (Deducted) (₦)</th>
                                                             <th>Remaining Balance (₦)</th>
@@ -673,6 +797,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                                                                 <td><strong>{{ $rec['student_name'] }}</strong></td>
                                                                 <td><code>{{ $rec['admission_no'] }}</code></td>
                                                                 <td>{{ $rec['class_name'] }}</td>
+                                                                <td><span class="badge bg-light text-dark border"><i class="fas fa-tag me-1 text-primary"></i> {{ $rec['fee_name'] ?? 'School Fees' }}</span></td>
                                                                 <td class="text-primary font-weight-bold">₦{{ number_format((float)$rec['allocated_fee'], 2) }}</td>
                                                                 <td class="text-success font-weight-bold">- ₦{{ number_format((float)$rec['paid_amount'], 2) }}</td>
                                                                 <td class="text-danger font-weight-bold">₦{{ number_format((float)$rec['balance_remaining'], 2) }}</td>
@@ -846,6 +971,33 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                                         </div>
 
                                         <div class="row mb-3">
+                                            <div class="col-md-12">
+                                                <div class="form-group">
+                                                    <label for="bal_fee_type" class="form-label font-weight-bold">Fee Type to Import / Deduct <span class="text-danger">*</span></label>
+                                                    <select name="fee_type" id="bal_fee_type" class="form-control" required>
+                                                        <optgroup label="Standard Fee Types">
+                                                            <?php foreach ($feeTypeEnumOptions as $ftKey => $ftLabel): ?>
+                                                                <option value="<?php echo htmlspecialchars($ftKey); ?>" <?php echo $ftKey === 'tuition' ? 'selected' : ''; ?>>
+                                                                    <?php echo htmlspecialchars($ftLabel); ?>
+                                                                </option>
+                                                            <?php endforeach; ?>
+                                                        </optgroup>
+                                                        <?php if (!empty($feeStructuresList)): ?>
+                                                        <optgroup label="Specific Fee Structures">
+                                                            <?php foreach ($feeStructuresList as $fs): ?>
+                                                                <option value="structure:<?php echo $fs['id']; ?>">
+                                                                    <?php echo htmlspecialchars($fs['name']); ?> (₦<?php echo number_format($fs['amount'], 2); ?> &mdash; <?php echo ucfirst($fs['fee_type']); ?>)
+                                                                </option>
+                                                            <?php endforeach; ?>
+                                                        </optgroup>
+                                                        <?php endif; ?>
+                                                    </select>
+                                                    <small class="text-muted"><i class="fas fa-info-circle me-1"></i> Payments in this CSV will be deducted specifically from each student's selected fee allocation.</small>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row mb-3">
                                             <div class="col-md-6">
                                                 <div class="form-group">
                                                     <label for="bal_payment_method" class="form-label font-weight-bold">Payment Method</label>
@@ -977,6 +1129,31 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
+                                    </div>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <label for="modal_fee_type" class="form-label font-weight-bold">Fee Type to Import / Deduct <span class="text-danger">*</span></label>
+                                        <select name="fee_type" id="modal_fee_type" class="form-control" required>
+                                            <optgroup label="Standard Fee Types">
+                                                <?php foreach ($feeTypeEnumOptions as $ftKey => $ftLabel): ?>
+                                                    <option value="<?php echo htmlspecialchars($ftKey); ?>" <?php echo $ftKey === 'tuition' ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($ftLabel); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </optgroup>
+                                            <?php if (!empty($feeStructuresList)): ?>
+                                            <optgroup label="Specific Fee Structures">
+                                                <?php foreach ($feeStructuresList as $fs): ?>
+                                                    <option value="structure:<?php echo $fs['id']; ?>">
+                                                        <?php echo htmlspecialchars($fs['name']); ?> (₦<?php echo number_format($fs['amount'], 2); ?> &mdash; <?php echo ucfirst($fs['fee_type']); ?>)
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </optgroup>
+                                            <?php endif; ?>
+                                        </select>
+                                        <small class="text-muted"><i class="fas fa-info-circle me-1"></i> Payments in this CSV will be deducted specifically from each student's selected fee allocation.</small>
                                     </div>
                                 </div>
 

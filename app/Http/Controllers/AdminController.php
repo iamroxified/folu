@@ -537,6 +537,7 @@ class AdminController extends Controller
             'csv_file' => 'required|file',
             'session_id' => 'nullable|integer',
             'term_id' => 'nullable|integer',
+            'fee_type' => 'nullable|string',
             'payment_method' => 'nullable|string',
             'payment_date' => 'nullable|date',
         ]);
@@ -547,6 +548,7 @@ class AdminController extends Controller
         $activeSession = AcademicSession::where('is_active', true)->first();
         $sessionId = (int) ($request->session_id ?: ($activeSession ? $activeSession->id : 2));
         $termId = (int) ($request->term_id ?: 1);
+        $targetFeeType = trim((string) ($request->input('fee_type') ?? 'tuition')) ?: 'tuition';
         $paymentMethod = $request->payment_method ?: 'bank_transfer';
         $paymentDate = $request->payment_date ?: now()->toDateString();
 
@@ -670,31 +672,124 @@ class AdminController extends Controller
             try {
                 DB::beginTransaction();
 
-                $studentFee = StudentFee::where('student_id', $student->id)
-                    ->where('session_id', $sessionId)
-                    ->where(function($q) use ($termId) {
-                        $q->where('term_id', $termId)->orWhereNull('term_id');
-                    })
-                    ->orderByDesc('id')
-                    ->first();
+                $isSpecificStructure = str_starts_with($targetFeeType, 'structure:') || (is_numeric($targetFeeType) && (int)$targetFeeType > 0);
+                $specificStructureId = $isSpecificStructure ? (int) str_replace('structure:', '', $targetFeeType) : null;
+                $studentFee = null;
 
-                if (!$studentFee) {
-                    $studentFee = FeeAllocationService::allocateFeeForStudent($student, $sessionId, $termId);
+                if ($specificStructureId) {
+                    $studentFee = StudentFee::where('student_id', $student->id)
+                        ->where('fee_structure_id', $specificStructureId)
+                        ->where(function($q) use ($sessionId) {
+                            if ($sessionId) {
+                                $q->where('session_id', $sessionId)->orWhereNull('session_id');
+                            }
+                        })
+                        ->orderByDesc('id')
+                        ->first();
+
+                    if (!$studentFee) {
+                        $studentFee = FeeAllocationService::allocateSpecificFeeForStudent($student, $specificStructureId, $sessionId, $termId);
+                    }
+                } else {
+                    // Match by fee_type in student's allocated fees for this session/term
+                    $studentFee = StudentFee::where('student_id', $student->id)
+                        ->where(function($q) use ($sessionId) {
+                            if ($sessionId) {
+                                $q->where('session_id', $sessionId)->orWhereNull('session_id');
+                            }
+                        })
+                        ->where(function($q) use ($termId) {
+                            if ($termId) {
+                                $q->where('term_id', $termId)->orWhereNull('term_id');
+                            }
+                        })
+                        ->whereHas('feeStructure', function($q) use ($targetFeeType) {
+                            $q->where('fee_type', $targetFeeType);
+                        })
+                        ->orderByDesc('id')
+                        ->first();
+
+                    if (!$studentFee) {
+                        // Check if any student fee exists for this fee_type regardless of session/term
+                        $studentFee = StudentFee::where('student_id', $student->id)
+                            ->whereHas('feeStructure', function($q) use ($targetFeeType) {
+                                $q->where('fee_type', $targetFeeType);
+                            })
+                            ->orderByDesc('id')
+                            ->first();
+                    }
+
+                    if (!$studentFee) {
+                        // Find matching fee structure by class, category, gender
+                        $category = in_array(strtoupper((string) $student->category), ['NI', 'NEW_INTAKE', 'NEW']) ? 'NI' : 'OS';
+                        $gender = strtoupper(substr((string) $student->gender, 0, 1));
+                        if (!in_array($gender, ['M', 'F'])) $gender = 'M';
+
+                        $candidates = FeeStructure::where('fee_type', $targetFeeType)
+                            ->where('is_active', true)
+                            ->where(function($q) use ($sessionId) {
+                                if ($sessionId) {
+                                    $q->where('session_id', $sessionId)->orWhereNull('session_id');
+                                }
+                            })
+                            ->get();
+
+                        $matchedFs = null;
+                        if ($candidates->isNotEmpty()) {
+                            $matchedFs = $candidates->sortByDesc(function($s) use ($student, $gender, $category, $termId) {
+                                $score = 0;
+                                if ($student->current_class_id && $s->class_id == $student->current_class_id) $score += 20;
+                                if ($s->category === $category) $score += 10;
+                                if ($s->gender === $gender || $s->gender === 'All') $score += 5;
+                                if ($termId && $s->term_id == $termId) $score += 5;
+                                return $score;
+                            })->first();
+                        }
+
+                        if (!$matchedFs) {
+                            $matchedFs = FeeStructure::where('fee_type', $targetFeeType)->where('is_active', true)->first();
+                        }
+
+                        if ($matchedFs) {
+                            $studentFee = FeeAllocationService::allocateSpecificFeeForStudent($student, $matchedFs->id, $sessionId, $termId);
+                        } elseif ($targetFeeType === 'tuition') {
+                            $studentFee = FeeAllocationService::allocateFeeForStudent($student, $sessionId, $termId);
+                        }
+                    }
                 }
 
                 if (!$studentFee) {
-                    $studentFee = StudentFee::where('student_id', $student->id)->orderByDesc('id')->first();
+                    $typeLabel = ucwords(str_replace('_', ' ', $targetFeeType));
+                    $fs = FeeStructure::where('fee_type', $targetFeeType)->first();
+                    if (!$fs && in_array($targetFeeType, ['tuition', 'registration', 'transport', 'library', 'sports', 'laboratory', 'uniform', 'exam', 'other'], true)) {
+                        $fs = FeeStructure::create([
+                            'name' => $typeLabel . ' Fee',
+                            'description' => "Standard {$typeLabel} Fee",
+                            'fee_type' => $targetFeeType,
+                            'amount' => 59500.00,
+                            'frequency' => 'annual',
+                            'effective_from' => now()->toDateString(),
+                            'session_id' => $sessionId,
+                            'term_id' => $termId,
+                            'category' => in_array(strtoupper((string) $student->category), ['NI', 'NEW_INTAKE', 'NEW']) ? 'NI' : 'OS',
+                            'gender' => 'All',
+                            'is_mandatory' => true,
+                            'is_active' => true,
+                        ]);
+                    }
+                    if ($fs) {
+                        $studentFee = FeeAllocationService::allocateSpecificFeeForStudent($student, $fs->id, $sessionId, $termId);
+                    }
                 }
 
                 if (!$studentFee) {
-                    $fs = FeeStructure::where('session_id', $sessionId)->where('is_active', true)->first()
-                        ?: FeeStructure::where('is_active', true)->first();
-                    $baseAmt = $fs ? (float) $fs->amount : 59500.00;
+                    $typeLabel = ucwords(str_replace('_', ' ', $targetFeeType));
+                    $baseAmt = 59500.00;
                     $studentFee = StudentFee::create([
                         'student_id' => $student->id,
                         'session_id' => $sessionId,
                         'term_id' => $termId,
-                        'fee_structure_id' => $fs ? $fs->id : null,
+                        'fee_structure_id' => null,
                         'base_amount' => $baseAmt,
                         'additional_amount' => 0.00,
                         'total_payable' => $baseAmt,
@@ -704,11 +799,20 @@ class AdminController extends Controller
                         'balance' => $baseAmt,
                         'due_date' => now()->addDays(30),
                         'status' => 'unpaid',
-                        'notes' => 'Auto-allocated fee for balance import',
+                        'notes' => "Auto-allocated {$typeLabel} fee for balance import",
                     ]);
                 }
 
+                if ((float)$studentFee->base_amount <= 0.001) {
+                    if ($studentFee->feeStructure && (float)$studentFee->feeStructure->amount > 0) {
+                        $studentFee->base_amount = (float)$studentFee->feeStructure->amount;
+                        $studentFee->total_payable = (float)$studentFee->base_amount + (float)$studentFee->additional_amount;
+                        $studentFee->save();
+                    }
+                }
+
                 $allocatedBefore = (float) $studentFee->total_payable;
+                $feeDisplayName = $studentFee->feeStructure->name ?? (ucwords(str_replace('_', ' ', $targetFeeType)) . ' Fee');
 
                 $payRef = 'PAY-' . date('Ymd') . '-' . strtoupper(Str::random(6));
                 while (Payment::where('payment_reference', $payRef)->exists()) {
@@ -726,7 +830,7 @@ class AdminController extends Controller
                     'payment_date' => $paymentDate,
                     'payer_name' => $studentName,
                     'payer_phone' => $student->parent_phone ?? $student->phone ?? null,
-                    'description' => "Actual balance payment import - Fee deduction for " . ($studentFee->feeStructure->name ?? 'School Fees'),
+                    'description' => "Actual balance payment import - Fee deduction for " . $feeDisplayName,
                     'status' => 'completed',
                 ]);
 
@@ -747,7 +851,7 @@ class AdminController extends Controller
                     'amount_paid' => $cleanPaid,
                     'issued_date' => $paymentDate,
                     'issued_by' => $issuedBy,
-                    'notes' => "Allocated Fee: ₦" . number_format($allocatedBefore, 2) . " | Deducted Paid: ₦" . number_format($cleanPaid, 2) . " | Remaining Balance: ₦" . number_format($studentFee->balance, 2),
+                    'notes' => "Fee: {$feeDisplayName} | Allocated Fee: ₦" . number_format($allocatedBefore, 2) . " | Deducted Paid: ₦" . number_format($cleanPaid, 2) . " | Remaining Balance: ₦" . number_format($studentFee->balance, 2),
                 ]);
 
                 FinancialAuditLog::logAction('imported_actual_balance', $payment, [], [
@@ -769,6 +873,7 @@ class AdminController extends Controller
                     'student_name' => $studentName,
                     'admission_no' => $student->admission_no ?? $student->student_number ?? 'N/A',
                     'class_name' => $student->schoolClass ? ($student->schoolClass->class_name . ' ' . ($student->schoolClass->section ?? '')) : 'N/A',
+                    'fee_name' => $feeDisplayName,
                     'allocated_fee' => $allocatedBefore,
                     'paid_amount' => $cleanPaid,
                     'balance_remaining' => (float) $studentFee->balance,
@@ -803,7 +908,10 @@ class AdminController extends Controller
 
         session(['balance_import_summary' => $summary]);
 
-        $successMsg = "Imported {$successCount} actual balance payment(s) successfully totaling ₦" . number_format($totalPaidAmount, 2) . " with official receipts generated.";
+        $displayFeeLabel = $isSpecificStructure
+            ? ($studentFee && $studentFee->feeStructure ? $studentFee->feeStructure->name : 'Selected Fee Structure')
+            : (ucwords(str_replace('_', ' ', $targetFeeType)) . ' Fee');
+        $successMsg = "Imported {$successCount} actual balance payment(s) for [{$displayFeeLabel}] successfully totaling ₦" . number_format($totalPaidAmount, 2) . " with official receipts generated.";
         if ($ignoredCount > 0) {
             $successMsg .= " ({$ignoredCount} student(s) with ₦0 or blank were ignored as no payment was made).";
         }
