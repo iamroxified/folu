@@ -1201,8 +1201,8 @@
                             <div class="card-body p-0">
                                 <form id="formBulkAllocate" method="POST" action="{{ route('admin.reset.bulk_allocate') }}">
                                     @csrf
-                                    <input type="hidden" name="session_id" value="{{ $sessionId }}">
-                                    <input type="hidden" name="term_id" value="{{ $termId }}">
+                                    <input type="hidden" name="session_id" value="{{ $sessionId > 0 ? $sessionId : ($tabData['target_session_id'] ?? ($sessions->first()->id ?? 1)) }}">
+                                    <input type="hidden" name="term_id" value="{{ $termId > 0 ? $termId : ($tabData['target_term_id'] ?? ($terms->first()->id ?? 1)) }}">
                                     <input type="hidden" name="class_id" value="{{ $classId }}">
                                     <input type="hidden" name="fee_structure_id" id="inputBulkFeeStructureId" value="0">
 

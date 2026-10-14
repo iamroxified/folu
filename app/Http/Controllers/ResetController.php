@@ -44,8 +44,9 @@ class ResetController extends Controller
         $activeSession = AcademicSession::where('is_active', true)->first() ?: AcademicSession::first();
         $activeTerm = Term::where('is_active', true)->first() ?: Term::first();
 
-        $sessionId = $request->has('session_id') ? (int) $request->session_id : ($activeSession ? (int) $activeSession->id : 0);
-        $termId = $request->has('term_id') ? (int) $request->term_id : ($activeTerm ? (int) $activeTerm->id : 0);
+        // Default session & term filter to 0 (All Sessions & All Terms) so no database records are hidden by default
+        $sessionId = (int) $request->get('session_id', 0);
+        $termId = (int) $request->get('term_id', 0);
         $classId = (int) $request->get('class_id', 0);
         $feeStructureId = (int) $request->get('fee_structure_id', 0);
 
@@ -286,9 +287,12 @@ class ResetController extends Controller
 
         // Tab: Bulk Allocate Preview
         if ($activeTab === 'bulk_allocate') {
-            $bulkQuery = Student::with(['currentClass', 'studentFees' => function ($q) use ($sessionId, $termId) {
-                if ($sessionId > 0) $q->where('session_id', $sessionId);
-                if ($termId > 0) $q->where('term_id', $termId);
+            $targetSessionId = $sessionId > 0 ? $sessionId : ($activeSession ? (int) $activeSession->id : 1);
+            $targetTermId = $termId > 0 ? $termId : ($activeTerm ? (int) $activeTerm->id : 1);
+
+            $bulkQuery = Student::with(['currentClass', 'studentFees' => function ($q) use ($targetSessionId, $targetTermId) {
+                if ($targetSessionId > 0) $q->where('session_id', $targetSessionId);
+                if ($targetTermId > 0) $q->where('term_id', $targetTermId);
             }]);
 
             if ($classId > 0) {
@@ -309,6 +313,8 @@ class ResetController extends Controller
             $tabData['count'] = $bulkStudents->count();
             $tabData['allocated_count'] = $bulkStudents->filter(fn ($s) => $s->studentFees->isNotEmpty())->count();
             $tabData['pending_count'] = $bulkStudents->filter(fn ($s) => $s->studentFees->isEmpty())->count();
+            $tabData['target_session_id'] = $targetSessionId;
+            $tabData['target_term_id'] = $targetTermId;
         }
 
         return view('admin.reset.index', compact(
