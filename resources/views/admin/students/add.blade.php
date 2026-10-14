@@ -141,12 +141,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            $admission_no = generate_student_admission_no();
-            $student_number = schema_has_column('students', 'student_number') ? generate_student_id() : $admission_no;
+            $admission_no = generate_student_admission_no($class_link);
+            $student_number = schema_has_column('students', 'student_number') ? generate_student_id($class_link) : $admission_no;
             $display_name = trim($first_name . ' ' . $last_name . ' ' . $other_names);
 
             $username = $admission_no;
-            $email = $student_email !== '' ? $student_email : strtolower(str_replace('/', '.', $admission_no)) . '@student.fimocol.edu.ng';
+            $defaultEmail = function_exists('generate_student_school_email') ? generate_student_school_email($first_name, $last_name) : strtolower(str_replace('/', '.', $admission_no)) . '@foluinternationalschools.com.ng';
+            $email = $student_email !== '' ? $student_email : $defaultEmail;
             $password = password_hash('password', PASSWORD_DEFAULT); // Default password
             $roleId = get_role_id_by_name('student') ?? 4;
 

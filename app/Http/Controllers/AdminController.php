@@ -108,7 +108,13 @@ class AdminController extends Controller
             $data['passport'] = $request->file('passport')->store('passports', 'public');
         }
 
-        $data['student_number'] = 'STU' . str_pad(Student::count() + 1, 4, '0', STR_PAD_LEFT);
+        $cid = $request->current_class_id ?? $request->class_id ?? $request->class_link;
+        if (empty($data['admission_no'])) {
+            $data['admission_no'] = generate_student_admission_no($cid);
+        }
+        if (empty($data['student_number'])) {
+            $data['student_number'] = $data['admission_no'];
+        }
         $data['enrollment_date'] = now();
 
         $student = Student::create($data);
@@ -448,7 +454,7 @@ class AdminController extends Controller
             }
 
             try {
-                $admissionNo = !empty($studentId) ? $studentId : generate_student_admission_no();
+                $admissionNo = !empty($studentId) ? $studentId : generate_student_admission_no($classObj ? $classObj->id : null);
                 $email = generate_student_school_email($firstName, $lastName);
 
                 $user = User::create([

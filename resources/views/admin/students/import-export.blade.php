@@ -109,8 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 // Auto-generate school email using @foluinternationalschools.com.ng
                 $studentEmail = generate_student_school_email($firstName, $lastName);
 
-                $admissionNo = generate_student_admission_no();
-                $studentNumber = schema_has_column('students', 'student_number') ? generate_student_id() : $admissionNo;
+                $admissionNo = generate_student_admission_no($selectedClassId);
+                $studentNumber = schema_has_column('students', 'student_number') ? generate_student_id($selectedClassId) : $admissionNo;
                 $displayName = trim("{$lastName} {$firstName} {$otherNames}");
 
                 // Create user in users table for authentication

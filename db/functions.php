@@ -206,7 +206,98 @@ function ausername($user_id) {
 }
 
 
-function generate_student_admission_no() {
+/**
+ * Determine school section code: 'P' for Primary/Early Years or 'S' for Secondary
+ *
+ * @param mixed $classIdentifier (class ID, class name string, or section name)
+ * @return string ('P' or 'S')
+ */
+function resolve_school_section_code($classIdentifier = null): string {
+    if (empty($classIdentifier)) {
+        if (!empty($_POST['class_link'])) {
+            $classIdentifier = $_POST['class_link'];
+        } elseif (!empty($_POST['current_class_id'])) {
+            $classIdentifier = $_POST['current_class_id'];
+        } elseif (!empty($_POST['class_id'])) {
+            $classIdentifier = $_POST['class_id'];
+        } elseif (function_exists('request')) {
+            $classIdentifier = request('class_link') ?? request('current_class_id') ?? request('class_id') ?? request('class');
+        }
+    }
+
+    if (empty($classIdentifier)) {
+        return 'S';
+    }
+
+    $className = '';
+    $gradeLevel = '';
+
+    if (is_numeric($classIdentifier)) {
+        $cid = (int) $classIdentifier;
+        if (class_exists('\Illuminate\Support\Facades\DB')) {
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('school_classes')) {
+                    $row = \Illuminate\Support\Facades\DB::table('school_classes')->where('id', $cid)->first();
+                    if ($row) {
+                        $className = (string) ($row->class_name ?? '');
+                        $gradeLevel = (string) ($row->grade_level ?? '');
+                    }
+                }
+                if ($className === '' && \Illuminate\Support\Facades\Schema::hasTable('classes')) {
+                    $row = \Illuminate\Support\Facades\DB::table('classes')->where('id', $cid)->first();
+                    if ($row) {
+                        $className = (string) ($row->class_name ?? '');
+                        $gradeLevel = (string) ($row->class_level ?? '');
+                    }
+                }
+            } catch (\Throwable $e) {}
+        }
+        if ($className === '' && function_exists('QueryDB')) {
+            try {
+                $row = QueryDB("SELECT class_name, section, grade_level FROM school_classes WHERE id = ? LIMIT 1", [$cid])->fetch(PDO::FETCH_ASSOC);
+                if ($row) {
+                    $className = (string) ($row['class_name'] ?? '');
+                    $gradeLevel = (string) ($row['grade_level'] ?? '');
+                }
+            } catch (\Throwable $t) {}
+        }
+    } else {
+        $className = (string) $classIdentifier;
+    }
+
+    $clean = strtoupper(trim($className));
+    if ($clean === 'P' || $clean === 'PRIMARY') {
+        return 'P';
+    }
+    if ($clean === 'S' || $clean === 'SECONDARY') {
+        return 'S';
+    }
+
+    $text = strtoupper(trim($className . ' ' . $gradeLevel));
+
+    // Secondary indicators: JSS, SSS, JS, SS, Secondary, Senior, Junior, High
+    if (
+        preg_match('/\b(JSS|SSS|JS|SS|SEC|SECONDARY|SENIOR|JUNIOR|HIGH)\b/i', $text) ||
+        str_contains($text, 'JSS') ||
+        str_contains($text, 'SSS')
+    ) {
+        return 'S';
+    }
+
+    // Primary & Early Years indicators: Primary, Pri, Basic, Grade, Nursery, Nur, Creche, Pre
+    if (
+        preg_match('/\b(PRIMARY|PRI|BASIC|GRADE|NURSERY|NUR|CRECHE|KG|KINDERGARTEN|PRE)\b/i', $text) ||
+        str_contains($text, 'PRIMARY') ||
+        str_contains($text, 'PRI') ||
+        str_contains($text, 'BASIC')
+    ) {
+        return 'P';
+    }
+
+    return 'S';
+}
+
+function generate_student_admission_no($classIdentifier = null, $year = null) {
     global $pdo;
 
     if (!isset($pdo) || !($pdo instanceof PDO)) {
@@ -225,11 +316,16 @@ function generate_student_admission_no() {
         }
     }
 
-    $year = date('Y');
-    $prefix = "FIS/{$year}/";
+    $sectionCode = resolve_school_section_code($classIdentifier);
+
+    if (!$year) {
+        $year = date('Y');
+    }
+
+    $prefix = "FIS/{$year}/{$sectionCode}/";
     $maxNum = 0;
 
-    // Check students table for highest numerical suffix
+    // Check students table for highest numerical suffix with this prefix
     if (schema_has_table('students')) {
         $stmt = $pdo->prepare("SELECT admission_no FROM students WHERE admission_no LIKE ?");
         $stmt->execute([$prefix . '%']);
@@ -246,7 +342,7 @@ function generate_student_admission_no() {
         }
     }
 
-    // Check users table for highest numerical suffix in username
+    // Check users table for highest numerical suffix in username with this prefix
     if (schema_has_table('users')) {
         $stmtUser = $pdo->prepare("SELECT username FROM users WHERE username LIKE ?");
         $stmtUser->execute([$prefix . '%']);
@@ -267,7 +363,7 @@ function generate_student_admission_no() {
 
     // Double check candidate number is unique across both tables
     do {
-        $candidate = $prefix . str_pad($candidateNum, 3, '0', STR_PAD_LEFT);
+        $candidate = $prefix . str_pad((string) $candidateNum, 3, '0', STR_PAD_LEFT);
 
         $studentCount = 0;
         if (schema_has_table('students')) {
@@ -557,26 +653,20 @@ function monthly_fee_collection($month = null, $year = null) {
  * Generate student ID
  * @return string
  */
-function generate_student_id() {
+function generate_student_id($classIdentifier = null, $year = null) {
     global $pdo;
 
     try {
         $studentColumns = QueryDB("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN);
 
         if (in_array('admission_no', $studentColumns, true)) {
-            return generate_student_admission_no();
+            return generate_student_admission_no($classIdentifier, $year);
         }
     } catch (PDOException $e) {
         error_log("Error checking student identifier column: " . $e->getMessage());
     }
 
-    do {
-        $id = 'STU' . date('Y') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE student_number = ?");
-        $stmt->execute([$id]);
-    } while ($stmt->fetchColumn() > 0);
-
-    return $id;
+    return generate_student_admission_no($classIdentifier, $year);
 }
 
 /**
