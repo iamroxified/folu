@@ -252,4 +252,222 @@ class FeeAllocationService
 
         return true;
     }
+
+    /**
+     * Allocate a specific fee structure to a student explicitly.
+     */
+    public static function allocateSpecificFeeForStudent(
+        Student $student,
+        int $feeStructureId,
+        ?int $sessionId = null,
+        ?int $termId = null,
+        bool $skipIfAlreadyAllocated = true
+    ): ?StudentFee {
+        $feeStructure = FeeStructure::find($feeStructureId);
+        if (!$feeStructure) {
+            return null;
+        }
+
+        $activeSession = \App\Models\AcademicSession::where('is_active', true)->first();
+        $activeSessionId = $activeSession ? (int) $activeSession->id : 2;
+
+        $sessionId = $sessionId ?? ($feeStructure->session_id ?: ($student->current_session_id ?: $activeSessionId));
+        $termId = $termId ?? ($feeStructure->term_id ?: ($student->current_term_id ?: null));
+
+        // Check if this student already has this fee allocated
+        $existing = StudentFee::where('student_id', $student->id)
+            ->where('fee_structure_id', $feeStructureId)
+            ->where(function ($q) use ($sessionId) {
+                if ($sessionId) {
+                    $q->where('session_id', $sessionId)->orWhereNull('session_id');
+                }
+            })
+            ->first();
+
+        if ($existing) {
+            if ($skipIfAlreadyAllocated) {
+                return $existing;
+            }
+        }
+
+        $baseAmount = (float) $feeStructure->amount;
+        $sessionName = $feeStructure->session ? $feeStructure->session->session_name : ($activeSession ? $activeSession->session_name : date('Y'));
+        $termName = $feeStructure->term ? $feeStructure->term->term_name : null;
+
+        $studentFee = StudentFee::create([
+            'student_id' => $student->id,
+            'fee_structure_id' => $feeStructure->id,
+            'session_id' => $sessionId,
+            'term_id' => $termId,
+            'base_amount' => $baseAmount,
+            'additional_amount' => 0,
+            'total_payable' => $baseAmount,
+            'amount_due' => $baseAmount,
+            'amount_paid' => 0,
+            'amount_owed' => $baseAmount,
+            'balance' => $baseAmount,
+            'due_date' => !empty($feeStructure->effective_to) ? $feeStructure->effective_to : now()->addDays(30),
+            'status' => 'unpaid',
+            'academic_year' => $sessionName,
+            'semester' => $termName,
+            'notes' => 'Allocated Fee Structure: ' . $feeStructure->name,
+            'itemized_snapshot' => $feeStructure->itemized_components,
+        ]);
+
+        FinancialAuditLog::logAction('manual_allocated_fee', $studentFee, [], [
+            'student_id' => $student->id,
+            'fee_structure_id' => $feeStructure->id,
+            'amount' => $baseAmount,
+        ]);
+
+        return $studentFee;
+    }
+
+    /**
+     * Safely deallocate a student fee record if no payments have been recorded.
+     */
+    public static function deallocateStudentFee(int $studentFeeId): array
+    {
+        $studentFee = StudentFee::find($studentFeeId);
+        if (!$studentFee) {
+            return ['success' => false, 'message' => 'Fee allocation record not found.'];
+        }
+
+        // Check if payments exist
+        $hasPayments = ((float) $studentFee->amount_paid > 0.001);
+        if (!$hasPayments) {
+            $paymentCount = \App\Models\Payment::where(function ($q) use ($studentFeeId) {
+                $q->where('payable_type', 'student_fee')
+                  ->orWhere('payable_type', 'App\\Models\\StudentFee');
+            })->where('payable_id', $studentFeeId)->where('status', 'completed')->count();
+            if ($paymentCount > 0) {
+                $hasPayments = true;
+            }
+        }
+
+        if ($hasPayments) {
+            $feeTitle = $studentFee->feeStructure->name ?? 'Fee';
+            return [
+                'success' => false,
+                'message' => "Cannot de-allocate fee '{$feeTitle}'. A payment of ₦" . number_format((float)$studentFee->amount_paid, 2) . " has already been recorded for this student."
+            ];
+        }
+
+        $oldData = $studentFee->toArray();
+
+        // Unlink any additional charges linked to this student fee
+        AdditionalCharge::where('student_fee_id', $studentFeeId)->update(['student_fee_id' => null]);
+
+        $feeName = $studentFee->feeStructure->name ?? 'Fee';
+        $studentFee->delete();
+
+        FinancialAuditLog::logAction('deallocated_student_fee', null, $oldData, [
+            'student_id' => $oldData['student_id'],
+            'fee_structure_id' => $oldData['fee_structure_id'],
+        ]);
+
+        return [
+            'success' => true,
+            'message' => "Fee '{$feeName}' successfully de-allocated from student."
+        ];
+    }
+
+    /**
+     * Bulk allocate fees to multiple students.
+     */
+    public static function bulkAllocateFees(
+        array $studentIds,
+        ?int $feeStructureId = null,
+        ?int $sessionId = null,
+        ?int $termId = null,
+        bool $skipExisting = true
+    ): array {
+        $allocated = 0;
+        $skipped = 0;
+        $failed = 0;
+
+        foreach ($studentIds as $id) {
+            $student = Student::find((int) $id);
+            if (!$student) {
+                $failed++;
+                continue;
+            }
+
+            try {
+                if ($feeStructureId && $feeStructureId > 0) {
+                    $result = self::allocateSpecificFeeForStudent($student, $feeStructureId, $sessionId, $termId, $skipExisting);
+                    if ($result && $result->wasRecentlyCreated) {
+                        $allocated++;
+                    } else {
+                        $skipped++;
+                    }
+                } else {
+                    $result = self::allocateFeeForStudent($student, $sessionId, $termId);
+                    if ($result && $result->wasRecentlyCreated) {
+                        $allocated++;
+                    } else {
+                        $skipped++;
+                    }
+                }
+            } catch (\Throwable $e) {
+                $failed++;
+            }
+        }
+
+        return [
+            'allocated' => $allocated,
+            'skipped' => $skipped,
+            'failed' => $failed,
+            'total' => count($studentIds),
+        ];
+    }
+
+    /**
+     * Bulk deallocate fees from multiple students.
+     */
+    public static function bulkDeallocateFees(
+        array $studentIds,
+        ?int $feeStructureId = null,
+        ?int $sessionId = null,
+        ?int $termId = null
+    ): array {
+        $deallocated = 0;
+        $protected = 0;
+        $skipped = 0;
+
+        foreach ($studentIds as $id) {
+            $query = StudentFee::where('student_id', (int) $id);
+            if ($feeStructureId && $feeStructureId > 0) {
+                $query->where('fee_structure_id', $feeStructureId);
+            }
+            if ($sessionId && $sessionId > 0) {
+                $query->where('session_id', $sessionId);
+            }
+            if ($termId && $termId > 0) {
+                $query->where('term_id', $termId);
+            }
+
+            $fees = $query->get();
+            if ($fees->isEmpty()) {
+                $skipped++;
+                continue;
+            }
+
+            foreach ($fees as $fee) {
+                $res = self::deallocateStudentFee($fee->id);
+                if ($res['success']) {
+                    $deallocated++;
+                } else {
+                    $protected++;
+                }
+            }
+        }
+
+        return [
+            'deallocated' => $deallocated,
+            'protected' => $protected,
+            'skipped' => $skipped,
+            'total' => count($studentIds),
+        ];
+    }
 }

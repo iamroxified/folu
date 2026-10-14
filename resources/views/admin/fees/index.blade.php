@@ -58,8 +58,13 @@ $fees = QueryDB(
                 <div class="page-inner">
                     <div class="d-flex align-items-left align-items-md-center flex-column flex-md-row pb-3">
                         <h2 class="text-dark pb-2 fw-bold">Fee Structures</h2>
-                        <div class="ms-md-auto">
-                            <a href="/admin/fees/add.php" class="btn btn-primary btn-round"><i class="fas fa-plus me-1"></i> Add Fee Structure</a>
+                        <div class="ms-md-auto d-flex gap-2">
+                            <a href="/admin/fees/bulk_allocation.php" class="btn btn-outline-primary btn-round">
+                                <i class="fas fa-users-cog me-1"></i> Bulk Fee Allocation
+                            </a>
+                            <a href="/admin/fees/add.php" class="btn btn-primary btn-round">
+                                <i class="fas fa-plus me-1"></i> Add Fee Structure
+                            </a>
                         </div>
                     </div>
 

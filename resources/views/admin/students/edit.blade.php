@@ -48,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $academic_session_link = filter_input(INPUT_POST, 'academic_session_link', FILTER_VALIDATE_INT);
     $admission_date = validate($_POST['admission_date'] ?? '');
     $student_type = validate($_POST['student_type'] ?? 'day');
+    $category = in_array(strtoupper(validate($_POST['category'] ?? '')), ['OS', 'RETURNING'], true) ? 'OS' : 'NI';
     $department = strtolower(validate($_POST['department'] ?? 'general'));
     if (!in_array($department, ['general', 'science', 'arts', 'commercial'], true)) {
         $department = 'general';
@@ -68,14 +69,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'UPDATE students SET
                     first_name = ?, last_name = ?, other_names = ?, date_of_birth = ?, gender = ?,
                     state_of_origin = ?, lga = ?, address = ?, home_address = ?, current_class_id = ?, current_session_id = ?,
-                    admission_date = ?, enrollment_date = ?, student_type = ?, department = ?, blood_group = ?, genotype = ?, status = ?,
+                    admission_date = ?, enrollment_date = ?, student_type = ?, category = ?, department = ?, blood_group = ?, genotype = ?, status = ?,
                     updated_at = NOW()
                  WHERE id = ?'
             );
             $stmt->execute([
                 $first_name, $last_name, $other_names, $date_of_birth, $gender,
                 $state_of_origin, $lga, $home_address, $home_address, $class_link, $academic_session_link,
-                $admission_date, $admission_date, $student_type, $department, $blood_group, $genotype, $status,
+                $admission_date, $admission_date, $student_type, $category, $department, $blood_group, $genotype, $status,
                 $studentId
             ]);
 
@@ -301,11 +302,18 @@ if (!empty($student['state_of_origin'])) {
                         <div class="form-group">
                           <label for="student_type">Student Type</label>
                           <select class="form-control" name="student_type" id="student_type">
-                            <option value="day" <?php echo ($student['student_type'] == 'day') ? 'selected' : ''; ?>>Day
-                            </option>
-                            <option value="boarding"
-                              <?php echo ($student['student_type'] == 'boarding') ? 'selected' : ''; ?>>Boarding
-                            </option>
+                            <option value="day" <?php echo ($student['student_type'] == 'day') ? 'selected' : ''; ?>>Day</option>
+                            <option value="boarding" <?php echo ($student['student_type'] == 'boarding') ? 'selected' : ''; ?>>Boarding</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="col-md-3">
+                        <div class="form-group">
+                          <label for="category">Intake / Enrollment Status <span class="text-danger">*</span></label>
+                          <?php $curCat = strtoupper(trim((string) ($student['category'] ?? 'NI'))); ?>
+                          <select class="form-control" name="category" id="category" required>
+                            <option value="NI" <?php echo ($curCat === 'NI' || $curCat === 'NEW_INTAKE') ? 'selected' : ''; ?>>New Intake (NI)</option>
+                            <option value="OS" <?php echo ($curCat === 'OS' || $curCat === 'RETURNING') ? 'selected' : ''; ?>>Returning Student (OS)</option>
                           </select>
                         </div>
                       </div>
@@ -314,22 +322,14 @@ if (!empty($student['state_of_origin'])) {
                           <label for="blood_group">Blood Group</label>
                           <select class="form-control" name="blood_group" id="blood_group">
                             <option value="">Select</option>
-                            <option value="A+" <?php echo ($student['blood_group'] == 'A+') ? 'selected' : ''; ?>>A+
-                            </option>
-                            <option value="A-" <?php echo ($student['blood_group'] == 'A-') ? 'selected' : ''; ?>>A-
-                            </option>
-                            <option value="B+" <?php echo ($student['blood_group'] == 'B+') ? 'selected' : ''; ?>>B+
-                            </option>
-                            <option value="B-" <?php echo ($student['blood_group'] == 'B-') ? 'selected' : ''; ?>>B-
-                            </option>
-                            <option value="AB+" <?php echo ($student['blood_group'] == 'AB+') ? 'selected' : ''; ?>>AB+
-                            </option>
-                            <option value="AB-" <?php echo ($student['blood_group'] == 'AB-') ? 'selected' : ''; ?>>AB-
-                            </option>
-                            <option value="O+" <?php echo ($student['blood_group'] == 'O+') ? 'selected' : ''; ?>>O+
-                            </option>
-                            <option value="O-" <?php echo ($student['blood_group'] == 'O-') ? 'selected' : ''; ?>>O-
-                            </option>
+                            <option value="A+" <?php echo ($student['blood_group'] == 'A+') ? 'selected' : ''; ?>>A+</option>
+                            <option value="A-" <?php echo ($student['blood_group'] == 'A-') ? 'selected' : ''; ?>>A-</option>
+                            <option value="B+" <?php echo ($student['blood_group'] == 'B+') ? 'selected' : ''; ?>>B+</option>
+                            <option value="B-" <?php echo ($student['blood_group'] == 'B-') ? 'selected' : ''; ?>>B-</option>
+                            <option value="AB+" <?php echo ($student['blood_group'] == 'AB+') ? 'selected' : ''; ?>>AB+</option>
+                            <option value="AB-" <?php echo ($student['blood_group'] == 'AB-') ? 'selected' : ''; ?>>AB-</option>
+                            <option value="O+" <?php echo ($student['blood_group'] == 'O+') ? 'selected' : ''; ?>>O+</option>
+                            <option value="O-" <?php echo ($student['blood_group'] == 'O-') ? 'selected' : ''; ?>>O-</option>
                           </select>
                         </div>
                       </div>
@@ -338,33 +338,25 @@ if (!empty($student['state_of_origin'])) {
                           <label for="genotype">Genotype</label>
                           <select class="form-control" name="genotype" id="genotype">
                             <option value="">Select</option>
-                            <option value="AA" <?php echo ($student['genotype'] == 'AA') ? 'selected' : ''; ?>>AA
-                            </option>
-                            <option value="AS" <?php echo ($student['genotype'] == 'AS') ? 'selected' : ''; ?>>AS
-                            </option>
-                            <option value="SS" <?php echo ($student['genotype'] == 'SS') ? 'selected' : ''; ?>>SS
-                            </option>
-                            <option value="AC" <?php echo ($student['genotype'] == 'AC') ? 'selected' : ''; ?>>AC
-                            </option>
-                            <option value="SC" <?php echo ($student['genotype'] == 'SC') ? 'selected' : ''; ?>>SC
-                            </option>
+                            <option value="AA" <?php echo ($student['genotype'] == 'AA') ? 'selected' : ''; ?>>AA</option>
+                            <option value="AS" <?php echo ($student['genotype'] == 'AS') ? 'selected' : ''; ?>>AS</option>
+                            <option value="SS" <?php echo ($student['genotype'] == 'SS') ? 'selected' : ''; ?>>SS</option>
+                            <option value="AC" <?php echo ($student['genotype'] == 'AC') ? 'selected' : ''; ?>>AC</option>
+                            <option value="SC" <?php echo ($student['genotype'] == 'SC') ? 'selected' : ''; ?>>SC</option>
                           </select>
                         </div>
                       </div>
-                      <div class="col-md-3">
+                    </div>
+                    <div class="row">
+                      <div class="col-md-4">
                         <div class="form-group">
-                          <label for="status">Status</label>
+                          <label for="status">Account Status <span class="text-danger">*</span></label>
                           <select class="form-control" name="status" id="status" required>
-                            <option value="active" <?php if ($student['status'] === 'active') echo 'selected'; ?>>Active
-                            </option>
-                            <option value="inactive" <?php if ($student['status'] === 'inactive') echo 'selected'; ?>>
-                              Inactive</option>
-                            <option value="graduated" <?php if ($student['status'] === 'graduated') echo 'selected'; ?>>
-                              Graduated</option>
-                            <option value="transferred"
-                              <?php if ($student['status'] === 'transferred') echo 'selected'; ?>>Transferred</option>
-                            <option value="expelled" <?php if ($student['status'] === 'expelled') echo 'selected'; ?>>
-                              Expelled</option>
+                            <option value="active" <?php if ($student['status'] === 'active') echo 'selected'; ?>>Active</option>
+                            <option value="inactive" <?php if ($student['status'] === 'inactive') echo 'selected'; ?>>Inactive</option>
+                            <option value="graduated" <?php if ($student['status'] === 'graduated') echo 'selected'; ?>>Graduated</option>
+                            <option value="transferred" <?php if ($student['status'] === 'transferred') echo 'selected'; ?>>Transferred</option>
+                            <option value="expelled" <?php if ($student['status'] === 'expelled') echo 'selected'; ?>>Expelled</option>
                           </select>
                         </div>
                       </div>

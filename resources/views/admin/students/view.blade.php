@@ -89,6 +89,40 @@ $hasAddCharge = isset($_POST['add_additional_charge']) || (function_exists('requ
 $hasDeleteCharge = isset($_POST['delete_additional_charge']) || (function_exists('request') && request()->has('delete_additional_charge'));
 $hasDropSubject = isset($_POST['drop_student_subject']) || (function_exists('request') && request()->has('drop_student_subject'));
 $hasEnrollSubject = isset($_POST['enroll_student_subject']) || (function_exists('request') && request()->has('enroll_student_subject'));
+$hasUpdateCategory = isset($_POST['update_student_category']) || (function_exists('request') && request()->has('update_student_category'));
+$hasDeallocateFee = isset($_POST['deallocate_student_fee']) || (function_exists('request') && request()->has('deallocate_student_fee'));
+
+if ($isPost && $hasUpdateCategory) {
+    $newCategory = strtoupper(trim((string) ($_POST['category'] ?? request('category') ?? 'NI')));
+    if (!in_array($newCategory, ['NI', 'OS'], true)) {
+        $_SESSION['flash_error'] = 'Invalid student intake status selected.';
+    } else {
+        try {
+            $catStmt = $pdo->prepare("UPDATE students SET category = ?, updated_at = NOW() WHERE id = ?");
+            $catStmt->execute([$newCategory, $studentId]);
+            $label = $newCategory === 'NI' ? 'New Intake (NI)' : 'Returning Student (OS)';
+            $_SESSION['flash_message'] = "Student status updated to '{$label}' successfully.";
+        } catch (\Throwable $e) {
+            $_SESSION['flash_error'] = 'Failed to update student status: ' . $e->getMessage();
+        }
+    }
+    $performRedirect();
+}
+
+if ($isPost && $hasDeallocateFee) {
+    $feeIdToDeallocate = (int) ($_POST['student_fee_id'] ?? request('student_fee_id') ?? 0);
+    if ($feeIdToDeallocate > 0) {
+        $result = \App\Services\FeeAllocationService::deallocateStudentFee($feeIdToDeallocate);
+        if (!empty($result['success']) || !empty($result['status'])) {
+            $_SESSION['flash_message'] = $result['message'];
+        } else {
+            $_SESSION['flash_error'] = $result['message'];
+        }
+    } else {
+        $_SESSION['flash_error'] = 'Invalid fee record selected for deallocation.';
+    }
+    $performRedirect();
+}
 
 if ($isPost && ($hasDropSubject || $hasEnrollSubject)) {
     $subSessionId = (int) ($student['current_session_id'] ?? $student['academic_session_link'] ?? 0);
@@ -389,7 +423,12 @@ try {
     if ($studentModel) {
         $existingFee = \App\Models\StudentFee::where('student_id', $studentId)->latest('id')->first();
         if (!$existingFee) {
-            \App\Services\FeeAllocationService::allocateFeeForStudent($studentModel);
+            $wasDeallocated = \App\Models\FinancialAuditLog::where('student_id', $studentId)
+                ->where('action', 'fee_deallocated')
+                ->exists();
+            if (!$wasDeallocated) {
+                \App\Services\FeeAllocationService::allocateFeeForStudent($studentModel);
+            }
         } elseif ((float) $existingFee->base_amount <= 0.001) {
             $allocated = \App\Services\FeeAllocationService::allocateFeeForStudent($studentModel);
             if ($allocated && (float) $allocated->base_amount > 0 && $existingFee->id !== $allocated->id) {
@@ -711,9 +750,17 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
               <div class="col-md-8">
                 <h2 class="mb-1 text-white"><?php echo htmlspecialchars(trim(($student['first_name'] ?? '') . ' ' . ($student['other_names'] ?? '') . ' ' . ($student['last_name'] ?? ''))); ?></h2>
                 <p class="mb-2">Admission No: <strong><?php echo htmlspecialchars((string) ($student['admission_no'] ?? 'N/A')); ?></strong></p>
-                <div class="d-flex gap-3">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
                   <span class="badge bg-light text-dark">Class: <?php echo htmlspecialchars((string) ($student['class_name'] ?? 'Not Assigned')); ?></span>
                   <span class="badge bg-light text-dark">Session: <?php echo htmlspecialchars((string) ($student['session_name'] ?? 'N/A')); ?></span>
+                  <?php 
+                    $studentCategory = strtoupper(trim((string) ($student['category'] ?? 'NI'))); 
+                    $isReturning = ($studentCategory === 'OS' || $studentCategory === 'RETURNING');
+                  ?>
+                  <span class="badge <?php echo $isReturning ? 'bg-primary text-white' : 'bg-warning text-dark'; ?>">
+                    <i class="fas <?php echo $isReturning ? 'fa-user-check' : 'fa-user-plus'; ?> me-1"></i>
+                    <?php echo $isReturning ? 'Returning Student (OS)' : 'New Intake (NI)'; ?>
+                  </span>
                   <span class="badge bg-<?php echo ($student['status'] ?? '') === 'active' ? 'success' : 'warning'; ?>"><?php echo ucfirst((string) ($student['status'] ?? 'active')); ?></span>
                 </div>
               </div>
@@ -818,6 +865,23 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                             <span class="badge bg-<?php echo strtolower((string) ($student['student_type'] ?? 'day')) === 'boarding' ? 'info' : 'warning'; ?> text-dark">
                               <?php echo ucfirst((string) ($student['student_type'] ?? 'Day')); ?>
                             </span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td><strong>Intake Status:</strong></td>
+                          <td>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                              <span class="badge <?php echo $isReturning ? 'bg-primary text-white' : 'bg-warning text-dark'; ?>">
+                                <?php echo $isReturning ? 'Returning Student (OS)' : 'New Intake (NI)'; ?>
+                              </span>
+                              <form method="POST" action="" class="d-inline" onsubmit="return confirm('Change intake status to <?php echo $isReturning ? 'New Intake (NI)' : 'Returning Student (OS)'; ?>?');">
+                                <input type="hidden" name="update_student_category" value="1">
+                                <input type="hidden" name="category" value="<?php echo $isReturning ? 'NI' : 'OS'; ?>">
+                                <button type="submit" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size: 11px;" title="Switch status">
+                                  <i class="fas fa-sync-alt me-1"></i> Set <?php echo $isReturning ? 'New Intake' : 'Returning'; ?>
+                                </button>
+                              </form>
+                            </div>
                           </td>
                         </tr>
                         <tr>
@@ -1147,16 +1211,32 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                               </span>
                             </td>
                             <td class="text-end">
-                              <?php if ($af_bal > 0.001): ?>
-                                <button type="button" 
-                                        class="btn btn-sm btn-primary text-white pay-item-direct-btn"
-                                        data-item-key="fee_<?php echo (int) $af['id']; ?>"
-                                        title="Pay this tuition fee">
-                                  <i class="fas fa-credit-card me-1"></i> Pay
-                                </button>
-                              <?php else: ?>
-                                <span class="badge bg-success"><i class="fas fa-check me-1"></i> Cleared</span>
-                              <?php endif; ?>
+                              <div class="d-inline-flex gap-1 align-items-center">
+                                <?php if ($af_bal > 0.001): ?>
+                                  <button type="button" 
+                                          class="btn btn-sm btn-primary text-white pay-item-direct-btn"
+                                          data-item-key="fee_<?php echo (int) $af['id']; ?>"
+                                          title="Pay this tuition fee">
+                                    <i class="fas fa-credit-card me-1"></i> Pay
+                                  </button>
+                                <?php else: ?>
+                                  <span class="badge bg-success"><i class="fas fa-check me-1"></i> Cleared</span>
+                                <?php endif; ?>
+
+                                <?php if ($af_paid <= 0.001): ?>
+                                  <form method="POST" action="" class="d-inline" onsubmit="return confirm('Are you sure you want to de-allocate this fee (<?php echo htmlspecialchars(addslashes((string) $af['type_name'])); ?>)? This fee assignment will be removed.');">
+                                    <input type="hidden" name="deallocate_student_fee" value="1">
+                                    <input type="hidden" name="student_fee_id" value="<?php echo (int) $af['id']; ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="De-allocate fee">
+                                      <i class="fas fa-trash-alt me-1"></i> De-allocate
+                                    </button>
+                                  </form>
+                                <?php else: ?>
+                                  <button type="button" class="btn btn-sm btn-light border text-muted" disabled title="Cannot deallocate a fee with recorded payments">
+                                    <i class="fas fa-lock me-1"></i> Paid
+                                  </button>
+                                <?php endif; ?>
+                              </div>
                             </td>
                           </tr>
                           <?php endforeach; ?>

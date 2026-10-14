@@ -110,6 +110,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $academic_session_link = filter_input(INPUT_POST, 'academic_session_link', FILTER_VALIDATE_INT);
     $admission_date = validate((string) ($_POST['admission_date'] ?? ''));
     $student_type = validate((string) ($_POST['student_type'] ?? 'day'));
+    $category = strtoupper(trim(validate((string) ($_POST['category'] ?? 'NI'))));
+    if (!in_array($category, ['NI', 'OS'], true)) {
+        $category = 'NI';
+    }
     $department = strtolower(validate((string) ($_POST['department'] ?? 'general')));
     if (!in_array($department, ['general', 'science', 'arts', 'commercial'], true)) {
         $department = 'general';
@@ -192,7 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'enrollment_date' => $admission_date,
                 'status' => $status,
                 'admission_status' => 'admitted',
-                'category' => 'NI',
+                'category' => $category,
                 'state_of_origin' => $state_of_origin,
                 'lga' => $lga,
                 'student_type' => $student_type,
@@ -228,7 +232,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'relationship' => $parent_relationship,
             ]);
 
-            $success = 'Student added successfully';
+            $_SESSION['flash_success'] = 'Student registered successfully!';
+            header('Location: /admin/view_students.php?id=' . $student_id);
+            exit;
 
         } catch (Exception $e) {
             if ($pdo->inTransaction()) {
@@ -443,7 +449,7 @@ $states = QueryDB("SELECT id, name FROM state ORDER BY name ASC")->fetchAll();
                       </div>
                     </div>
                     <div class="row">
-                      <div class="col-md-4">
+                      <div class="col-md-3">
                         <div class="form-group">
                           <label for="student_type">Student Type</label>
                           <select class="form-control" name="student_type" id="student_type">
@@ -452,7 +458,16 @@ $states = QueryDB("SELECT id, name FROM state ORDER BY name ASC")->fetchAll();
                           </select>
                         </div>
                       </div>
-                      <div class="col-md-4">
+                      <div class="col-md-3">
+                        <div class="form-group">
+                          <label for="category">Intake / Enrollment Status <span class="text-danger">*</span></label>
+                          <select class="form-control" name="category" id="category" required>
+                            <option value="NI" selected>New Intake (NI)</option>
+                            <option value="OS">Returning Student (OS)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="col-md-3">
                         <div class="form-group">
                           <label for="blood_group">Blood Group</label>
                           <select class="form-control" name="blood_group" id="blood_group">
@@ -468,7 +483,7 @@ $states = QueryDB("SELECT id, name FROM state ORDER BY name ASC")->fetchAll();
                           </select>
                         </div>
                       </div>
-                      <div class="col-md-4">
+                      <div class="col-md-3">
                         <div class="form-group">
                           <label for="genotype">Genotype</label>
                           <select class="form-control" name="genotype" id="genotype">

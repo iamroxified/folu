@@ -151,16 +151,19 @@
               </a>
             </li>
     
-               <li class="nav-item {{ $isActive(['fees', 'add_fees', 'fee_structure', 'all_payments', 'print_receipt', 'fee_type', 'add_fee_type', 'edit_fee_type', 'fees/index', 'fees/add', 'fees/structure', 'fees/payments', 'fees/receipt', 'fees/types']) }}">
+               <li class="nav-item {{ $isActive(['fees', 'add_fees', 'fee_structure', 'bulk_fee_allocation', 'all_payments', 'print_receipt', 'fee_type', 'add_fee_type', 'edit_fee_type', 'fees/index', 'fees/add', 'fees/structure', 'fees/bulk_allocation', 'fees/payments', 'fees/receipt', 'fees/types']) }}">
               <a data-bs-toggle="collapse" href="#fees">
                 <i class="fas fa-dollar-sign"></i>
                 <p>Fees</p>
                 <span class="caret"></span>
               </a>
-              <div class="collapse {{ $isSubmenuActive(['fees', 'add_fees', 'fee_structure', 'all_payments', 'print_receipt', 'fee_type', 'add_fee_type', 'edit_fee_type', 'fees/index', 'fees/add', 'fees/structure', 'fees/payments', 'fees/receipt', 'fees/types']) }}" id="fees">
+              <div class="collapse {{ $isSubmenuActive(['fees', 'add_fees', 'fee_structure', 'bulk_fee_allocation', 'all_payments', 'print_receipt', 'fee_type', 'add_fee_type', 'edit_fee_type', 'fees/index', 'fees/add', 'fees/structure', 'fees/bulk_allocation', 'fees/payments', 'fees/receipt', 'fees/types']) }}" id="fees">
                 <ul class="nav nav-collapse">
                   <li>
                     <a href="{{ url('/admin/fees.php') }}">All Fees</a>
+                  </li>
+                  <li>
+                    <a href="{{ url('/admin/fees/bulk_allocation.php') }}">Bulk Fee Allocation</a>
                   </li>
                   <li>
                     <a href="{{ url('/admin/fees/payments.php') }}">Student Payments</a>
@@ -171,10 +174,9 @@
                   <li>
                     <a href="{{ url('/admin/add_fee_type.php') }}">Add Fee Type</a>
                   </li>
-                     <li>
+                  <li>
                     <a href="{{ url('/admin/fee_type.php') }}">Fee Types</a>
                   </li>
-         
                 </ul>
               </div>
             </li>
