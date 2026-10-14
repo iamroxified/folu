@@ -25,6 +25,7 @@
                     <li class="nav-item"><a class="nav-link" href="{{ route('admin.fees') }}">Fees</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('admin.announcements') }}">Announcements</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('admin.settings') }}">Settings</a></li>
+                    <li class="nav-item"><a class="nav-link text-warning fw-bold" href="{{ route('admin.reset.index') }}"><i class="fas fa-undo-alt me-1"></i>Reset</a></li>
                 </ul>
                 <div class="navbar-nav ms-auto">
                     <a class="nav-link" href="{{ route('logout') }}">Logout</a>

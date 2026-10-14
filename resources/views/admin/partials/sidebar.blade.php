@@ -247,6 +247,39 @@
                 <p>Settings</p>
               </a>
             </li>
+            <li class="nav-item {{ $isActive(['reset', 'reset/index', 'reset/payments', 'reset/allocations', 'reset/students', 'reset/classes', 'reset/subjects', 'reset/bulk-allocate']) }}">
+              <a data-bs-toggle="collapse" href="#resetSubmenu">
+                <i class="fas fa-undo-alt text-danger"></i>
+                <p class="text-danger fw-bold">Reset</p>
+                <span class="badge badge-danger ms-auto me-2">Reset</span>
+                <span class="caret"></span>
+              </a>
+              <div class="collapse {{ $isSubmenuActive(['reset', 'reset/index', 'reset/payments', 'reset/allocations', 'reset/students', 'reset/classes', 'reset/subjects', 'reset/bulk-allocate']) }}" id="resetSubmenu">
+                <ul class="nav nav-collapse">
+                  <li>
+                    <a href="{{ route('admin.reset.index') }}">Reset Hub Overview</a>
+                  </li>
+                  <li>
+                    <a href="{{ route('admin.reset.index', ['tab' => 'payments']) }}">Reset Payments</a>
+                  </li>
+                  <li>
+                    <a href="{{ route('admin.reset.index', ['tab' => 'allocations']) }}">Reset Allocations</a>
+                  </li>
+                  <li>
+                    <a href="{{ route('admin.reset.index', ['tab' => 'students']) }}">Delete Students</a>
+                  </li>
+                  <li>
+                    <a href="{{ route('admin.reset.index', ['tab' => 'classes']) }}">Delete Classes</a>
+                  </li>
+                  <li>
+                    <a href="{{ route('admin.reset.index', ['tab' => 'subjects']) }}">Delete Subjects</a>
+                  </li>
+                  <li>
+                    <a href="{{ route('admin.reset.index', ['tab' => 'bulk_allocate']) }}">Bulk Allocate Fees</a>
+                  </li>
+                </ul>
+              </div>
+            </li>
           </ul>
         </div>
       </div>

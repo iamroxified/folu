@@ -10,6 +10,7 @@ use App\Http\Controllers\StudentController;
 use App\Http\Controllers\StudentPortalController;
 use App\Http\Controllers\TeacherPortalController;
 use App\Http\Controllers\BlogController;
+use App\Http\Controllers\ResetController;
 use Illuminate\Support\Facades\Route;
 
 // Unified Authentication Routes
@@ -118,6 +119,15 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::put('/expenditures/{expenditure}', [AdminController::class, 'updateExpenditure'])->name('expenditures.update');
     Route::delete('/expenditures/{expenditure}', [AdminController::class, 'destroyExpenditure'])->name('expenditures.destroy');
     Route::get('/expenditures/export/csv', [AdminController::class, 'exportExpenditures'])->name('expenditures.export');
+
+    // System Reset & Purge Module
+    Route::get('/reset', [ResetController::class, 'index'])->name('reset.index');
+    Route::post('/reset/payments', [ResetController::class, 'resetPayments'])->name('reset.payments');
+    Route::post('/reset/allocations', [ResetController::class, 'resetAllocations'])->name('reset.allocations');
+    Route::post('/reset/students', [ResetController::class, 'deleteStudents'])->name('reset.students');
+    Route::post('/reset/classes', [ResetController::class, 'deleteClasses'])->name('reset.classes');
+    Route::post('/reset/subjects', [ResetController::class, 'deleteSubjects'])->name('reset.subjects');
+    Route::post('/reset/bulk-allocate', [ResetController::class, 'bulkAllocate'])->name('reset.bulk_allocate');
 });
 
 Route::middleware(['auth', 'role:Teacher'])->prefix('teacher')->name('teacher.')->group(function () {
