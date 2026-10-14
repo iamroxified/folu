@@ -76,6 +76,18 @@ try {
     $p_check->execute([$receipt_number]);
     $rawPayment = $p_check->fetch(PDO::FETCH_ASSOC);
 
+    if (!$rawPayment && schema_has_table('receipts')) {
+        $r_check = $pdo->prepare("SELECT p.* FROM receipts r JOIN payments p ON r.payment_id = p.id WHERE r.receipt_number = ? AND p.status = 'completed' LIMIT 1");
+        $r_check->execute([$receipt_number]);
+        $rawPayment = $r_check->fetch(PDO::FETCH_ASSOC);
+    }
+
+    if (!$rawPayment && is_numeric($receipt_number)) {
+        $pid_check = $pdo->prepare("SELECT * FROM payments WHERE id = ? AND status = 'completed' LIMIT 1");
+        $pid_check->execute([$receipt_number]);
+        $rawPayment = $pid_check->fetch(PDO::FETCH_ASSOC);
+    }
+
     if (!$rawPayment) {
         die('Receipt reference "' . htmlspecialchars($receipt_number) . '" not found or not completed.');
     }
@@ -211,6 +223,18 @@ try {
         ");
         $payment_stmt->execute([$rawPayment['id']]);
         $payment = $payment_stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    if ($payment && schema_has_table('receipts')) {
+        try {
+            $rc_stmt = $pdo->prepare("SELECT receipt_number FROM receipts WHERE payment_id = ? ORDER BY id DESC LIMIT 1");
+            $rc_stmt->execute([$rawPayment['id']]);
+            $officialRec = $rc_stmt->fetchColumn();
+            if ($officialRec) {
+                $payment['official_receipt_number'] = $officialRec;
+                $payment['receipt_number'] = $officialRec;
+            }
+        } catch (\Throwable $t) {}
     }
 
     if (!$payment) {

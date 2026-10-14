@@ -18,4 +18,9 @@ class Payment extends Model
     {
         return $this->morphTo();
     }
+
+    public function receipt()
+    {
+        return $this->hasOne(Receipt::class, 'payment_id');
+    }
 }

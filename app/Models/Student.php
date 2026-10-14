@@ -149,4 +149,9 @@ class Student extends Model
     {
         $this->attributes['current_term_id'] = $value;
     }
+
+    public function receipts()
+    {
+        return $this->hasMany(Receipt::class, 'student_id');
+    }
 }

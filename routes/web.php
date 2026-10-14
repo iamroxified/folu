@@ -41,9 +41,12 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/students/create', [AdminController::class, 'createStudent'])->name('students.create');
     Route::post('/students', [AdminController::class, 'storeStudent'])->name('students.store');
     Route::post('/students/import', [AdminController::class, 'importStudents'])->name('students.import');
+    Route::post('/students/import-actual-balance', [AdminController::class, 'importActualPayments'])->name('students.import_actual_balance');
+    Route::get('/students/sample-payment-csv', [AdminController::class, 'downloadSamplePaymentCsv'])->name('students.sample_payment_csv');
     Route::get('/students/export', [AdminController::class, 'exportStudents'])->name('students.export');
     Route::get('/students/{student}', [AdminController::class, 'showStudent'])->name('students.show');
     Route::get('/students/{student}/admission-letter', [AdminController::class, 'admissionLetter'])->name('students.admission_letter');
+    Route::get('/fees/receipt', function(\Illuminate\Http\Request $request) { return view('admin.fees.receipt'); })->name('fees.receipt');
 
     // Profile & Settings
     Route::get('/profile', [AdminController::class, 'profile'])->name('profile');

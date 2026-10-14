@@ -13,6 +13,8 @@ use App\Models\Subject;
 use App\Models\FeeStructure;
 use App\Models\StudentFee;
 use App\Models\AdditionalCharge;
+use App\Models\Payment;
+use App\Models\Receipt;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\SchoolSetting;
@@ -20,6 +22,8 @@ use App\Models\Announcement;
 use App\Models\FinancialAuditLog;
 use App\Services\FeeAllocationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -525,6 +529,299 @@ class AdminController extends Controller
                 echo "\"{$row['row']}\",\"{$row['student_id']}\",\"{$row['first_name']}\",\"{$row['last_name']}\",\"{$row['reason']}\"\n";
             }
         }, 'failed_student_imports.csv');
+    }
+
+    public function importActualPayments(Request $request)
+    {
+        $request->validate([
+            'csv_file' => 'required|file',
+            'session_id' => 'nullable|integer',
+            'term_id' => 'nullable|integer',
+            'payment_method' => 'nullable|string',
+            'payment_date' => 'nullable|date',
+        ]);
+
+        require_once base_path('db/functions.php');
+        require_once base_path('db/school_portal_helpers.php');
+
+        $activeSession = AcademicSession::where('is_active', true)->first();
+        $sessionId = (int) ($request->session_id ?: ($activeSession ? $activeSession->id : 2));
+        $termId = (int) ($request->term_id ?: 1);
+        $paymentMethod = $request->payment_method ?: 'bank_transfer';
+        $paymentDate = $request->payment_date ?: now()->toDateString();
+
+        $file = $request->file('csv_file');
+        $filePath = $file->getRealPath();
+        $firstLine = file_get_contents($filePath, false, null, 0, 500);
+
+        $delimiter = ',';
+        if ($firstLine !== false) {
+            if (substr_count($firstLine, ';') > substr_count($firstLine, ',')) {
+                $delimiter = ';';
+            } elseif (substr_count($firstLine, "\t") > substr_count($firstLine, ',')) {
+                $delimiter = "\t";
+            }
+        }
+
+        $handle = fopen($filePath, 'r');
+        $totalProcessed = 0;
+        $successCount = 0;
+        $totalPaidAmount = 0.0;
+        $importedRows = [];
+        $failedRows = [];
+
+        // Detect column positions
+        $headerRow = fgetcsv($handle, 0, $delimiter);
+        $snCol = 0;
+        $nameCol = 1;
+        $paidCol = 2;
+        $hasHeader = false;
+
+        if ($headerRow) {
+            if (isset($headerRow[0])) {
+                $headerRow[0] = preg_replace('/\x{EF}\x{BB}\x{BF}/', '', (string) $headerRow[0]);
+            }
+
+            foreach ($headerRow as $idx => $heading) {
+                $clean = strtolower(trim((string) $heading));
+                if (in_array($clean, ['sn', 's/n', 'id', 'no', 's_n'], true)) {
+                    $snCol = $idx;
+                    $hasHeader = true;
+                } elseif (in_array($clean, ['name', 'student_name', 'student name', 'fullname', 'full_name', 'names'], true)) {
+                    $nameCol = $idx;
+                    $hasHeader = true;
+                } elseif (in_array($clean, ['paid', 'amount_paid', 'amount', 'actual', 'actual_paid', 'paid_amount', 'fee_paid'], true)) {
+                    $paidCol = $idx;
+                    $hasHeader = true;
+                }
+            }
+
+            if (!$hasHeader) {
+                rewind($handle);
+            }
+        }
+
+        $rowNumber = 0;
+        while (($data = fgetcsv($handle, 0, $delimiter)) !== false) {
+            $rowNumber++;
+            if (empty($data) || (count($data) === 1 && trim((string) $data[0]) === '')) {
+                continue;
+            }
+
+            if (isset($data[0])) {
+                $data[0] = preg_replace('/\x{EF}\x{BB}\x{BF}/', '', (string) $data[0]);
+            }
+
+            $rawSn = trim((string) ($data[$snCol] ?? $rowNumber));
+            $rawName = trim((string) ($data[$nameCol] ?? ''));
+            $rawPaid = trim((string) ($data[$paidCol] ?? ''));
+
+            if ($rawName === '' && !empty($data[0]) && !is_numeric($data[0])) {
+                $rawName = trim((string) $data[0]);
+                $rawPaid = trim((string) ($data[1] ?? ''));
+            }
+
+            if (in_array(strtolower($rawName), ['name', 'student_name', 'fullname', 'full name', 'student'], true)) {
+                continue;
+            }
+
+            if ($rawName === '') {
+                $failedRows[] = [
+                    'row' => $rowNumber,
+                    'sn' => $rawSn,
+                    'name' => 'N/A',
+                    'paid' => $rawPaid,
+                    'reason' => 'Student name is missing or blank',
+                ];
+                continue;
+            }
+
+            $cleanPaid = (float) preg_replace('/[^0-9.]/', '', $rawPaid);
+            if ($cleanPaid <= 0) {
+                $failedRows[] = [
+                    'row' => $rowNumber,
+                    'sn' => $rawSn,
+                    'name' => $rawName,
+                    'paid' => $rawPaid,
+                    'reason' => 'Paid amount must be greater than 0',
+                ];
+                continue;
+            }
+
+            $totalProcessed++;
+
+            $studentData = find_student_by_full_name($rawName);
+            $student = null;
+            if ($studentData && !empty($studentData['id'])) {
+                $student = Student::find($studentData['id']);
+            }
+
+            if (!$student) {
+                $student = Student::where('admission_no', $rawName)
+                    ->orWhere('student_number', $rawName)
+                    ->orWhere('email', $rawName)
+                    ->orWhere(DB::raw("LOWER(CONCAT(last_name, ' ', first_name))"), strtolower($rawName))
+                    ->orWhere(DB::raw("LOWER(CONCAT(first_name, ' ', last_name))"), strtolower($rawName))
+                    ->first();
+            }
+
+            if (!$student) {
+                $failedRows[] = [
+                    'row' => $rowNumber,
+                    'sn' => $rawSn,
+                    'name' => $rawName,
+                    'paid' => $cleanPaid,
+                    'reason' => "Student not found in database. Please verify name spelling or register student first.",
+                ];
+                continue;
+            }
+
+            try {
+                DB::beginTransaction();
+
+                $studentFee = StudentFee::where('student_id', $student->id)
+                    ->where('session_id', $sessionId)
+                    ->where(function($q) use ($termId) {
+                        $q->where('term_id', $termId)->orWhereNull('term_id');
+                    })
+                    ->orderByDesc('id')
+                    ->first();
+
+                if (!$studentFee) {
+                    $studentFee = FeeAllocationService::allocateFeeForStudent($student, $sessionId, $termId);
+                }
+
+                if (!$studentFee) {
+                    $studentFee = StudentFee::where('student_id', $student->id)->orderByDesc('id')->first();
+                }
+
+                if (!$studentFee) {
+                    $fs = FeeStructure::where('session_id', $sessionId)->where('is_active', true)->first()
+                        ?: FeeStructure::where('is_active', true)->first();
+                    $baseAmt = $fs ? (float) $fs->amount : 59500.00;
+                    $studentFee = StudentFee::create([
+                        'student_id' => $student->id,
+                        'session_id' => $sessionId,
+                        'term_id' => $termId,
+                        'fee_structure_id' => $fs ? $fs->id : null,
+                        'base_amount' => $baseAmt,
+                        'additional_amount' => 0.00,
+                        'total_payable' => $baseAmt,
+                        'amount_due' => $baseAmt,
+                        'amount_paid' => 0.00,
+                        'amount_owed' => $baseAmt,
+                        'balance' => $baseAmt,
+                        'due_date' => now()->addDays(30),
+                        'status' => 'unpaid',
+                        'notes' => 'Auto-allocated fee for balance import',
+                    ]);
+                }
+
+                $allocatedBefore = (float) $studentFee->total_payable;
+
+                $payRef = 'PAY-' . date('Ymd') . '-' . strtoupper(Str::random(6));
+                while (Payment::where('payment_reference', $payRef)->exists()) {
+                    $payRef = 'PAY-' . date('Ymd') . '-' . strtoupper(Str::random(6));
+                }
+
+                $studentName = trim($student->first_name . ' ' . ($student->other_names ?? '') . ' ' . $student->last_name);
+
+                $payment = Payment::create([
+                    'payment_reference' => $payRef,
+                    'payable_type' => 'App\\Models\\StudentFee',
+                    'payable_id' => $studentFee->id,
+                    'amount' => $cleanPaid,
+                    'payment_method' => $paymentMethod,
+                    'payment_date' => $paymentDate,
+                    'payer_name' => $studentName,
+                    'payer_phone' => $student->parent_phone ?? $student->phone ?? null,
+                    'description' => "Actual balance payment import - Fee deduction for " . ($studentFee->feeStructure->name ?? 'School Fees'),
+                    'status' => 'completed',
+                ]);
+
+                // Recalculate totals and deduct from allocated fee
+                $studentFee->recalculateTotals();
+
+                $receiptNumber = 'REC-' . date('Ymd') . '-' . strtoupper(Str::random(6));
+                while (Receipt::where('receipt_number', $receiptNumber)->exists()) {
+                    $receiptNumber = 'REC-' . date('Ymd') . '-' . strtoupper(Str::random(6));
+                }
+
+                $issuedBy = Auth::check() ? Auth::user()->name : ($_SESSION['username'] ?? 'Administrator');
+
+                $receipt = Receipt::create([
+                    'receipt_number' => $receiptNumber,
+                    'payment_id' => $payment->id,
+                    'student_id' => $student->id,
+                    'amount_paid' => $cleanPaid,
+                    'issued_date' => $paymentDate,
+                    'issued_by' => $issuedBy,
+                    'notes' => "Allocated Fee: ₦" . number_format($allocatedBefore, 2) . " | Deducted Paid: ₦" . number_format($cleanPaid, 2) . " | Remaining Balance: ₦" . number_format($studentFee->balance, 2),
+                ]);
+
+                FinancialAuditLog::logAction('imported_actual_balance', $payment, [], [
+                    'student_id' => $student->id,
+                    'student_fee_id' => $studentFee->id,
+                    'amount_paid' => $cleanPaid,
+                    'allocated_fee' => $allocatedBefore,
+                    'remaining_balance' => $studentFee->balance,
+                    'receipt_number' => $receiptNumber,
+                ]);
+
+                DB::commit();
+
+                $successCount++;
+                $totalPaidAmount += $cleanPaid;
+
+                $importedRows[] = [
+                    'sn' => $rawSn,
+                    'student_name' => $studentName,
+                    'admission_no' => $student->admission_no ?? $student->student_number ?? 'N/A',
+                    'class_name' => $student->schoolClass ? ($student->schoolClass->class_name . ' ' . ($student->schoolClass->section ?? '')) : 'N/A',
+                    'allocated_fee' => $allocatedBefore,
+                    'paid_amount' => $cleanPaid,
+                    'balance_remaining' => (float) $studentFee->balance,
+                    'status' => $studentFee->status,
+                    'payment_reference' => $payRef,
+                    'receipt_number' => $receiptNumber,
+                    'receipt_url' => url('/admin/fees/receipt.php?receipt=' . $receiptNumber),
+                ];
+
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                $failedRows[] = [
+                    'row' => $rowNumber,
+                    'sn' => $rawSn,
+                    'name' => $rawName,
+                    'paid' => $cleanPaid,
+                    'reason' => 'Database error: ' . $e->getMessage(),
+                ];
+            }
+        }
+        fclose($handle);
+
+        $summary = [
+            'total' => $totalProcessed,
+            'success' => $successCount,
+            'total_amount' => $totalPaidAmount,
+            'failed' => count($failedRows),
+            'records' => $importedRows,
+            'failed_records' => $failedRows,
+        ];
+
+        session(['balance_import_summary' => $summary]);
+
+        return redirect()->back()->with('balance_import_success', "Imported {$successCount} actual balance payment(s) successfully totaling ₦" . number_format($totalPaidAmount, 2) . " with official receipts generated.")->with('balance_import_summary', $summary);
+    }
+
+    public function downloadSamplePaymentCsv()
+    {
+        return response()->streamDownload(function() {
+            echo "sn,name,paid\n";
+            echo "1,Adeyemi Babatunde John,40000\n";
+            echo "2,Okonkwo Chinedu,59500\n";
+            echo "3,Bello Mohammed Aliyu,25000\n";
+        }, 'sample_student_payments.csv');
     }
 
     public function exportStudents()
