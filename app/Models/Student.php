@@ -10,7 +10,6 @@ class Student extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
         'user_link',
         'admission_no',
         'student_number',
@@ -129,6 +128,21 @@ class Student extends Model
     public function getTermLinkAttribute()
     {
         return $this->current_term_id;
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_link');
+    }
+
+    public function getUserIdAttribute()
+    {
+        return $this->user_link;
+    }
+
+    public function setUserIdAttribute($value)
+    {
+        $this->attributes['user_link'] = $value;
     }
 
     public function setTermLinkAttribute($value)

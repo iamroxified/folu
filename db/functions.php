@@ -12,6 +12,17 @@ error_reporting(E_ALL);
 function QueryDB($sql, $params = []) {
   global $pdo; // assumes $pdo is your PDO connection
 
+  if (!$pdo) {
+      if (class_exists(\Illuminate\Support\Facades\DB::class)) {
+          try {
+              $pdo = \Illuminate\Support\Facades\DB::connection()->getPdo();
+          } catch (\Throwable $e) {}
+      }
+      if (!$pdo && file_exists(__DIR__ . '/config.php')) {
+          require_once __DIR__ . '/config.php';
+      }
+  }
+
   if (!empty($params)) {
       $stmt = $pdo->prepare($sql);
       $stmt->execute($params);

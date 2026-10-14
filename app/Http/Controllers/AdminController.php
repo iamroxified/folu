@@ -390,6 +390,9 @@ class AdminController extends Controller
     {
         $request->validate(['csv_file' => 'required|file|mimes:csv,txt,xlsx,xls']);
 
+        require_once base_path('db/functions.php');
+        require_once base_path('db/school_portal_helpers.php');
+
         $file = $request->file('csv_file');
         $handle = fopen($file->getRealPath(), 'r');
         $header = fgetcsv($handle);
@@ -411,7 +414,7 @@ class AdminController extends Controller
             $lastName = trim((string) ($data[3] ?? ''));
             $gender = trim((string) ($data[4] ?? ''));
             $className = trim((string) ($data[5] ?? ''));
-            $studentTypeRaw = trim((string) ($data[6] ?? 'NI'));
+            $studentTypeRaw = trim((string) ($data[6] ?? 'OS'));
             $sessionName = trim((string) ($data[7] ?? ''));
             $parentName = trim((string) ($data[8] ?? ''));
             $parentPhone = trim((string) ($data[9] ?? ''));
@@ -428,7 +431,8 @@ class AdminController extends Controller
                 $genderClean = in_array($genderClean, ['male', 'm']) ? 'male' : 'female';
             }
 
-            $categoryClean = in_array(strtoupper($studentTypeRaw), ['RETURNING', 'OS', 'OLD']) ? 'OS' : 'NI';
+            // All students on import are categorised as returning students (OS)
+            $categoryClean = 'OS';
 
             $classObj = !empty($className) ? ($classes->get($className) ?? SchoolClass::where('class_name', 'LIKE', "%$className%")->first()) : null;
             if (!$classObj && !empty($className)) {
@@ -467,7 +471,7 @@ class AdminController extends Controller
                 ]);
 
                 $student = Student::create([
-                    'user_id' => $user->id,
+                    'user_link' => $user->id,
                     'admission_no' => $admissionNo,
                     'student_number' => $admissionNo,
                     'first_name' => $firstName,

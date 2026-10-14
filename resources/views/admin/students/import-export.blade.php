@@ -137,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     'enrollment_date' => date('Y-m-d'),
                     'status' => $status,
                     'admission_status' => 'admitted',
+                    'category' => 'OS',
                     'current_class_id' => $selectedClassId ?: null,
                     'class_link' => $selectedClassId ?: null,
                     'class_id' => $selectedClassId ?: null,
@@ -154,6 +155,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     $stmt = $pdo->prepare("INSERT INTO students ({$studentColumns}) VALUES ({$studentPlaceholders})");
                     $stmt->execute(array_values($studentInsertData));
                     $importedCount++;
+
+                    $newStudentId = (int) $pdo->lastInsertId();
+                    if ($newStudentId > 0 && class_exists(\App\Models\Student::class) && class_exists(\App\Services\FeeAllocationService::class)) {
+                        try {
+                            $studentModel = \App\Models\Student::find($newStudentId);
+                            if ($studentModel) {
+                                \App\Services\FeeAllocationService::allocateFeeForStudent($studentModel);
+                            }
+                        } catch (\Throwable $feeEx) {
+                            // Non-blocking fee allocation
+                        }
+                    }
                 } else {
                     throw new Exception("No writable student table columns were matched for insert.");
                 }
@@ -262,7 +275,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                                         <li><strong>Name</strong> (Full Name in a single column - automatically split into Surname, Firstname, Other Name)</li>
                                         <li><strong>Status</strong> (Optional: active / inactive, defaults to <code>active</code>)</li>
                                     </ul>
-                                    <p class="text-muted"><small><i class="fas fa-info-circle"></i> Student school emails ending with <strong>@foluinternationalschools.com.ng</strong> will be automatically generated upon import.</small></p>
+                                    <p class="text-muted"><small><i class="fas fa-info-circle"></i> Student school emails ending with <strong>@foluinternationalschools.com.ng</strong> will be automatically generated upon import. All imported students are automatically categorised as <strong>Returning Students (OS)</strong>.</small></p>
 
                                     <form method="POST" enctype="multipart/form-data">
                                         <div class="form-group mb-3">
