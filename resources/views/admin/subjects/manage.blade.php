@@ -161,6 +161,7 @@ $classLevelOptions = [
     'NUR1' => 'Nursery 1',
     'NUR2' => 'Nursery 2',
     'PNUR' => 'Pre-Nursery',
+    'CRE'  => 'Creche',
 ];
 ?>
 <!DOCTYPE html>
