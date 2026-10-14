@@ -15,7 +15,16 @@ if (!isset($_SESSION['adid']) && !auth()->check()) {
     exit;
 }
 
-$studentColumns = QueryDB("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN);
+$rawFullCols = QueryDB("SHOW FULL COLUMNS FROM students")->fetchAll(PDO::FETCH_ASSOC);
+$generatedColumns = ['class_link', 'academic_session_link', 'term_link', 'session_link'];
+$studentColumns = [];
+foreach ($rawFullCols as $c) {
+    if (empty($c['Extra']) || stripos($c['Extra'], 'GENERATED') === false) {
+        if (!in_array($c['Field'], $generatedColumns, true)) {
+            $studentColumns[] = $c['Field'];
+        }
+    }
+}
 $studentIdentifierField = in_array('admission_no', $studentColumns, true) ? 'admission_no' : 'student_number';
 $studentIdentifierLabel = $studentIdentifierField === 'admission_no' ? 'Admission No' : 'Student Number';
 
@@ -459,7 +468,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && (!iss
                 QueryDB($userInsertSql, $userValues);
                 $newUserId = (int) $GLOBALS['pdo']->lastInsertId();
 
-                // Prepare Student profile record
+                // Prepare Student profile record (physical storage columns only, never virtual generated columns)
                 $studentData = [
                     'admission_no' => $admissionNo,
                     'student_number' => $admissionNo,
@@ -471,11 +480,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && (!iss
                     'status' => $status,
                     'admission_status' => 'admitted',
                     'current_class_id' => $selectedClassId,
-                    'class_link' => $selectedClassId,
                     'current_session_id' => $selectedSessionId,
-                    'session_link' => $selectedSessionId,
                     'current_term_id' => $selectedTermId,
-                    'term_link' => $selectedTermId,
                     'category' => 'OS', // All students on import are categorised as returning students (OS)
                     'gender' => 'Male',
                     'date_of_birth' => date('Y-m-d', strtotime('-10 years')),
@@ -485,7 +491,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && (!iss
                 $validStudentFields = [];
                 $validStudentValues = [];
                 foreach ($studentData as $field => $val) {
-                    if (in_array($field, $studentColumns, true)) {
+                    if (in_array($field, $studentColumns, true) && !in_array($field, $generatedColumns, true)) {
                         $validStudentFields[] = $field;
                         $validStudentValues[] = $val;
                     }
@@ -510,6 +516,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && (!iss
                     throw new Exception("No writable student table columns were matched for insert.");
                 }
             } catch (Throwable $e) {
+                // Clean up orphaned user record if student profile insert failed
+                if (!empty($newUserId)) {
+                    try {
+                        QueryDB("DELETE FROM users WHERE id = ?", [$newUserId]);
+                    } catch (\Throwable $cleanupEx) {}
+                }
                 $rowErrors[] = "Row {$rowNum} ('{$col0}'): " . $e->getMessage();
             }
         }
