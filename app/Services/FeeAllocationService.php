@@ -12,9 +12,12 @@ use Illuminate\Support\Facades\DB;
 class FeeAllocationService
 {
     /**
-     * Determine and allocate appropriate fee structure for a student automatically.
+     * Determine and allocate all appropriate fee structures for a student automatically.
+     * Supports multiple fee structures per student (e.g. Tuition + Stationary + Uniform).
+     *
+     * @return StudentFee[]
      */
-    public static function allocateFeeForStudent(Student $student, ?int $sessionId = null, ?int $termId = null): ?StudentFee
+    public static function allocateAllMatchingFeesForStudent(Student $student, ?int $sessionId = null, ?int $termId = null): array
     {
         $activeSession = \App\Models\AcademicSession::where('is_active', true)->first();
         $activeSessionId = $activeSession ? (int) $activeSession->id : 2;
@@ -35,7 +38,7 @@ class FeeAllocationService
             $gender = 'M'; // default fallback
         }
 
-        // Query FeeStructure
+        // Query FeeStructure matching session, category, gender, and class (or class_id IS NULL)
         $query = FeeStructure::where('session_id', $sessionId)
             ->where('is_active', true)
             ->where('category', $category)
@@ -48,104 +51,90 @@ class FeeAllocationService
                   ->orWhere('gender', 'All');
             });
 
-        // CRITICAL BUSINESS RULE: New Intake fees ignore term; Returning student fees filter by term.
+        // New Intake fees ignore term; Returning student fees filter by term (or whole session where term_id IS NULL).
         if ($category === 'OS' && $termId) {
-            $query->where('term_id', $termId);
+            $query->where(function($q) use ($termId) {
+                $q->where('term_id', $termId)
+                  ->orWhereNull('term_id');
+            });
         }
 
-        // Prefer specific class matching over null class_id
-        $feeStructures = $query->get()->sortByDesc(function($structure) use ($student, $gender) {
-            $score = 0;
-            if ($structure->class_id === $student->current_class_id) $score += 10;
-            if ($structure->gender === $gender) $score += 5;
-            return $score;
-        });
+        $allCandidates = $query->get();
 
-        $feeStructure = $feeStructures->first();
-
-        // 1. If not found, try matching by class in this session regardless of gender or category
-        if (!$feeStructure && $student->current_class_id) {
-            $feeStructure = FeeStructure::where('session_id', $sessionId)
-                ->where('is_active', true)
-                ->where('class_id', $student->current_class_id)
-                ->first();
+        // If no candidates found in this session, fall back to active session if different
+        if ($allCandidates->isEmpty() && $sessionId !== $activeSessionId) {
+            return self::allocateAllMatchingFeesForStudent($student, $activeSessionId, $termId);
         }
 
-        // 2. If not found, try general fee structure in this session (class_id IS NULL)
-        if (!$feeStructure) {
-            $feeStructure = FeeStructure::where('session_id', $sessionId)
-                ->where('is_active', true)
-                ->whereNull('class_id')
-                ->first();
-        }
+        // Filter and prioritize candidates:
+        // Group by fee_type (or fee name if fee_type is general):
+        // If a class-specific fee structure exists for a fee_type, do not allocate a generic (null class) fee structure for that same fee_type.
+        $selectedStructures = collect();
 
-        // 3. If no matching fee structure found in this session, try falling back to active session
-        if (!$feeStructure && $sessionId !== $activeSessionId) {
-            return self::allocateFeeForStudent($student, $activeSessionId, $termId);
-        }
-
-        // 4. If still not found, try general fee structure across active sessions
-        if (!$feeStructure) {
-            $feeStructure = FeeStructure::where('is_active', true)
-                ->whereNull('class_id')
-                ->first();
-        }
-
-        // 5. Ultimate fallback to any active fee structure in system
-        if (!$feeStructure) {
-            $feeStructure = FeeStructure::where('is_active', true)->first();
-        }
-
-        if (!$feeStructure) {
-            return null;
-        }
-
-        // Check if student fee allocation already exists for this session & term
-        $existingQuery = StudentFee::where('student_id', $student->id)
-            ->where('session_id', $sessionId);
-
-        if ($category === 'OS' && $termId) {
-            $existingQuery->where('term_id', $termId);
-        }
-
-        $studentFee = $existingQuery->first();
-
-        if (!$studentFee) {
-            $baseAmount = (float) $feeStructure->amount;
-            $studentFee = StudentFee::create([
-                'student_id' => $student->id,
-                'fee_structure_id' => $feeStructure->id,
-                'session_id' => $sessionId,
-                'term_id' => $category === 'OS' ? $termId : null,
-                'base_amount' => $baseAmount,
-                'additional_amount' => 0,
-                'total_payable' => $baseAmount,
-                'amount_due' => $baseAmount,
-                'amount_paid' => 0,
-                'amount_owed' => $baseAmount,
-                'balance' => $baseAmount,
-                'due_date' => now()->addDays(30),
-                'status' => 'unpaid',
-                'academic_year' => $feeStructure->session ? $feeStructure->session->session_name : date('Y'),
-                'semester' => $feeStructure->term ? $feeStructure->term->term_name : null,
-                'notes' => 'Auto-allocated ' . ($category === 'NI' ? 'New Intake' : 'Returning') . ' Fee Structure',
-                'itemized_snapshot' => $feeStructure->itemized_components,
-            ]);
-
-            FinancialAuditLog::logAction('auto_allocated_fee', $studentFee, [], [
-                'student_id' => $student->id,
-                'fee_structure_id' => $feeStructure->id,
-                'amount' => $baseAmount,
-            ]);
-        } else {
-            // Keep existing historical record intact, but recalculate totals
-            if ((float) $studentFee->base_amount <= 0.001) {
-                $studentFee->base_amount = (float) $feeStructure->amount;
+        if ($allCandidates->isNotEmpty()) {
+            $grouped = $allCandidates->groupBy('fee_type');
+            foreach ($grouped as $feeType => $structures) {
+                $classSpecific = $structures->where('class_id', $student->current_class_id);
+                if ($classSpecific->isNotEmpty()) {
+                    foreach ($classSpecific as $struct) {
+                        $selectedStructures->push($struct);
+                    }
+                } else {
+                    foreach ($structures as $struct) {
+                        $selectedStructures->push($struct);
+                    }
+                }
             }
-            $studentFee->recalculateTotals();
         }
 
-        return $studentFee;
+        // Fallbacks if absolutely no fee structures matched
+        if ($selectedStructures->isEmpty()) {
+            $fallback = null;
+            if ($student->current_class_id) {
+                $fallback = FeeStructure::where('session_id', $sessionId)
+                    ->where('is_active', true)
+                    ->where('class_id', $student->current_class_id)
+                    ->first();
+            }
+            if (!$fallback) {
+                $fallback = FeeStructure::where('session_id', $sessionId)
+                    ->where('is_active', true)
+                    ->whereNull('class_id')
+                    ->first();
+            }
+            if (!$fallback) {
+                $fallback = FeeStructure::where('is_active', true)->first();
+            }
+            if ($fallback) {
+                $selectedStructures->push($fallback);
+            }
+        }
+
+        $allocatedFees = [];
+        foreach ($selectedStructures as $fs) {
+            $allocated = self::allocateSpecificFeeForStudent($student, $fs->id, $sessionId, $termId, true);
+            if ($allocated) {
+                $allocatedFees[] = $allocated;
+            }
+        }
+
+        return $allocatedFees;
+    }
+
+    /**
+     * Determine and allocate appropriate primary fee structure for a student automatically.
+     * Allocates all matching structures and returns the primary/tuition fee record.
+     */
+    public static function allocateFeeForStudent(Student $student, ?int $sessionId = null, ?int $termId = null): ?StudentFee
+    {
+        $allocated = self::allocateAllMatchingFeesForStudent($student, $sessionId, $termId);
+        if (!empty($allocated)) {
+            $tuition = collect($allocated)->first(function($sf) {
+                return $sf->feeStructure && $sf->feeStructure->fee_type === 'tuition';
+            });
+            return $tuition ?: $allocated[0];
+        }
+        return null;
     }
 
     /**
@@ -275,22 +264,32 @@ class FeeAllocationService
         $termId = $termId ?? ($feeStructure->term_id ?: ($student->current_term_id ?: null));
 
         // Check if this student already has this fee allocated
-        $existing = StudentFee::where('student_id', $student->id)
+        $existingQuery = StudentFee::where('student_id', $student->id)
             ->where('fee_structure_id', $feeStructureId)
             ->where(function ($q) use ($sessionId) {
                 if ($sessionId) {
                     $q->where('session_id', $sessionId)->orWhereNull('session_id');
                 }
-            })
-            ->first();
+            });
+
+        if ($termId) {
+            $existingQuery->where(function ($q) use ($termId) {
+                $q->where('term_id', $termId)->orWhereNull('term_id');
+            });
+        }
+
+        $existing = $existingQuery->first();
+        $baseAmount = (float) $feeStructure->amount;
 
         if ($existing) {
+            if ((float) $existing->base_amount <= 0.001 && $baseAmount > 0) {
+                $existing->base_amount = $baseAmount;
+                $existing->recalculateTotals();
+            }
             if ($skipIfAlreadyAllocated) {
                 return $existing;
             }
         }
-
-        $baseAmount = (float) $feeStructure->amount;
         $sessionName = $feeStructure->session ? $feeStructure->session->session_name : ($activeSession ? $activeSession->session_name : date('Y'));
         $termName = $feeStructure->term ? $feeStructure->term->term_name : null;
 
@@ -402,11 +401,19 @@ class FeeAllocationService
                         $skipped++;
                     }
                 } else {
-                    $result = self::allocateFeeForStudent($student, $sessionId, $termId);
-                    if ($result && $result->wasRecentlyCreated) {
+                    $results = self::allocateAllMatchingFeesForStudent($student, $sessionId, $termId);
+                    $hasNew = false;
+                    foreach ($results as $res) {
+                        if ($res && $res->wasRecentlyCreated) {
+                            $hasNew = true;
+                        }
+                    }
+                    if ($hasNew) {
                         $allocated++;
-                    } else {
+                    } elseif (!empty($results)) {
                         $skipped++;
+                    } else {
+                        $failed++;
                     }
                 }
             } catch (\Throwable $e) {

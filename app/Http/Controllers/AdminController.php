@@ -269,25 +269,27 @@ class AdminController extends Controller
         ]);
 
         $category = $request->category;
-        $termId = $category === 'NI' ? null : $request->term_id;
+        $termId = $category === 'NI' ? null : ($request->term_id ?: null);
 
-        if ($category === 'OS' && !$termId) {
-            return back()->withInput()->withErrors(['term_id' => 'Term selection is required for Returning Student fee structures.']);
-        }
-
-        // CRITICAL BUSINESS RULE: Prevent duplicate fee structure for exact same combination
+        // Prevent duplicate fee structure for exact same name, fee type, session, class, gender, category, and term
         $duplicateQuery = FeeStructure::where('session_id', $request->session_id)
             ->where('class_id', $request->class_id)
             ->where('gender', $request->gender)
             ->where('category', $category)
+            ->where('fee_type', $request->fee_type)
+            ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower(trim((string) $request->name))])
             ->where('is_active', true);
 
-        if ($category === 'OS' && $termId) {
-            $duplicateQuery->where('term_id', $termId);
+        if ($category === 'OS') {
+            if ($termId) {
+                $duplicateQuery->where('term_id', $termId);
+            } else {
+                $duplicateQuery->whereNull('term_id');
+            }
         }
 
         if ($duplicateQuery->exists()) {
-            return back()->withInput()->withErrors(['duplicate' => 'An active fee structure already exists for this exact combination (Session, Class, Gender, Student Type, Term).']);
+            return back()->withInput()->withErrors(['duplicate' => "An active fee structure with this exact name ('{$request->name}') and fee type ('{$request->fee_type}') already exists for this combination."]);
         }
 
         $feeData = $request->all();
@@ -326,25 +328,27 @@ class AdminController extends Controller
         ]);
 
         $category = $request->category;
-        $termId = $category === 'NI' ? null : $request->term_id;
-
-        if ($category === 'OS' && !$termId) {
-            return back()->withInput()->withErrors(['term_id' => 'Term selection is required for Returning Student fee structures.']);
-        }
+        $termId = $category === 'NI' ? null : ($request->term_id ?: null);
 
         $duplicateQuery = FeeStructure::where('session_id', $request->session_id)
             ->where('class_id', $request->class_id)
             ->where('gender', $request->gender)
             ->where('category', $category)
+            ->where('fee_type', $request->fee_type)
+            ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower(trim((string) $request->name))])
             ->where('is_active', true)
             ->where('id', '!=', $fee->id);
 
-        if ($category === 'OS' && $termId) {
-            $duplicateQuery->where('term_id', $termId);
+        if ($category === 'OS') {
+            if ($termId) {
+                $duplicateQuery->where('term_id', $termId);
+            } else {
+                $duplicateQuery->whereNull('term_id');
+            }
         }
 
         if ($duplicateQuery->exists()) {
-            return back()->withInput()->withErrors(['duplicate' => 'An active fee structure already exists for this exact combination (Session, Class, Gender, Student Type, Term).']);
+            return back()->withInput()->withErrors(['duplicate' => "An active fee structure with this exact name ('{$request->name}') and fee type ('{$request->fee_type}') already exists for this combination."]);
         }
 
         $oldData = $fee->toArray();

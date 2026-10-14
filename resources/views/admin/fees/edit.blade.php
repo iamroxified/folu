@@ -57,26 +57,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (
             $name === '' ||
             !$sessionId ||
-            ($category === 'OS' && !$termId) ||
             $amount === false ||
             $effectiveFrom === ''
         ) {
-            $error = 'Please complete all required fields. Term is required for Returning Students (OS).';
+            $error = 'Please complete all required fields.';
         } else {
-            // Duplicate check
+            // Duplicate check: only block if an active fee structure with the exact same name AND fee type already exists for this combination
             $duplicateCheck = \App\Models\FeeStructure::where('session_id', $sessionId)
                 ->where('class_id', $classId)
                 ->where('gender', $gender)
                 ->where('category', $category)
+                ->where('fee_type', $feeType)
+                ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower(trim($name))])
                 ->where('is_active', true)
                 ->where('id', '!=', $targetFee->id);
 
-            if ($category === 'OS' && $termId) {
-                $duplicateCheck->where('term_id', $termId);
+            if ($category === 'OS') {
+                if ($termId) {
+                    $duplicateCheck->where('term_id', $termId);
+                } else {
+                    $duplicateCheck->whereNull('term_id');
+                }
             }
 
             if ($duplicateCheck->exists()) {
-                $error = 'An active fee structure already exists for this exact combination (Session, Class, Gender, Student Type, Term).';
+                $error = "An active fee structure with this name ('" . htmlspecialchars($name) . "') and fee type ('" . htmlspecialchars($feeType) . "') already exists for this combination.";
             } else {
                 $targetFee->update([
                     'name' => $name,
@@ -215,9 +220,9 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                                             </div>
                                             <div class="col-md-3">
                                                 <div class="form-group" id="term_group">
-                                                    <label for="term_id">Term <span class="text-danger" id="term_req_star">*</span></label>
+                                                    <label for="term_id">Term <small class="text-muted">(Optional for whole session)</small></label>
                                                     <select class="form-control" name="term_id" id="term_id">
-                                                        <option value="">Select Term</option>
+                                                        <option value="">All Terms / Whole Session</option>
                                                         <?php foreach ($terms as $term): ?>
                                                             <option value="<?php echo (int) $term['id']; ?>" <?php echo ($feeRecord && $feeRecord->term_id == $term['id']) ? 'selected' : ''; ?>>
                                                                 <?php echo htmlspecialchars($term['term_name']); ?>
@@ -322,11 +327,11 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                 termSelect.disabled = true;
                 termSelect.value = '';
                 termSelect.removeAttribute('required');
-                termStar.style.display = 'none';
+                if (termStar) termStar.style.display = 'none';
             } else {
                 termSelect.disabled = false;
-                termSelect.setAttribute('required', 'required');
-                termStar.style.display = 'inline';
+                termSelect.removeAttribute('required');
+                if (termStar) termStar.style.display = 'none';
             }
         }
         document.addEventListener('DOMContentLoaded', toggleTermField);

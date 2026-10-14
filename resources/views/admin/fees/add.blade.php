@@ -39,7 +39,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (
         $name === '' ||
         !$sessionId ||
-        ($category === 'OS' && !$termId) ||
         $amount === false ||
         $effectiveFrom === '' ||
         !in_array($feeType, $feeTypeOptions, true) ||
@@ -47,24 +46,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         !in_array($category, $categoryOptions, true) ||
         !in_array($gender, $genderOptions, true)
     ) {
-        $error = 'Please complete all required fee structure fields. Term is required for Returning Students (OS).';
+        $error = 'Please complete all required fee structure fields.';
     } else {
         try {
-            // Check duplicates
+            // Check duplicates: only block if an active fee structure with the exact same name AND fee type already exists for this exact combination
+            $termSql = $termId 
+                ? "AND term_id = ?" 
+                : "AND (term_id IS NULL OR term_id = 0)";
+            $params = [$sessionId, $classId, $classId, $gender, $category, $feeType, $name];
+            if ($termId) {
+                $params[] = $termId;
+            }
+
             $duplicateCheck = QueryDB(
-                "SELECT id FROM fee_structures 
+                "SELECT id, name, fee_type FROM fee_structures 
                  WHERE session_id = ? 
                  AND (class_id = ? OR (class_id IS NULL AND ? IS NULL)) 
                  AND gender = ? 
                  AND category = ? 
+                 AND fee_type = ? 
+                 AND LOWER(TRIM(name)) = LOWER(TRIM(?)) 
                  AND is_active = 1 
-                 " . ($category === 'OS' ? "AND term_id = ?" : "") . " 
+                 {$termSql} 
                  LIMIT 1",
-                $category === 'OS' ? [$sessionId, $classId, $classId, $gender, $category, $termId] : [$sessionId, $classId, $classId, $gender, $category]
+                $params
             )->fetch(PDO::FETCH_ASSOC);
 
             if ($duplicateCheck) {
-                $error = 'An active fee structure already exists for this exact combination (Session, Class, Gender, Student Type, Term).';
+                $error = "An active fee structure with this name ('" . htmlspecialchars($name) . "') and fee type ('" . htmlspecialchars($feeType) . "') already exists for this combination.";
             } else {
                 $selectedClass = null;
                 if ($classId) {
@@ -208,9 +217,9 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                                             </div>
                                             <div class="col-md-3">
                                                 <div class="form-group" id="term_group">
-                                                    <label for="term_id">Term <span class="text-danger" id="term_req_star">*</span></label>
+                                                    <label for="term_id">Term <small class="text-muted">(Optional for whole session)</small></label>
                                                     <select class="form-control" name="term_id" id="term_id">
-                                                        <option value="">Select Term</option>
+                                                        <option value="">All Terms / Whole Session</option>
                                                         <?php foreach ($terms as $term): ?>
                                                             <option value="<?php echo (int) $term['id']; ?>" <?php echo (int) ($term['is_active'] ?? 0) === 1 ? 'selected' : ''; ?>>
                                                                 <?php echo htmlspecialchars($term['term_name']); ?>
@@ -310,11 +319,11 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                 termSelect.disabled = true;
                 termSelect.value = '';
                 termSelect.removeAttribute('required');
-                termStar.style.display = 'none';
+                if (termStar) termStar.style.display = 'none';
             } else {
                 termSelect.disabled = false;
-                termSelect.setAttribute('required', 'required');
-                termStar.style.display = 'inline';
+                termSelect.removeAttribute('required');
+                if (termStar) termStar.style.display = 'none';
             }
         }
         document.addEventListener('DOMContentLoaded', toggleTermField);
