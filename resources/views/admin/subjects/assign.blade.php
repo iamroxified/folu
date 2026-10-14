@@ -93,9 +93,13 @@ if ($selectedClass) {
     $alreadyAssignedSql .= ") AS already_assigned";
 
     $hasSubjectClassLevel = schema_has_column('subjects', 'class_level');
-    $levelClause = $hasSubjectClassLevel
-        ? "(s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%') OR (s.class_level = 'PRI' AND ? LIKE 'PRI%'))"
-        : "1 = 1";
+    if ($hasSubjectClassLevel) {
+        [$levelClause, $levelParams] = build_subject_class_level_sql_clause($classLevel, (string) ($selectedClass['class_name'] ?? ''));
+        $queryParams = array_merge($params, $levelParams);
+    } else {
+        $levelClause = "1 = 1";
+        $queryParams = $params;
+    }
 
     $subjects = QueryDB(
         "SELECT s.*, {$alreadyAssignedSql}
@@ -103,9 +107,7 @@ if ($selectedClass) {
          WHERE (s.status IS NULL OR s.status = 'active')
            AND {$levelClause}
          ORDER BY s.subject_name, s.subject_code",
-        $hasSubjectClassLevel
-            ? array_merge($params, [$classLevel, $classLevel, $classLevel, $classLevel])
-            : $params
+        $queryParams
     )->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>

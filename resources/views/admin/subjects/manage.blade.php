@@ -142,26 +142,27 @@ $subjects = QueryDB(
 )->fetchAll();
 
 $classLevelOptions = [
-    'ALL'  => 'All Classes (School-wide)',
-    'SSS'  => 'Senior Secondary (All SSS: SSS1, SSS2, SSS3)',
-    'SSS1' => 'SSS 1 (Senior Secondary 1)',
-    'SSS2' => 'SSS 2 (Senior Secondary 2)',
-    'SSS3' => 'SSS 3 (Senior Secondary 3)',
-    'JSS'  => 'Junior Secondary (All JSS: JSS1, JSS2, JSS3)',
-    'JSS1' => 'JSS 1 (Junior Secondary 1)',
-    'JSS2' => 'JSS 2 (Junior Secondary 2)',
-    'JSS3' => 'JSS 3 (Junior Secondary 3)',
-    'PRI'  => 'Primary (All Primary: Primary 1 - 6)',
-    'PRI1' => 'Primary 1',
-    'PRI2' => 'Primary 2',
-    'PRI3' => 'Primary 3',
-    'PRI4' => 'Primary 4',
-    'PRI5' => 'Primary 5',
-    'PRI6' => 'Primary 6',
-    'NUR1' => 'Nursery 1',
-    'NUR2' => 'Nursery 2',
-    'PNUR' => 'Pre-Nursery',
-    'CRE'  => 'Creche',
+    'ALL'         => 'All Classes (School-wide)',
+    'SSS'         => 'Senior Secondary (All SSS: SSS1, SSS2, SSS3)',
+    'SSS1'        => 'SSS 1 (Senior Secondary 1)',
+    'SSS2'        => 'SSS 2 (Senior Secondary 2)',
+    'SSS3'        => 'SSS 3 (Senior Secondary 3)',
+    'JSS'         => 'Junior Secondary (All JSS: JSS1, JSS2, JSS3)',
+    'JSS1'        => 'JSS 1 (Junior Secondary 1)',
+    'JSS2'        => 'JSS 2 (Junior Secondary 2)',
+    'JSS3'        => 'JSS 3 (Junior Secondary 3)',
+    'PRI'         => 'Primary (All Primary: Primary 1 - 6)',
+    'PRI1'        => 'Primary 1',
+    'PRI2'        => 'Primary 2',
+    'PRI3'        => 'Primary 3',
+    'PRI4'        => 'Primary 4',
+    'PRI5'        => 'Primary 5',
+    'PRI6'        => 'Primary 6',
+    'Pre_Nursery' => 'Pre_Nursery (Creche, Pre-Nursery, Nur1 and Nur2)',
+    'CRE'         => 'Creche',
+    'PNUR'        => 'Pre-Nursery',
+    'NUR1'        => 'Nursery 1',
+    'NUR2'        => 'Nursery 2',
 ];
 ?>
 <!DOCTYPE html>
@@ -241,12 +242,12 @@ $classLevelOptions = [
                                             <label for="class_level" class="fw-bold">Target Class Level <span class="text-danger">*</span></label>
                                             <select class="form-control" id="class_level" name="class_level" required>
                                                 <?php foreach ($classLevelOptions as $code => $lbl): ?>
-                                                    <option value="<?php echo htmlspecialchars($code); ?>" <?php echo ($editingSubjectLevel === $code) ? 'selected' : ''; ?>>
+                                                    <option value="<?php echo htmlspecialchars($code); ?>" <?php echo (strcasecmp($editingSubjectLevel, $code) === 0) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars($lbl); ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
-                                            <small class="form-text text-muted">Select 'ALL' for school-wide, 'SSS' for all senior classes, or a specific class.</small>
+                                            <small class="form-text text-muted">Select 'ALL' for school-wide, 'Pre_Nursery' for all early years (Creche, Pre-Nursery, Nur1 and Nur2), 'PRI' for all primary, 'JSS' / 'SSS' for secondary, or a specific class.</small>
                                         </div>
 
                                         <div class="form-group mb-3">

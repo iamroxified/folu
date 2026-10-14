@@ -1328,6 +1328,55 @@ function get_class_subject_assignments(?int $classId = null, ?int $sessionId = n
     return QueryDB($sql, $params)->fetchAll();
 }
 
+function is_pre_nursery_applicable_level(string $level): bool
+{
+    $clean = strtoupper(trim($level));
+    if ($clean === '') {
+        return false;
+    }
+
+    return (
+        str_starts_with($clean, 'CRE') ||
+        str_starts_with($clean, 'CRC') ||
+        str_contains($clean, 'CRECHE') ||
+        str_starts_with($clean, 'PNUR') ||
+        str_starts_with($clean, 'PRE_NUR') ||
+        str_starts_with($clean, 'PRE-NUR') ||
+        str_contains($clean, 'PRE-NURSERY') ||
+        str_contains($clean, 'PRE_NURSERY') ||
+        str_starts_with($clean, 'NUR') ||
+        str_contains($clean, 'NURSERY')
+    );
+}
+
+function build_subject_class_level_sql_clause(string $classLevel, string $className = '', string $tableAlias = 's'): array
+{
+    $cls = trim($classLevel);
+    $clsUpper = strtoupper($cls);
+
+    $conditions = [
+        "{$tableAlias}.class_level = 'ALL'",
+        "{$tableAlias}.class_level = ?",
+    ];
+    $params = [$cls];
+
+    if (str_starts_with($clsUpper, 'SSS') || str_contains($clsUpper, 'SENIOR')) {
+        $conditions[] = "{$tableAlias}.class_level = 'SSS'";
+    }
+    if (str_starts_with($clsUpper, 'JSS') || str_contains($clsUpper, 'JUNIOR')) {
+        $conditions[] = "{$tableAlias}.class_level = 'JSS'";
+    }
+    if (str_starts_with($clsUpper, 'PRI') || str_contains($clsUpper, 'PRIMARY')) {
+        $conditions[] = "{$tableAlias}.class_level = 'PRI'";
+    }
+    if (is_pre_nursery_applicable_level($cls) || is_pre_nursery_applicable_level($className)) {
+        $conditions[] = "{$tableAlias}.class_level IN ('Pre_Nursery', 'PRE_NURSERY', 'PNUR', 'NUR', 'EARLY_YEARS')";
+    }
+
+    $sql = '(' . implode(' OR ', $conditions) . ')';
+    return [$sql, $params];
+}
+
 function subject_matches_class_level(string $subjectLevel, string $classLevel): bool
 {
     $sub = strtoupper(trim($subjectLevel));
@@ -1335,14 +1384,17 @@ function subject_matches_class_level(string $subjectLevel, string $classLevel): 
     if ($sub === 'ALL' || $sub === '' || $cls === '' || $sub === $cls) {
         return true;
     }
-    if ($sub === 'SSS' && str_starts_with($cls, 'SSS')) {
+    if ($sub === 'SSS' && (str_starts_with($cls, 'SSS') || str_contains($cls, 'SENIOR'))) {
         return true;
     }
-    if ($sub === 'JSS' && str_starts_with($cls, 'JSS')) {
+    if ($sub === 'JSS' && (str_starts_with($cls, 'JSS') || str_contains($cls, 'JUNIOR'))) {
         return true;
     }
-    if (($sub === 'PRI' || $sub === 'PRIMARY') && str_starts_with($cls, 'PRI')) {
+    if (($sub === 'PRI' || $sub === 'PRIMARY') && (str_starts_with($cls, 'PRI') || str_contains($cls, 'PRIMARY'))) {
         return true;
+    }
+    if (in_array($sub, ['PRE_NURSERY', 'PRE-NURSERY', 'PNUR', 'NUR', 'EARLY_YEARS'], true)) {
+        return is_pre_nursery_applicable_level($cls);
     }
     return false;
 }
@@ -1500,13 +1552,14 @@ function get_student_allocated_subjects(int $studentId, ?int $sessionId = null):
     $levelSubjects = [];
     if ($classLevel !== '') {
         if (schema_has_column('subjects', 'class_level')) {
+            [$levelClause, $levelParams] = build_subject_class_level_sql_clause($classLevel, (string) ($class['class_name'] ?? ''));
             $levelSubjects = QueryDB(
                 "SELECT s.*, 0 AS is_class_assignment
                  FROM subjects s
                  WHERE (s.status IS NULL OR s.status = 'active')
-                   AND (s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%') OR (s.class_level = 'PRI' AND ? LIKE 'PRI%'))
+                   AND {$levelClause}
                  ORDER BY s.subject_name",
-                [$classLevel, $classLevel, $classLevel, $classLevel]
+                $levelParams
             )->fetchAll(PDO::FETCH_ASSOC);
         } else {
             $allSubjects = QueryDB(

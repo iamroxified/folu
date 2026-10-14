@@ -100,21 +100,23 @@ if ($selectedClass) {
     $classCol = get_csa_class_column();
     $subjCol = get_csa_subject_column();
     $hasSubjectClassLevel = schema_has_column('subjects', 'class_level');
-
-    $levelClause = $hasSubjectClassLevel
-        ? "(s.status = 'active' AND (s.class_level = 'ALL' OR s.class_level = ? OR (s.class_level = 'SSS' AND ? LIKE 'SSS%') OR (s.class_level = 'JSS' AND ? LIKE 'JSS%')))"
-        : "(s.status = 'active')";
+    if ($hasSubjectClassLevel) {
+        [$levelClause, $levelParams] = build_subject_class_level_sql_clause($classLevel, (string) ($selectedClass['class_name'] ?? ''));
+        $levelSql = "(s.status = 'active' AND {$levelClause})";
+        $queryParams = array_merge([$selectedClassId], $levelParams);
+    } else {
+        $levelSql = "(s.status = 'active')";
+        $queryParams = [$selectedClassId];
+    }
 
     $classSubjects = QueryDB(
         "SELECT DISTINCT s.*
          FROM subjects s
          LEFT JOIN class_subject_assignments csa ON csa.{$subjCol} = s.id
          WHERE csa.{$classCol} = ?
-            OR {$levelClause}
+            OR {$levelSql}
          ORDER BY s.subject_name",
-        $hasSubjectClassLevel
-            ? [$selectedClassId, $classLevel, $classLevel, $classLevel]
-            : [$selectedClassId]
+        $queryParams
     )->fetchAll(PDO::FETCH_ASSOC);
 
     // Fetch students in class
