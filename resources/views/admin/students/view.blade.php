@@ -416,6 +416,13 @@ if ($isPost && ($hasAddCharge || $hasDeleteCharge || $hasDeletePayment || $hasPr
 }
 
 // Get student fee summary, additional charges, recent payment history, and outstanding fees
+$fee_summary = ['total_due' => 0, 'total_paid' => 0, 'total_balance' => 0];
+$allocated_fees = [];
+$additional_charges = [];
+$payment_history = [];
+$outstanding_fees = [];
+$payable_items = [];
+
 try {
     $studentModel = \App\Models\Student::find($studentId);
 
@@ -423,9 +430,17 @@ try {
     if ($studentModel) {
         $existingFee = \App\Models\StudentFee::where('student_id', $studentId)->latest('id')->first();
         if (!$existingFee) {
-            $wasDeallocated = \App\Models\FinancialAuditLog::where('student_id', $studentId)
-                ->where('action', 'fee_deallocated')
-                ->exists();
+            $wasDeallocated = false;
+            try {
+                $wasDeallocated = \App\Models\FinancialAuditLog::where('action', 'deallocated_student_fee')
+                    ->where(function($q) use ($studentId) {
+                        $q->where('new_values->student_id', $studentId)
+                          ->orWhere('old_values->student_id', $studentId);
+                    })
+                    ->exists();
+            } catch (\Throwable $t) {
+                $wasDeallocated = false;
+            }
             if (!$wasDeallocated) {
                 \App\Services\FeeAllocationService::allocateFeeForStudent($studentModel);
             }
@@ -660,12 +675,25 @@ try {
         }
     }
 
-} catch (PDOException $e) {
-    $fee_summary = ['total_due' => 0, 'total_paid' => 0, 'total_balance' => 0];
-    $additional_charges = [];
-    $payment_history = [];
-    $outstanding_fees = [];
-    $payable_items = [];
+} catch (\Throwable $e) {
+    if (!isset($fee_summary)) {
+        $fee_summary = ['total_due' => 0, 'total_paid' => 0, 'total_balance' => 0];
+    }
+    if (!isset($allocated_fees)) {
+        $allocated_fees = [];
+    }
+    if (!isset($additional_charges)) {
+        $additional_charges = [];
+    }
+    if (!isset($payment_history)) {
+        $payment_history = [];
+    }
+    if (!isset($outstanding_fees)) {
+        $outstanding_fees = [];
+    }
+    if (!isset($payable_items)) {
+        $payable_items = [];
+    }
 }
 
 // Get additional student metrics
@@ -937,8 +965,8 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                   </div>
                   <div class="d-flex align-items-center gap-2">
                     <?php 
-                      $enrolledCount = count(array_filter($allocatedSubjects, fn($s) => !$s['is_dropped']));
-                      $droppedCount = count(array_filter($allocatedSubjects, fn($s) => $s['is_dropped']));
+                      $enrolledCount = count(array_filter($allocatedSubjects ?? [], fn($s) => !($s['is_dropped'] ?? false)));
+                      $droppedCount = count(array_filter($allocatedSubjects ?? [], fn($s) => ($s['is_dropped'] ?? false)));
                     ?>
                     <span class="badge bg-success text-white fw-bold"><?php echo $enrolledCount; ?> Active</span>
                     <?php if ($droppedCount > 0): ?>
@@ -1130,7 +1158,7 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                     <i class="fas fa-graduation-cap me-2 text-primary"></i>Allocated School & Tuition Fees
                   </h4>
                   <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-primary text-white fw-bold"><?php echo count($allocated_fees); ?> Allocated Fee(s)</span>
+                    <span class="badge bg-primary text-white fw-bold"><?php echo count($allocated_fees ?? []); ?> Allocated Fee(s)</span>
                     <a href="/admin/fee_structure.php?student_id=<?php echo (int) $student['id']; ?>" class="btn btn-outline-primary btn-sm fw-bold">
                       <i class="fas fa-sliders-h me-1"></i> Fee Structures
                     </a>
@@ -1263,7 +1291,7 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                     <i class="fas fa-file-invoice-dollar me-2 text-warning"></i>Additional Charges & Extra Fees
                   </h4>
                   <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-warning text-dark fw-bold"><?php echo count($additional_charges); ?> Extra Charges</span>
+                    <span class="badge bg-warning text-dark fw-bold"><?php echo count($additional_charges ?? []); ?> Extra Charges</span>
                     <button type="button" class="btn btn-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#extraFeeModal">
                       <i class="fas fa-plus me-1"></i> Add Fee
                     </button>
@@ -1389,7 +1417,7 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                   <h4 class="card-title mb-0">
                     <i class="fas fa-history me-2"></i>Recent Payment History
                   </h4>
-                  <span class="badge bg-secondary"><?php echo count($payment_history); ?> transactions</span>
+                  <span class="badge bg-secondary"><?php echo count($payment_history ?? []); ?> transactions</span>
                 </div>
                 <div class="card-body p-0">
                   <?php if (empty($payment_history)): ?>
@@ -1650,7 +1678,7 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                         <h5 class="text-danger mb-0 fw-bold">
                           <i class="fas fa-list-check me-2"></i>Select Individual Fee / Charge
                         </h5>
-                        <span class="badge bg-danger"><?php echo count($payable_items); ?> unpaid items</span>
+                        <span class="badge bg-danger"><?php echo count($payable_items ?? []); ?> unpaid items</span>
                       </div>
                       <p class="text-muted small mb-3">Tuition fees and individual extra charges are handled separately (not lump-summed). Select an individual payable item below to make a payment towards it.</p>
 
