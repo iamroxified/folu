@@ -24,10 +24,13 @@ $payment = QueryDB(
             fs.name AS fee_name,
             fs.description AS fee_description,
             fs.fee_type,
+            sf.base_amount AS amount_due,
+            (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id) AS total_fee_paid,
+            GREATEST(0.00, sf.base_amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id)) AS fee_balance,
             ac.session_name,
             t.term_name AS session_term
      FROM payments p
-     JOIN student_fees sf ON p.payable_type = 'student_fee' AND p.payable_id = sf.id
+     JOIN student_fees sf ON (p.payable_type = 'student_fee' OR p.payable_type LIKE '%StudentFee%') AND p.payable_id = sf.id
      LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
      LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
      LEFT JOIN terms t ON fs.term_id = t.id
@@ -37,9 +40,53 @@ $payment = QueryDB(
 )->fetch(PDO::FETCH_ASSOC);
 
 if (!$payment) {
+    $payment = QueryDB(
+        "SELECT p.*,
+                p.payment_reference AS receipt_number,
+                p.amount AS amount_paid,
+                p.description AS payment_description,
+                NULL AS fee_structure_link,
+                ch.fee_name AS fee_name,
+                ch.reason AS fee_description,
+                'additional_charge' AS fee_type,
+                ch.amount AS amount_due,
+                (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'additional_charge' OR p_sub.payable_type LIKE '%AdditionalCharge%') AND p_sub.payable_id = ch.id AND p_sub.status = 'completed' AND p_sub.id <= p.id) AS total_fee_paid,
+                GREATEST(0.00, ch.amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'additional_charge' OR p_sub.payable_type LIKE '%AdditionalCharge%') AND p_sub.payable_id = ch.id AND p_sub.status = 'completed' AND p_sub.id <= p.id)) AS fee_balance,
+                ac.session_name,
+                t.term_name AS session_term
+         FROM payments p
+         JOIN additional_charges ch ON (p.payable_type = 'additional_charge' OR p.payable_type LIKE '%AdditionalCharge%') AND p.payable_id = ch.id
+         LEFT JOIN academic_sessions ac ON ch.session_id = ac.id
+         LEFT JOIN terms t ON ch.term_id = t.id
+         WHERE p.id = ? AND ch.student_id = ? AND p.status = 'completed'
+         LIMIT 1",
+        [$paymentId, (int) $student['id']]
+    )->fetch(PDO::FETCH_ASSOC);
+}
+
+if (!$payment) {
     header('Location: /student/payments.php');
     exit;
 }
+
+try {
+    $rc_stmt = QueryDB("SELECT receipt_number FROM receipts WHERE payment_id = ? ORDER BY id DESC LIMIT 1", [$payment['id']]);
+    $officialRec = $rc_stmt ? $rc_stmt->fetchColumn() : null;
+    if ($officialRec) {
+        $payment['receipt_number'] = $officialRec;
+    }
+} catch (\Throwable $t) {}
+
+$amountDue = (float) ($payment['amount_due'] ?? 0);
+$totalFeePaid = (float) ($payment['total_fee_paid'] ?? 0);
+$itemBalance = (float) ($payment['fee_balance'] ?? max(0.00, $amountDue - $totalFeePaid));
+$transactionAmount = (float) ($payment['amount_paid'] ?? 0);
+
+$isEqualPaid = ($amountDue > 0.001) 
+    ? ($itemBalance <= 0.001 && abs($amountDue - $totalFeePaid) <= 0.01)
+    : ($transactionAmount > 0.001 && $itemBalance <= 0.001);
+
+$isCompleted = $isEqualPaid;
 
 try {
     $settings_stmt = QueryDB("SELECT * FROM school_settings LIMIT 1");
@@ -242,13 +289,15 @@ $schoolLogo = !empty($schoolSettings['school_logo']) ? (str_starts_with($schoolS
     </div>
     <div class="card shadow-sm">
       <div class="card-body p-4" style="position: relative;">
+        <?php if ($isCompleted): ?>
         <!-- Background Watermark -->
         <div class="watermark-container" aria-hidden="true">
           <div class="watermark-box">
-            <div class="watermark-main-text">PAYMENT COMPLETED</div>
+            <div class="watermark-main-text">PAID IN FULL</div>
             <div class="watermark-sub-text">OFFICIAL RECEIPT • VALIDATED</div>
           </div>
         </div>
+        <?php endif; ?>
 
         <div style="position: relative; z-index: 2;">
           <div class="d-flex justify-content-between align-items-start mb-4">
@@ -261,6 +310,7 @@ $schoolLogo = !empty($schoolSettings['school_logo']) ? (str_starts_with($schoolS
             </div>
             <div class="d-flex flex-column align-items-end gap-2">
               <img src="<?php echo htmlspecialchars($schoolLogo); ?>" alt="school logo" style="max-width: 90px; max-height: 90px; object-fit: contain;" onerror="this.src='/images/folu-logo.png';">
+              <?php if ($isCompleted): ?>
               <div class="official-stamp-badge">
                 <div class="stamp-badge-inner">
                   <div class="stamp-school-name"><?php echo htmlspecialchars($schoolName); ?></div>
@@ -270,6 +320,7 @@ $schoolLogo = !empty($schoolSettings['school_logo']) ? (str_starts_with($schoolS
                   <div class="stamp-sub-text">ACCOUNTS &amp; BURSARY</div>
                 </div>
               </div>
+              <?php endif; ?>
             </div>
           </div>
           <hr>
@@ -293,7 +344,13 @@ $schoolLogo = !empty($schoolSettings['school_logo']) ? (str_starts_with($schoolS
                   <td><?php echo htmlspecialchars((string) ($payment['fee_description'] ?: ('Fee #' . $payment['fee_structure_link']))); ?></td>
                   <td>₦<?php echo number_format((float) ($payment['amount_paid'] ?? 0), 2); ?></td>
                   <td><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', (string) ($payment['payment_method'] ?? 'n/a')))); ?></td>
-                  <td><span class="badge bg-success text-white fw-bold">✓ Completed</span></td>
+                  <td>
+                    <?php if ($isCompleted): ?>
+                      <span class="badge bg-success text-white fw-bold">✓ Completed</span>
+                    <?php else: ?>
+                      <span class="badge bg-warning text-dark fw-bold">⏳ Partial Payment</span>
+                    <?php endif; ?>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -305,6 +362,7 @@ $schoolLogo = !empty($schoolSettings['school_logo']) ? (str_starts_with($schoolS
               <p class="mb-1 text-muted small"><strong>Thank you for your payment!</strong></p>
               <p class="mb-0 text-muted" style="font-size: 11px;">Officially generated electronic receipt. Generated on <?php echo date('Y-m-d H:i:s'); ?>.</p>
             </div>
+            <?php if ($isCompleted): ?>
             <div class="stamp-box-completed">
               <div class="seal-ring">
                 <div class="seal-icon">✓</div>
@@ -314,6 +372,12 @@ $schoolLogo = !empty($schoolSettings['school_logo']) ? (str_starts_with($schoolS
               </div>
               <div class="seal-caption">BURSARY VALIDATED</div>
             </div>
+            <?php else: ?>
+            <div style="border: 2px dashed #94a3b8; border-radius: 8px; padding: 10px 16px; text-align: center; width: 170px; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase;">
+              <div style="height: 25px;"></div>
+              Authorized Stamp
+            </div>
+            <?php endif; ?>
           </div>
         </div>
       </div>

@@ -536,7 +536,8 @@ try {
     $payment_history_stmt = $pdo->prepare("
         SELECT 
             p.id AS payment_id,
-            p.payment_reference AS receipt_number,
+            COALESCE(r.receipt_number, p.payment_reference) AS receipt_number,
+            p.payment_reference,
             p.payment_date,
             p.amount AS transaction_amount,
             p.payment_method,
@@ -544,15 +545,15 @@ try {
             p.payable_id,
             p.description AS payment_description,
             CASE 
-                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN CONCAT(ac.fee_name, ' (Extra Fee)')
+                WHEN (p.payable_type = 'additional_charge' OR p.payable_type LIKE '%AdditionalCharge%') THEN CONCAT(ac.fee_name, ' (Extra Fee)')
                 ELSE COALESCE(fs.name, fs.description, 'School Tuition Fee')
             END AS type_name,
             CASE 
-                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN 'Extra Charge'
+                WHEN (p.payable_type = 'additional_charge' OR p.payable_type LIKE '%AdditionalCharge%') THEN 'Extra Charge'
                 ELSE 'Tuition Fee'
             END AS item_category,
             CASE 
-                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.amount
+                WHEN (p.payable_type = 'additional_charge' OR p.payable_type LIKE '%AdditionalCharge%') THEN ac.amount
                 ELSE CASE
                     WHEN sf.base_amount > 0.001 THEN sf.base_amount
                     WHEN sf.amount_due > 0.001 THEN sf.amount_due
@@ -560,38 +561,42 @@ try {
                 END
             END AS amount_due,
             CASE 
-                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.amount_paid
-                ELSE (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed')
+                WHEN (p.payable_type = 'additional_charge' OR p.payable_type LIKE '%AdditionalCharge%') THEN (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'additional_charge' OR p_sub.payable_type LIKE '%AdditionalCharge%') AND p_sub.payable_id = ac.id AND p_sub.status = 'completed' AND p_sub.id <= p.id)
+                ELSE (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id)
             END AS total_fee_paid,
             CASE 
-                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.balance
-                ELSE GREATEST(0.00, (CASE WHEN sf.base_amount > 0.001 THEN sf.base_amount WHEN sf.amount_due > 0.001 THEN sf.amount_due ELSE COALESCE(fs.amount, 0.00) END) - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed'))
+                WHEN (p.payable_type = 'additional_charge' OR p.payable_type LIKE '%AdditionalCharge%') THEN GREATEST(0.00, ac.amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'additional_charge' OR p_sub.payable_type LIKE '%AdditionalCharge%') AND p_sub.payable_id = ac.id AND p_sub.status = 'completed' AND p_sub.id <= p.id))
+                ELSE GREATEST(0.00, (CASE WHEN sf.base_amount > 0.001 THEN sf.base_amount WHEN sf.amount_due > 0.001 THEN sf.amount_due ELSE COALESCE(fs.amount, 0.00) END) - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id))
             END AS current_balance,
             CASE 
-                WHEN p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') THEN ac.status
+                WHEN (p.payable_type = 'additional_charge' OR p.payable_type LIKE '%AdditionalCharge%') THEN 
+                    CASE 
+                        WHEN GREATEST(0.00, ac.amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'additional_charge' OR p_sub.payable_type LIKE '%AdditionalCharge%') AND p_sub.payable_id = ac.id AND p_sub.status = 'completed' AND p_sub.id <= p.id)) <= 0.001 THEN 'paid'
+                        ELSE 'partial'
+                    END
                 ELSE CASE 
-                    WHEN GREATEST(0.00, (CASE WHEN sf.base_amount > 0.001 THEN sf.base_amount WHEN sf.amount_due > 0.001 THEN sf.amount_due ELSE COALESCE(fs.amount, 0.00) END) - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed')) <= 0.001 THEN 'paid'
-                    WHEN (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed') > 0 THEN 'partial'
+                    WHEN GREATEST(0.00, (CASE WHEN sf.base_amount > 0.001 THEN sf.base_amount WHEN sf.amount_due > 0.001 THEN sf.amount_due ELSE COALESCE(fs.amount, 0.00) END) - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id)) <= 0.001 THEN 'paid'
+                    WHEN (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id) > 0 THEN 'partial'
                     ELSE 'pending'
                 END
             END AS fee_status,
             COALESCE(sess_sf.session_name, sess_ac.session_name, 'N/A') AS session_name,
             COALESCE(t_sf.term_name, t_ac.term_name, '') AS session_term
         FROM payments p
-        LEFT JOIN student_fees sf ON (p.payable_type IN ('student_fee', 'App\\Models\\StudentFee') AND p.payable_id = sf.id)
+        LEFT JOIN receipts r ON r.payment_id = p.id
+        LEFT JOIN student_fees sf ON ((p.payable_type = 'student_fee' OR p.payable_type LIKE '%StudentFee%') AND p.payable_id = sf.id)
         LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
         LEFT JOIN academic_sessions sess_sf ON fs.session_id = sess_sf.id
         LEFT JOIN academic_terms t_sf ON fs.term_id = t_sf.id
-        LEFT JOIN additional_charges ac ON (p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') AND p.payable_id = ac.id)
+        LEFT JOIN additional_charges ac ON ((p.payable_type = 'additional_charge' OR p.payable_type LIKE '%AdditionalCharge%') AND p.payable_id = ac.id)
         LEFT JOIN academic_sessions sess_ac ON ac.session_id = sess_ac.id
         LEFT JOIN academic_terms t_ac ON ac.term_id = t_ac.id
-        WHERE ((p.payable_type IN ('student_fee', 'App\\Models\\StudentFee') AND sf.student_id = :sid1)
-            OR (p.payable_type IN ('additional_charge', 'App\\Models\\AdditionalCharge') AND ac.student_id = :sid2))
+        WHERE ((sf.student_id = :sid1) OR (ac.student_id = :sid2) OR (r.student_id = :sid3))
           AND p.status = 'completed'
         ORDER BY COALESCE(p.payment_date, p.created_at) DESC, p.id DESC
-        LIMIT 50
+        LIMIT 100
     ");
-    $payment_history_stmt->execute(['sid1' => $studentId, 'sid2' => $studentId]);
+    $payment_history_stmt->execute(['sid1' => $studentId, 'sid2' => $studentId, 'sid3' => $studentId]);
     $payment_history = $payment_history_stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // 5. Get outstanding fees
@@ -794,6 +799,9 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
               </div>
               <div class="col-md-4 text-end">
                 <div class="btn-group-vertical" role="group">
+                  <a href="#payment_history_section" class="btn btn-light action-btn">
+                    <i class="fas fa-receipt me-2 text-success"></i>Payment Receipts (<?php echo count($payment_history ?? []); ?>)
+                  </a>
                   <a href="/admin/edit_students.php?id=<?php echo (int) $student['id']; ?>" class="btn btn-light action-btn">
                     <i class="fas fa-edit me-2"></i>Edit Student
                   </a>
@@ -1251,6 +1259,23 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                                   <span class="badge bg-success"><i class="fas fa-check me-1"></i> Cleared</span>
                                 <?php endif; ?>
 
+                                <?php if ($af_paid > 0.001): ?>
+                                  <?php 
+                                    $af_receipt = null;
+                                    foreach ($payment_history as $ph) {
+                                      if (($ph['payable_type'] === 'student_fee' || str_contains((string)$ph['payable_type'], 'StudentFee')) && (int)$ph['payable_id'] === (int)$af['id']) {
+                                        $af_receipt = $ph['receipt_number'] ?: $ph['payment_reference'];
+                                        break;
+                                      }
+                                    }
+                                  ?>
+                                  <?php if ($af_receipt): ?>
+                                    <a href="/admin/fees/receipt.php?receipt=<?php echo urlencode((string) $af_receipt); ?>" target="_blank" class="btn btn-sm btn-outline-info" title="View Receipt">
+                                      <i class="fas fa-receipt me-1"></i> Receipt
+                                    </a>
+                                  <?php endif; ?>
+                                <?php endif; ?>
+
                                 <?php if ($af_paid <= 0.001): ?>
                                   <form method="POST" action="" class="d-inline" onsubmit="return confirm('Are you sure you want to de-allocate this fee (<?php echo htmlspecialchars(addslashes((string) $af['type_name'])); ?>)? This fee assignment will be removed.');">
                                     <input type="hidden" name="deallocate_student_fee" value="1">
@@ -1376,6 +1401,22 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                             </td>
                             <td class="text-end">
                               <div class="d-flex justify-content-end gap-1">
+                                <?php if ($c_paid > 0.001): ?>
+                                  <?php 
+                                    $ac_receipt = null;
+                                    foreach ($payment_history as $ph) {
+                                      if (($ph['payable_type'] === 'additional_charge' || str_contains((string)$ph['payable_type'], 'AdditionalCharge')) && (int)$ph['payable_id'] === (int)$charge['id']) {
+                                        $ac_receipt = $ph['receipt_number'] ?: $ph['payment_reference'];
+                                        break;
+                                      }
+                                    }
+                                  ?>
+                                  <?php if ($ac_receipt): ?>
+                                    <a href="/admin/fees/receipt.php?receipt=<?php echo urlencode((string) $ac_receipt); ?>" target="_blank" class="btn btn-sm btn-outline-info" title="View Receipt">
+                                      <i class="fas fa-receipt me-1"></i> Receipt
+                                    </a>
+                                  <?php endif; ?>
+                                <?php endif; ?>
                                 <?php if ($c_bal > 0.001): ?>
                                   <button type="button" 
                                           class="btn btn-sm btn-success text-white pay-item-direct-btn"
@@ -1411,18 +1452,18 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                 </div>
               </div>
 
-              <!-- Recent Payment History -->
-              <div class="card mb-4">
+              <!-- Recent Payment History & Receipts -->
+              <div class="card mb-4" id="payment_history_section">
                 <div class="card-header d-flex justify-content-between align-items-center">
                   <h4 class="card-title mb-0">
-                    <i class="fas fa-history me-2"></i>Recent Payment History
+                    <i class="fas fa-receipt me-2 text-primary"></i>Student Payment Transactions & Receipts
                   </h4>
                   <span class="badge bg-secondary"><?php echo count($payment_history ?? []); ?> transactions</span>
                 </div>
                 <div class="card-body p-0">
                   <?php if (empty($payment_history)): ?>
                     <div class="text-center py-4 text-muted">
-                      <i class="fas fa-info-circle fa-2x mb-2 d-block"></i> No completed payment transactions found for this student.
+                      <i class="fas fa-receipt fa-2x mb-2 d-block text-secondary"></i> No completed payment transactions or receipts found for this student.
                     </div>
                   <?php else: ?>
                     <div class="table-responsive">
@@ -1430,21 +1471,33 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                         <thead class="bg-light">
                           <tr>
                             <th style="width: 40px;">#</th>
+                            <th>Official Receipt</th>
                             <th>Fee Item</th>
                             <th>Category</th>
                             <th>Session / Term</th>
-                            <th>Item Due (₦)</th>
+                            <th>Item Total (₦)</th>
                             <th>Paid in Txn (₦)</th>
                             <th>Current Balance (₦)</th>
-                            <th>Status</th>
+                            <th>Fee Status</th>
                             <th>Payment Date</th>
-                            <th>Receipt</th>
+                            <th class="text-center">Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           <?php $sn = 1; ?><?php foreach ($payment_history as $payment): ?>
+                          <?php 
+                            $recNum = !empty($payment['receipt_number']) ? $payment['receipt_number'] : $payment['payment_reference'];
+                          ?>
                           <tr>
                             <td><?php echo $sn++; ?></td>
+                            <td>
+                              <span class="badge bg-dark font-monospace py-1 px-2" style="font-size: 11px;">
+                                <i class="fas fa-receipt me-1 text-warning"></i><?php echo htmlspecialchars((string) $recNum); ?>
+                              </span>
+                              <?php if (!empty($payment['payment_reference']) && $payment['payment_reference'] !== $recNum): ?>
+                                <br><small class="text-muted" style="font-size: 10px;">Ref: <?php echo htmlspecialchars((string) $payment['payment_reference']); ?></small>
+                              <?php endif; ?>
+                            </td>
                             <td>
                               <strong class="text-dark"><?php echo htmlspecialchars((string) ($payment['type_name'] ?? 'School Fee')); ?></strong>
                               <?php if (!empty($payment['payment_description'])): ?>
@@ -1478,27 +1531,22 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                             <td>
                               <?php echo !empty($payment['payment_date']) ? date('M d, Y', strtotime((string) $payment['payment_date'])) : 'N/A'; ?>
                             </td>
-                            <td>
-                              <?php if (!empty($payment['receipt_number'])): ?>
-                                <code><?php echo htmlspecialchars((string) $payment['receipt_number']); ?></code>
-                                <br>
-                                <div class="d-flex gap-1 mt-1">
-                                   <a href="/admin/print_receipt.php?receipt=<?php echo urlencode((string) $payment['receipt_number']); ?>" 
-                                      target="_blank" 
-                                      class="btn btn-sm btn-outline-primary">
-                                       <i class="fas fa-print me-1"></i> Print
-                                   </a>
-                                   <form method="POST" action="" class="d-inline delete-payment-form" onsubmit="return confirmDeletePayment(event, this, '<?php echo htmlspecialchars((string)$payment['receipt_number']); ?>', '<?php echo number_format((float)($payment['transaction_amount'] ?? 0), 2); ?>');">
-                                     <input type="hidden" name="delete_payment" value="1">
-                                     <input type="hidden" name="payment_id" value="<?php echo (int)($payment['payment_id'] ?? 0); ?>">
-                                     <button type="submit" class="btn btn-sm btn-outline-danger">
-                                       <i class="fas fa-trash me-1"></i> Delete
-                                     </button>
-                                   </form>
-                                 </div>
-                              <?php else: ?>
-                                <span class="text-muted">-</span>
-                              <?php endif; ?>
+                            <td class="text-center">
+                              <div class="d-inline-flex gap-1 align-items-center">
+                                <a href="/admin/fees/receipt.php?receipt=<?php echo urlencode((string) $recNum); ?>" 
+                                   target="_blank" 
+                                   class="btn btn-sm btn-primary"
+                                   title="View & Print Official Receipt">
+                                    <i class="fas fa-print me-1"></i> Print Receipt
+                                </a>
+                                <form method="POST" action="" class="d-inline delete-payment-form" onsubmit="return confirmDeletePayment(event, this, '<?php echo htmlspecialchars((string)$recNum); ?>', '<?php echo number_format((float)($payment['transaction_amount'] ?? 0), 2); ?>');">
+                                  <input type="hidden" name="delete_payment" value="1">
+                                  <input type="hidden" name="payment_id" value="<?php echo (int)($payment['payment_id'] ?? 0); ?>">
+                                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete payment transaction">
+                                    <i class="fas fa-trash"></i>
+                                  </button>
+                                </form>
+                              </div>
                             </td>
                           </tr>
                           <?php endforeach; ?>

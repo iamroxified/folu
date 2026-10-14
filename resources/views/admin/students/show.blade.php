@@ -298,6 +298,11 @@
                                     @if($pmt->description)
                                         <div class="small text-secondary">{{ $pmt->description }}</div>
                                     @endif
+                                    <div class="mt-2">
+                                        <a href="/admin/fees/receipt.php?receipt={{ urlencode($pmt->payment_reference) }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-print me-1"></i> Print Receipt
+                                        </a>
+                                    </div>
                                 </li>
                             @endforeach
                         </ul>

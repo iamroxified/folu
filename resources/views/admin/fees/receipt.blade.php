@@ -92,7 +92,7 @@ try {
         die('Receipt reference "' . htmlspecialchars($receipt_number) . '" not found.');
     }
 
-    if (in_array($rawPayment['payable_type'], ['additional_charge', 'App\Models\AdditionalCharge'])) {
+    if (in_array($rawPayment['payable_type'], ['additional_charge', 'App\Models\AdditionalCharge']) || str_contains((string) $rawPayment['payable_type'], 'AdditionalCharge')) {
         $joins_ac = "JOIN additional_charges ac ON ac.id = p.payable_id\n";
         $joins_ac .= "        JOIN students s ON ac.student_id = s.id\n";
         if (schema_has_table('academic_sessions')) {
@@ -131,8 +131,6 @@ try {
                 p.payment_reference AS receipt_number,
                 p.amount AS transaction_amount,
                 p.description AS payment_description,
-                p.payment_method,
-                p.payment_date,
                 s.id AS student_id,
                 s.first_name,
                 s.last_name,
@@ -141,8 +139,8 @@ try {
                 {$classSelectName},
                 {$classSelectArm},
                 ac.amount AS amount_due,
-                ac.amount_paid AS total_fee_paid,
-                ac.balance AS fee_balance,
+                (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'additional_charge' OR p_sub.payable_type LIKE '%AdditionalCharge%') AND p_sub.payable_id = ac.id AND p_sub.status = 'completed' AND p_sub.id <= p.id) AS total_fee_paid,
+                GREATEST(0.00, ac.amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'additional_charge' OR p_sub.payable_type LIKE '%AdditionalCharge%') AND p_sub.payable_id = ac.id AND p_sub.status = 'completed' AND p_sub.id <= p.id)) AS fee_balance,
                 ac.status AS fee_status,
                 ac.reason AS fee_description,
                 CONCAT(ac.fee_name, ' (Extra Fee)') AS type_name,
@@ -155,7 +153,7 @@ try {
         $payment_stmt->execute([$rawPayment['id']]);
         $payment = $payment_stmt->fetch(PDO::FETCH_ASSOC);
     } else {
-        $joins = "JOIN student_fees sf ON (p.payable_type = 'student_fee' OR p.payable_type = 'App\\\\Models\\\\StudentFee') AND p.payable_id = sf.id\n";
+        $joins = "JOIN student_fees sf ON (p.payable_type = 'student_fee' OR p.payable_type LIKE '%StudentFee%') AND p.payable_id = sf.id\n";
         $joins .= "        JOIN students s ON sf.student_id = s.id\n";
         $joins .= "        LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id\n";
 
@@ -196,8 +194,6 @@ try {
                 p.payment_reference AS receipt_number,
                 p.amount AS transaction_amount,
                 p.description AS payment_description,
-                p.payment_method,
-                p.payment_date,
                 s.id AS student_id,
                 s.first_name,
                 s.last_name,
@@ -206,11 +202,11 @@ try {
                 {$classSelectName},
                 {$classSelectArm},
                 sf.base_amount AS amount_due,
-                (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed') AS total_fee_paid,
-                GREATEST(0.00, sf.base_amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed')) AS fee_balance,
+                (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id) AS total_fee_paid,
+                GREATEST(0.00, sf.base_amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id)) AS fee_balance,
                 CASE 
-                    WHEN GREATEST(0.00, sf.base_amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed')) <= 0.001 THEN 'paid'
-                    WHEN (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE p_sub.payable_type IN ('student_fee', 'App\\\\Models\\\\StudentFee') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed') > 0 THEN 'partial'
+                    WHEN GREATEST(0.00, sf.base_amount - (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id)) <= 0.001 THEN 'paid'
+                    WHEN (SELECT COALESCE(SUM(p_sub.amount), 0) FROM payments p_sub WHERE (p_sub.payable_type = 'student_fee' OR p_sub.payable_type LIKE '%StudentFee%') AND p_sub.payable_id = sf.id AND p_sub.status = 'completed' AND p_sub.id <= p.id) > 0 THEN 'partial'
                     ELSE 'pending'
                 END AS fee_status,
                 fs.description AS fee_description,
@@ -256,8 +252,17 @@ try {
     }
 
     // Completed status and payment balance flags
-    $isCompleted = strtolower(trim((string) ($payment['status'] ?? $rawPayment['status'] ?? ''))) === 'completed';
-    $itemBalance = (float) ($payment['fee_balance'] ?? 0);
+    $amountDue = (float) ($payment['amount_due'] ?? 0);
+    $totalFeePaid = (float) ($payment['total_fee_paid'] ?? 0);
+    $itemBalance = (float) ($payment['fee_balance'] ?? max(0.00, $amountDue - $totalFeePaid));
+    $transactionAmount = (float) ($payment['transaction_amount'] ?? $payment['amount'] ?? 0);
+
+    // CRITICAL: The payment completed watermark must ONLY appear on a receipt where the amount owed and amount paid are equal
+    $isEqualPaid = ($amountDue > 0.001) 
+        ? ($itemBalance <= 0.001 || abs($amountDue - $totalFeePaid) <= 0.01)
+        : ($transactionAmount > 0.001 && $itemBalance <= 0.001);
+
+    $isCompleted = $isEqualPaid;
     $isFullyPaid = $itemBalance <= 0.001;
 
 } catch (PDOException $e) {
@@ -749,6 +754,12 @@ try {
                     <div style="margin-top: 6px;">
                         <span class="completed-badge-pill">
                             <span style="font-size: 13px; line-height: 1;">✓</span> PAYMENT COMPLETED
+                        </span>
+                    </div>
+                <?php else: ?>
+                    <div style="margin-top: 6px;">
+                        <span class="completed-badge-pill" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
+                            <span style="font-size: 13px; line-height: 1;">⏳</span> PARTIAL PAYMENT
                         </span>
                     </div>
                 <?php endif; ?>
