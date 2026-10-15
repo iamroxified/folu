@@ -2,8 +2,8 @@
 require_once base_path('db/config.php');
 require_once base_path('db/functions.php');
 
-if (isset($_SESSION['student_user_id'], $_SESSION['student_id'])) {
-    header('Location: /student/index.php');
+if (isset($_SESSION['student_user_id'], $_SESSION['student_id']) || (class_exists(\Illuminate\Support\Facades\Auth::class) && \Illuminate\Support\Facades\Auth::check() && (int)(\Illuminate\Support\Facades\Auth::user()->role_id ?? 0) === 4)) {
+    header('Location: /student/dashboard');
     exit;
 }
 
@@ -31,7 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login
                 $_SESSION['student_id'] = (int) $student['id'];
                 $_SESSION['student_username'] = $student['admission_no'] ?? $result['user']['username'];
                 $_SESSION['student_name'] = trim(($student['first_name'] ?? '') . ' ' . ($student['last_name'] ?? ''));
-                header('Location: /student/index.php');
+                if (class_exists(\Illuminate\Support\Facades\Auth::class)) {
+                    \Illuminate\Support\Facades\Auth::loginUsingId((int) $result['user']['id'], true);
+                }
+                header('Location: /student/dashboard');
                 exit;
             }
         }

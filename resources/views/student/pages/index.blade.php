@@ -3,16 +3,20 @@ require_once base_path('db/config.php');
 require_once base_path('db/functions.php');
 
 if (!isset($_SESSION['student_user_id'], $_SESSION['student_id'])) {
+    if (class_exists(\Illuminate\Support\Facades\Auth::class) && \Illuminate\Support\Facades\Auth::check() && (int)(\Illuminate\Support\Facades\Auth::user()->role_id ?? 0) === 4) {
+        header('Location: /student/dashboard');
+        exit;
+    }
     header('Location: /student/login.php');
     exit;
 }
 
-$student = get_student_profile_by_user_id((int) $_SESSION['student_user_id']);
-
-if (!$student) {
-    header('Location: /student/logout.php');
-    exit;
+if (class_exists(\Illuminate\Support\Facades\Auth::class) && !\Illuminate\Support\Facades\Auth::check() && !empty($_SESSION['student_user_id'])) {
+    \Illuminate\Support\Facades\Auth::loginUsingId((int) $_SESSION['student_user_id'], true);
 }
+
+header('Location: /student/dashboard');
+exit;
 
 $currentSessionId = get_student_default_session_id((int) $student['id'], (int) ($student['academic_session_link'] ?? 0)) ?? 0;
 $payments = get_student_payment_history((int) $student['id'], $currentSessionId);

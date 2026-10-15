@@ -6,15 +6,23 @@ use Illuminate\Contracts\View\View;
 
 class StudentPortalController extends Controller
 {
-    public function show(?string $path = 'login.php'): View
+    public function show(?string $path = 'login.php')
     {
+        $normalized = $this->normalizePath($path);
+        if ($normalized === 'index' || $normalized === 'dashboard') {
+            return redirect()->route('student.dashboard');
+        }
+
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
 
         if (\Illuminate\Support\Facades\Auth::check()) {
             $user = \Illuminate\Support\Facades\Auth::user();
-            $student = \App\Models\Student::where('email', $user->email)->first(); // Note: adjust if needed, but the view uses helpers
+            $student = \App\Models\Student::where('email', $user->email)
+                ->orWhere('admission_no', $user->username)
+                ->orWhere('user_id', $user->id)
+                ->first();
 
             $_SESSION['student_user_id'] = $user->id;
             $_SESSION['student_id'] = $student->id ?? 0;
@@ -29,7 +37,7 @@ class StudentPortalController extends Controller
         $_POST = request()->post();
         $_REQUEST = array_merge($_GET, $_POST);
 
-        $view = 'student.pages.' . $this->normalizePath($path);
+        $view = 'student.pages.' . $normalized;
 
         abort_unless(view()->exists($view), 404);
 
