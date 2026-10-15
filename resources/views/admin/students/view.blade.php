@@ -463,8 +463,16 @@ try {
         }
     }
 
+    // Filter parameters for academic and financial history
+    $filterSessionId = isset($_GET['filter_session_id']) && $_GET['filter_session_id'] !== '' ? (int)$_GET['filter_session_id'] : null;
+    $filterTermId = isset($_GET['filter_term_id']) && $_GET['filter_term_id'] !== '' ? (int)$_GET['filter_term_id'] : null;
+    $filterTermCode = $filterTermId ? (string)$filterTermId : null;
+
+    $allSessionsList = QueryDB("SELECT id, session_name, is_active FROM academic_sessions ORDER BY start_date DESC, id DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $allTermsList = QueryDB("SELECT id, term_name FROM terms ORDER BY term_number ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+
     // 2. Get all allocated student fees (both base tuition and general fee structures)
-    $allocated_fees_stmt = $pdo->prepare("
+    $allocSql = "
         SELECT 
             sf.*,
             COALESCE(fs.name, fs.description, 'School Tuition Fee') AS type_name,
@@ -481,24 +489,46 @@ try {
         FROM student_fees sf
         LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
         LEFT JOIN academic_sessions sess ON sf.session_id = sess.id
-        LEFT JOIN academic_terms t ON sf.term_id = t.id
+        LEFT JOIN terms t ON sf.term_id = t.id
         WHERE sf.student_id = ?
-        ORDER BY sf.id DESC
-    ");
-    $allocated_fees_stmt->execute([$studentId]);
+    ";
+    $allocParams = [$studentId];
+    if ($filterSessionId) {
+        $allocSql .= " AND sf.session_id = ?";
+        $allocParams[] = $filterSessionId;
+    }
+    if ($filterTermId) {
+        $allocSql .= " AND sf.term_id = ?";
+        $allocParams[] = $filterTermId;
+    }
+    $allocSql .= " ORDER BY sf.id DESC";
+
+    $allocated_fees_stmt = $pdo->prepare($allocSql);
+    $allocated_fees_stmt->execute($allocParams);
     $allocated_fees = $allocated_fees_stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // 3. Get all additional charges for this student
-    $additional_charges_stmt = $pdo->prepare("
+    $chargeSql = "
         SELECT ac.*, u.name AS added_by_name, s.session_name, t.term_name
         FROM additional_charges ac
         LEFT JOIN users u ON ac.added_by = u.id
         LEFT JOIN academic_sessions s ON ac.session_id = s.id
-        LEFT JOIN academic_terms t ON ac.term_id = t.id
+        LEFT JOIN terms t ON ac.term_id = t.id
         WHERE ac.student_id = ?
-        ORDER BY ac.id DESC
-    ");
-    $additional_charges_stmt->execute([$studentId]);
+    ";
+    $chargeParams = [$studentId];
+    if ($filterSessionId) {
+        $chargeSql .= " AND (ac.session_id IS NULL OR ac.session_id = ?)";
+        $chargeParams[] = $filterSessionId;
+    }
+    if ($filterTermId) {
+        $chargeSql .= " AND (ac.term_id IS NULL OR ac.term_id = ?)";
+        $chargeParams[] = $filterTermId;
+    }
+    $chargeSql .= " ORDER BY ac.id DESC";
+
+    $additional_charges_stmt = $pdo->prepare($chargeSql);
+    $additional_charges_stmt->execute($chargeParams);
     $additional_charges = $additional_charges_stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Accurate calculation of fee summary across both allocated fees and additional charges
@@ -533,7 +563,7 @@ try {
     ];
 
     // 4. Get recent payment history (both base tuition and individual extra charges, with itemized non-cumulative balances)
-    $payment_history_stmt = $pdo->prepare("
+    $paymentSql = "
         SELECT 
             p.id AS payment_id,
             COALESCE(r.receipt_number, p.payment_reference) AS receipt_number,
@@ -586,17 +616,29 @@ try {
         LEFT JOIN receipts r ON r.payment_id = p.id
         LEFT JOIN student_fees sf ON ((p.payable_type = 'student_fee' OR p.payable_type LIKE '%StudentFee%') AND p.payable_id = sf.id)
         LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
-        LEFT JOIN academic_sessions sess_sf ON fs.session_id = sess_sf.id
-        LEFT JOIN academic_terms t_sf ON fs.term_id = t_sf.id
+        LEFT JOIN academic_sessions sess_sf ON sf.session_id = sess_sf.id
+        LEFT JOIN terms t_sf ON sf.term_id = t_sf.id
         LEFT JOIN additional_charges ac ON ((p.payable_type = 'additional_charge' OR p.payable_type LIKE '%AdditionalCharge%') AND p.payable_id = ac.id)
         LEFT JOIN academic_sessions sess_ac ON ac.session_id = sess_ac.id
-        LEFT JOIN academic_terms t_ac ON ac.term_id = t_ac.id
+        LEFT JOIN terms t_ac ON ac.term_id = t_ac.id
         WHERE ((sf.student_id = :sid1) OR (ac.student_id = :sid2) OR (r.student_id = :sid3))
           AND p.status = 'completed'
-        ORDER BY COALESCE(p.payment_date, p.created_at) DESC, p.id DESC
-        LIMIT 100
-    ");
-    $payment_history_stmt->execute(['sid1' => $studentId, 'sid2' => $studentId, 'sid3' => $studentId]);
+    ";
+    $payParams = ['sid1' => $studentId, 'sid2' => $studentId, 'sid3' => $studentId];
+    if ($filterSessionId) {
+        $paymentSql .= " AND (sf.session_id = :fsess1 OR ac.session_id = :fsess2)";
+        $payParams['fsess1'] = $filterSessionId;
+        $payParams['fsess2'] = $filterSessionId;
+    }
+    if ($filterTermId) {
+        $paymentSql .= " AND (sf.term_id = :fterm1 OR ac.term_id = :fterm2)";
+        $payParams['fterm1'] = $filterTermId;
+        $payParams['fterm2'] = $filterTermId;
+    }
+    $paymentSql .= " ORDER BY COALESCE(p.payment_date, p.created_at) DESC, p.id DESC LIMIT 100";
+
+    $payment_history_stmt = $pdo->prepare($paymentSql);
+    $payment_history_stmt->execute($payParams);
     $payment_history = $payment_history_stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // 5. Get outstanding fees
@@ -605,7 +647,7 @@ try {
             sf.*,
             COALESCE(fs.name, fs.description, 'School Fee') AS type_name,
             COALESCE(fs.description, fs.name) AS fee_description,
-            ac.session_name,
+            sess.session_name,
             t.term_name AS session_term,
             t.term_name AS term,
             CASE 
@@ -615,8 +657,8 @@ try {
             END AS calculated_base_amount
         FROM student_fees sf
         LEFT JOIN fee_structures fs ON sf.fee_structure_id = fs.id
-        LEFT JOIN academic_sessions ac ON fs.session_id = ac.id
-        LEFT JOIN academic_terms t ON fs.term_id = t.id
+        LEFT JOIN academic_sessions sess ON sf.session_id = sess.id
+        LEFT JOIN terms t ON sf.term_id = t.id
         WHERE sf.student_id = ?
         AND sf.balance > 0
         ORDER BY sf.due_date ASC, sf.updated_at DESC
@@ -624,7 +666,30 @@ try {
     $outstanding_stmt->execute([$studentId]);
     $outstanding_fees = $outstanding_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 6. Build Individual Payable Items list (DO NOT lump sum tuition with additional charges)
+    // 6. Results and Attendance history
+    $student_results = get_student_results($studentId, $filterSessionId, $filterTermCode);
+    $student_attendance_records = get_student_attendance_history($studentId, $filterSessionId, $filterTermId);
+
+    $att_total_days = count($student_attendance_records);
+    $att_present = 0;
+    $att_absent = 0;
+    $att_late = 0;
+    $att_excused = 0;
+    foreach ($student_attendance_records as $rec) {
+        $st = strtolower((string)($rec['status'] ?? ''));
+        if ($st === 'present') {
+            $att_present++;
+        } elseif ($st === 'absent') {
+            $att_absent++;
+        } elseif ($st === 'late') {
+            $att_late++;
+        } elseif ($st === 'excused' || $st === 'sick' || $st === 'holiday') {
+            $att_excused++;
+        }
+    }
+    $att_rate = $att_total_days > 0 ? round(($att_present / $att_total_days) * 100, 1) : 0;
+
+    // 7. Build Individual Payable Items list (DO NOT lump sum tuition with additional charges)
     $payable_items = [];
 
     // A. Base Tuition Fees (Itemized per student fee record)
@@ -698,6 +763,20 @@ try {
     }
     if (!isset($payable_items)) {
         $payable_items = [];
+    }
+    if (!isset($student_results)) {
+        $student_results = [];
+    }
+    if (!isset($student_attendance_records)) {
+        $student_attendance_records = [];
+    }
+    if (!isset($att_total_days)) {
+        $att_total_days = 0;
+        $att_present = 0;
+        $att_absent = 0;
+        $att_late = 0;
+        $att_excused = 0;
+        $att_rate = 0;
     }
 }
 
@@ -1159,6 +1238,57 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                 </div>
               </div>
 
+              <!-- Academic Session & Term History Filter Card -->
+              <div class="card mb-4 shadow-sm border-secondary">
+                <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <h5 class="card-title mb-0 text-dark fw-bold fs-6">
+                    <i class="fas fa-history me-2 text-primary"></i>Filter Academic & Financial History
+                  </h5>
+                  <?php if ($filterSessionId || $filterTermId): ?>
+                    <span class="badge bg-info text-dark">Filtered View Active</span>
+                  <?php else: ?>
+                    <span class="badge bg-secondary">Viewing All History</span>
+                  <?php endif; ?>
+                </div>
+                <div class="card-body py-3">
+                  <form method="GET" action="" class="row g-2 align-items-end">
+                    <input type="hidden" name="id" value="<?php echo (int) $studentId; ?>">
+                    <div class="col-md-5">
+                      <label class="form-label small fw-bold text-muted mb-1">Academic Session</label>
+                      <select name="filter_session_id" class="form-select form-select-sm">
+                        <option value="">-- All Academic Sessions --</option>
+                        <?php foreach ($allSessionsList as $sess): ?>
+                          <option value="<?php echo (int) $sess['id']; ?>" <?php echo $filterSessionId === (int) $sess['id'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars((string) $sess['session_name']); ?> <?php echo !empty($sess['is_active']) ? '(Current Active)' : ''; ?>
+                          </option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small fw-bold text-muted mb-1">Term</label>
+                      <select name="filter_term_id" class="form-select form-select-sm">
+                        <option value="">-- All Terms --</option>
+                        <?php foreach ($allTermsList as $trm): ?>
+                          <option value="<?php echo (int) $trm['id']; ?>" <?php echo $filterTermId === (int) $trm['id'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars((string) $trm['term_name']); ?>
+                          </option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                      <button type="submit" class="btn btn-primary btn-sm flex-grow-1 fw-bold">
+                        <i class="fas fa-filter me-1"></i> Filter
+                      </button>
+                      <?php if ($filterSessionId || $filterTermId): ?>
+                        <a href="?id=<?php echo (int) $studentId; ?>" class="btn btn-outline-secondary btn-sm fw-bold" title="Reset to All">
+                          <i class="fas fa-undo"></i>
+                        </a>
+                      <?php endif; ?>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
               <!-- Allocated School & Tuition Fees -->
               <div class="card mb-4 shadow-sm border-primary">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
@@ -1552,6 +1682,237 @@ $allCatalogueSubjects = QueryDB("SELECT * FROM subjects WHERE (status IS NULL OR
                           <?php endforeach; ?>
                         </tbody>
                       </table>
+                    </div>
+                  <?php endif; ?>
+                </div>
+              </div>
+
+              <!-- Academic Results & Examination Grades Card -->
+              <div class="card mb-4 shadow-sm border-info" id="student_results_section">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <h4 class="card-title mb-0 text-dark fw-bold">
+                    <i class="fas fa-chart-line me-2 text-info"></i>Academic Results & Examination Grades
+                  </h4>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-info text-dark fw-bold"><?php echo count($student_results ?? []); ?> Record(s)</span>
+                    <a href="/admin/grades.php" class="btn btn-outline-info btn-sm fw-bold">
+                      <i class="fas fa-pen-alt me-1"></i> Manage Grades
+                    </a>
+                  </div>
+                </div>
+                <div class="card-body p-0">
+                  <?php if (empty($student_results)): ?>
+                    <div class="text-center py-4 text-muted">
+                      <i class="fas fa-award fa-2x mb-2 d-block text-muted"></i>
+                      No examination grades or academic results found for this student<?php echo ($filterSessionId || $filterTermId) ? ' for the selected filter criteria' : ''; ?>.
+                    </div>
+                  <?php else: ?>
+                    <div class="table-responsive">
+                      <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                          <tr>
+                            <th style="width: 40px;">#</th>
+                            <th>Subject</th>
+                            <th>Academic Session</th>
+                            <th>Term</th>
+                            <th>Assessment</th>
+                            <th>Score / Max</th>
+                            <th>Percentage</th>
+                            <th>Grade</th>
+                            <th>Remarks</th>
+                            <th>Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <?php 
+                            $sn_res = 1;
+                            foreach ($student_results as $res):
+                              $score = (float) ($res['score'] ?? 0);
+                              $maxScore = (float) ($res['max_score'] ?? 100);
+                              $pct = isset($res['percentage']) ? (float)$res['percentage'] : ($maxScore > 0 ? round(($score / $maxScore) * 100, 1) : 0);
+                              $letterGrade = !empty($res['letter_grade']) ? strtoupper((string)$res['letter_grade']) : (!empty($res['grade']) ? strtoupper((string)$res['grade']) : nigerian_grade_from_score($score));
+                              $gradeBadgeClass = match($letterGrade) {
+                                'A', 'A1' => 'bg-success text-white',
+                                'B', 'B2', 'B3' => 'bg-primary text-white',
+                                'C', 'C4', 'C5', 'C6' => 'bg-info text-dark',
+                                'D', 'D7', 'E', 'E8' => 'bg-warning text-dark',
+                                default => 'bg-danger text-white'
+                              };
+                          ?>
+                          <tr>
+                            <td><?php echo $sn_res++; ?></td>
+                            <td>
+                              <strong class="text-dark"><?php echo htmlspecialchars((string) ($res['subject_name'] ?? 'Subject')); ?></strong>
+                              <?php if (!empty($res['subject_code'])): ?>
+                                <br><small class="text-muted"><?php echo htmlspecialchars((string) $res['subject_code']); ?></small>
+                              <?php endif; ?>
+                            </td>
+                            <td><small class="text-muted"><?php echo htmlspecialchars((string) ($res['session_name'] ?? 'N/A')); ?></small></td>
+                            <td>
+                              <span class="badge bg-light text-dark border">
+                                <?php echo ucfirst((string) ($res['term_name'] ?? $res['term'] ?? 'First')); ?> Term
+                              </span>
+                            </td>
+                            <td>
+                              <span class="badge bg-secondary text-white">
+                                <?php echo htmlspecialchars(ucfirst((string) ($res['assessment_name'] ?? $res['assessment_type'] ?? 'Exam'))); ?>
+                              </span>
+                            </td>
+                            <td class="fw-bold text-dark">
+                              <?php echo number_format($score, 1); ?> <span class="text-muted fw-normal">/ <?php echo number_format($maxScore, 0); ?></span>
+                            </td>
+                            <td class="fw-bold <?php echo $pct >= 50 ? 'text-success' : 'text-danger'; ?>">
+                              <?php echo number_format($pct, 1); ?>%
+                            </td>
+                            <td>
+                              <span class="badge <?php echo $gradeBadgeClass; ?> px-2 py-1 fw-bold">
+                                <?php echo htmlspecialchars($letterGrade); ?>
+                              </span>
+                            </td>
+                            <td><small class="text-muted"><?php echo htmlspecialchars((string) ($res['comments'] ?? $res['remarks'] ?? '—')); ?></small></td>
+                            <td><small class="text-muted"><?php echo !empty($res['assessment_date']) ? date('M d, Y', strtotime((string)$res['assessment_date'])) : '—'; ?></small></td>
+                          </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                  <?php endif; ?>
+                </div>
+              </div>
+
+              <!-- Attendance History & Records Card -->
+              <div class="card mb-4 shadow-sm border-success" id="student_attendance_section">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <h4 class="card-title mb-0 text-dark fw-bold">
+                    <i class="fas fa-calendar-check me-2 text-success"></i>Attendance Records & Statistics
+                  </h4>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-success text-white fw-bold"><?php echo (int)$att_total_days; ?> Total Days</span>
+                    <a href="/admin/attendance/view.php" class="btn btn-outline-success btn-sm fw-bold">
+                      <i class="fas fa-calendar-alt me-1"></i> Attendance Hub
+                    </a>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <!-- Attendance Summary Stats Bar -->
+                  <div class="row g-2 mb-3 text-center">
+                    <div class="col-6 col-md-3">
+                      <div class="p-2 border rounded bg-light">
+                        <small class="text-muted d-block">Present Days</small>
+                        <strong class="text-success fs-5"><?php echo (int) $att_present; ?></strong>
+                        <span class="badge bg-success-subtle text-success ms-1" style="font-size: 11px;">
+                          <?php echo $att_total_days > 0 ? round(($att_present / $att_total_days) * 100) : 0; ?>%
+                        </span>
+                      </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                      <div class="p-2 border rounded bg-light">
+                        <small class="text-muted d-block">Absent Days</small>
+                        <strong class="text-danger fs-5"><?php echo (int) $att_absent; ?></strong>
+                        <span class="badge bg-danger-subtle text-danger ms-1" style="font-size: 11px;">
+                          <?php echo $att_total_days > 0 ? round(($att_absent / $att_total_days) * 100) : 0; ?>%
+                        </span>
+                      </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                      <div class="p-2 border rounded bg-light">
+                        <small class="text-muted d-block">Late / Excused</small>
+                        <strong class="text-warning fs-5"><?php echo (int) ($att_late + $att_excused); ?></strong>
+                        <small class="text-muted">(<?php echo (int)$att_late; ?>L / <?php echo (int)$att_excused; ?>E)</small>
+                      </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                      <div class="p-2 border rounded bg-light">
+                        <small class="text-muted d-block">Attendance Rate</small>
+                        <strong class="<?php echo $att_rate >= 75 ? 'text-success' : ($att_rate >= 50 ? 'text-warning' : 'text-danger'); ?> fs-5">
+                          <?php echo number_format($att_rate, 1); ?>%
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <?php if (empty($student_attendance_records)): ?>
+                    <div class="text-center py-4 text-muted">
+                      <i class="fas fa-calendar-times fa-2x mb-2 d-block text-muted"></i>
+                      No attendance records found for this student<?php echo ($filterSessionId || $filterTermId) ? ' for the selected filter criteria' : ''; ?>.
+                    </div>
+                  <?php else: ?>
+                    <div class="table-responsive">
+                      <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                          <tr>
+                            <th style="width: 40px;">#</th>
+                            <th>Date</th>
+                            <th>Session / Term</th>
+                            <th>Class / Subject</th>
+                            <th>Status</th>
+                            <th>Time In / Out</th>
+                            <th>Reason / Remarks</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <?php 
+                            $sn_att = 1;
+                            foreach (array_slice($student_attendance_records, 0, 50) as $att):
+                              $attStatus = strtolower((string)($att['status'] ?? 'present'));
+                              $statusBadge = match($attStatus) {
+                                'present' => 'bg-success text-white',
+                                'absent' => 'bg-danger text-white',
+                                'late' => 'bg-warning text-dark',
+                                'excused', 'sick', 'holiday' => 'bg-info text-dark',
+                                default => 'bg-secondary text-white'
+                              };
+                          ?>
+                          <tr>
+                            <td><?php echo $sn_att++; ?></td>
+                            <td>
+                              <strong><?php echo !empty($att['date']) ? date('M d, Y', strtotime((string)$att['date'])) : '—'; ?></strong>
+                              <br><small class="text-muted"><?php echo !empty($att['date']) ? date('l', strtotime((string)$att['date'])) : ''; ?></small>
+                            </td>
+                            <td>
+                              <small class="text-muted">
+                                <?php echo htmlspecialchars((string) ($att['session_name'] ?? 'N/A')); ?>
+                                <?php if (!empty($att['term_name'])): ?>
+                                  (<?php echo htmlspecialchars((string)$att['term_name']); ?>)
+                                <?php endif; ?>
+                              </small>
+                            </td>
+                            <td>
+                              <small class="text-dark">
+                                <?php echo htmlspecialchars((string) ($att['class_name'] ?? 'General Daily')); ?>
+                                <?php if (!empty($att['subject_name'])): ?>
+                                  <br><span class="text-muted"><?php echo htmlspecialchars((string)$att['subject_name']); ?></span>
+                                <?php endif; ?>
+                              </small>
+                            </td>
+                            <td>
+                              <span class="badge <?php echo $statusBadge; ?> px-2 py-1">
+                                <?php echo ucfirst($attStatus); ?>
+                              </span>
+                            </td>
+                            <td>
+                              <small class="text-muted">
+                                <?php if (!empty($att['arrival_time'])): ?>
+                                  <i class="fas fa-sign-in-alt text-success me-1"></i><?php echo htmlspecialchars((string)$att['arrival_time']); ?>
+                                <?php endif; ?>
+                                <?php if (!empty($att['departure_time'])): ?>
+                                  <br><i class="fas fa-sign-out-alt text-danger me-1"></i><?php echo htmlspecialchars((string)$att['departure_time']); ?>
+                                <?php endif; ?>
+                                <?php if (empty($att['arrival_time']) && empty($att['departure_time'])): ?>
+                                  —
+                                <?php endif; ?>
+                              </small>
+                            </td>
+                            <td><small class="text-muted"><?php echo htmlspecialchars((string) ($att['remarks'] ?? '—')); ?></small></td>
+                          </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                      <?php if (count($student_attendance_records) > 50): ?>
+                        <div class="text-center py-2 text-muted small bg-light border-top">
+                          Showing latest 50 of <?php echo count($student_attendance_records); ?> attendance records.
+                        </div>
+                      <?php endif; ?>
                     </div>
                   <?php endif; ?>
                 </div>

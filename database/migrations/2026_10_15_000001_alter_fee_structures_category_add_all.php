@@ -21,3 +21,4 @@ return new class extends Migration
         DB::statement("ALTER TABLE fee_structures MODIFY COLUMN category ENUM('NI', 'OS') NOT NULL DEFAULT 'OS'");
     }
 };
+

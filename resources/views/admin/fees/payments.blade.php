@@ -206,6 +206,7 @@ $search = trim((string) ($_GET['search'] ?? ''));
 $classFilter = filter_input(INPUT_GET, 'class_id', FILTER_VALIDATE_INT);
 $statusFilter = trim((string) ($_GET['status'] ?? ''));
 $sessionFilter = filter_input(INPUT_GET, 'session_id', FILTER_VALIDATE_INT);
+$termFilter = filter_input(INPUT_GET, 'term_id', FILTER_VALIDATE_INT);
 
 // Build SQL Query with Filters
 $whereConditions = ["1=1"];
@@ -245,8 +246,15 @@ if ($statusFilter !== '') {
 }
 
 if ($sessionFilter) {
-    $whereConditions[] = "sf.academic_year = ?";
-    $queryParams[] = (string) $sessionFilter;
+    $whereConditions[] = "(sf.session_id = ? OR s.current_session_id = ?)";
+    $queryParams[] = $sessionFilter;
+    $queryParams[] = $sessionFilter;
+}
+
+if ($termFilter) {
+    $whereConditions[] = "(sf.term_id = ? OR s.current_term_id = ?)";
+    $queryParams[] = $termFilter;
+    $queryParams[] = $termFilter;
 }
 
 $whereSql = implode(' AND ', $whereConditions);
@@ -334,6 +342,10 @@ $classesList = schema_has_table('school_classes')
 
 $sessionsList = schema_has_table('academic_sessions')
     ? QueryDB("SELECT id, session_name FROM academic_sessions ORDER BY is_active DESC, start_date DESC")->fetchAll()
+    : [];
+
+$termsList = schema_has_table('terms')
+    ? QueryDB("SELECT id, term_name, term_number FROM terms ORDER BY term_number ASC")->fetchAll()
     : [];
 
 ?>
@@ -436,14 +448,36 @@ $sessionsList = schema_has_table('academic_sessions')
                     <div class="card mb-4">
                         <div class="card-body">
                             <form method="GET" class="row g-3 align-items-center">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">Search Student / Admission / Receipt</label>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Search Student / Admission</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="fas fa-search"></i></span>
-                                        <input type="text" name="search" class="form-control" placeholder="Enter student name or admission no..." value="<?php echo htmlspecialchars($search); ?>">
+                                        <input type="text" name="search" class="form-control" placeholder="Name or admission no..." value="<?php echo htmlspecialchars($search); ?>">
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Session</label>
+                                    <select name="session_id" class="form-select">
+                                        <option value="">All Sessions</option>
+                                        <?php foreach ($sessionsList as $s): ?>
+                                            <option value="<?php echo (int) $s['id']; ?>" <?php echo $sessionFilter == $s['id'] ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars((string) $s['session_name']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Term</label>
+                                    <select name="term_id" class="form-select">
+                                        <option value="">All Terms</option>
+                                        <?php foreach ($termsList as $t): ?>
+                                            <option value="<?php echo (int) $t['id']; ?>" <?php echo $termFilter == $t['id'] ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars((string) $t['term_name']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
                                     <label class="form-label fw-bold">Class</label>
                                     <select name="class_id" class="form-select">
                                         <option value="">All Classes</option>
@@ -454,18 +488,18 @@ $sessionsList = schema_has_table('academic_sessions')
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <div class="col-md-2">
-                                    <label class="form-label fw-bold">Payment Status</label>
+                                <div class="col-md-1">
+                                    <label class="form-label fw-bold">Status</label>
                                     <select name="status" class="form-select">
-                                        <option value="">All Statuses</option>
+                                        <option value="">All</option>
                                         <option value="paid" <?php echo $statusFilter === 'paid' ? 'selected' : ''; ?>>Paid</option>
                                         <option value="partial" <?php echo $statusFilter === 'partial' ? 'selected' : ''; ?>>Partial</option>
-                                        <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>Pending / Unpaid</option>
+                                        <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>Unpaid</option>
                                     </select>
                                 </div>
-                                <div class="col-md-3 d-flex align-items-end gap-2" style="margin-top: 32px;">
+                                <div class="col-md-2 d-flex align-items-end gap-2" style="margin-top: 32px;">
                                     <button type="submit" class="btn btn-primary flex-grow-1"><i class="fas fa-filter me-1"></i> Filter</button>
-                                    <a href="?" class="btn btn-outline-secondary"><i class="fas fa-undo"></i> Reset</a>
+                                    <a href="?" class="btn btn-outline-secondary" title="Reset Filters"><i class="fas fa-undo"></i></a>
                                 </div>
                             </form>
                         </div>

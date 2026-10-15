@@ -296,12 +296,16 @@ function get_current_academic_term_id(?int $sessionId = null): ?int
 
 function set_current_academic_session(int $sessionId): bool
 {
-    global $pdo;
-
     if (!schema_has_table('academic_sessions')) {
         return false;
     }
 
+    if (class_exists('\App\Services\AcademicSessionTransitionService')) {
+        \App\Services\AcademicSessionTransitionService::transitionToSessionAndTerm($sessionId, null, true);
+        return true;
+    }
+
+    global $pdo;
     $pdo->beginTransaction();
 
     try {
@@ -318,12 +322,17 @@ function set_current_academic_session(int $sessionId): bool
 
 function set_current_academic_term(int $termId): bool
 {
-    global $pdo;
-
-    if (!schema_has_table('academic_terms')) {
+    if (!schema_has_table('academic_terms') && !schema_has_table('terms')) {
         return false;
     }
 
+    if (class_exists('\App\Services\AcademicSessionTransitionService')) {
+        $sessId = get_current_academic_session_id() ?? 1;
+        \App\Services\AcademicSessionTransitionService::transitionToSessionAndTerm($sessId, $termId, true);
+        return true;
+    }
+
+    global $pdo;
     $pdo->beginTransaction();
 
     try {
@@ -2045,6 +2054,15 @@ function allocate_fees_to_students_for_fee(int $feeId, ?int $sessionId = null): 
 
 function allocate_active_session_fees(?int $sessionId = null, ?int $termId = null): array
 {
+    if (class_exists('\App\Services\AcademicSessionTransitionService')) {
+        $res = \App\Services\AcademicSessionTransitionService::assignFeesToAllStudents($sessionId, $termId);
+        return [
+            'allocated' => $res['fees_allocated'],
+            'skipped' => 0,
+            'fees_processed' => $res['students_processed'],
+        ];
+    }
+
     $sessionId ??= get_current_academic_session_id();
     $termId ??= get_current_academic_term_id($sessionId) ?? 0;
     $fees = QueryDB(
@@ -2378,25 +2396,58 @@ function get_student_payment_history(int $studentId, ?int $sessionId = null): ar
     return QueryDB($query, [$studentId, $sessionId, $sessionId])->fetchAll();
 }
 
-function get_student_attendance_history(int $studentId, ?int $sessionId = null): array
+function get_student_attendance_history(int $studentId, ?int $sessionId = null, ?int $termId = null): array
 {
-    $sessionId ??= get_current_academic_session_id() ?? 0;
+    $sessionId ??= 0;
+    $termId ??= 0;
 
     if (schema_has_table('student_attendance')) {
+        $hasClassId = schema_has_column('student_attendance', 'class_id');
+        $hasSchoolClassId = schema_has_column('student_attendance', 'school_class_id');
+        $hasSessionId = schema_has_column('student_attendance', 'session_id');
+        $hasTermId = schema_has_column('student_attendance', 'term_id');
+
+        $classJoin = $hasClassId ? "LEFT JOIN classes c ON a.class_id = c.id" : "";
+        $schoolClassJoin = $hasSchoolClassId ? "LEFT JOIN school_classes sc ON a.school_class_id = sc.id" : "";
+        $classNameSelect = ($hasClassId && $hasSchoolClassId)
+            ? "COALESCE(c.class_name, sc.class_name) AS class_name, COALESCE(c.class_arm, sc.section) AS class_arm"
+            : ($hasSchoolClassId ? "sc.class_name AS class_name, sc.section AS class_arm" : "NULL AS class_name, NULL AS class_arm");
+
+        $sessionJoin = $hasSessionId ? "LEFT JOIN academic_sessions sess ON a.session_id = sess.id" : "";
+        $termJoin = $hasTermId ? "LEFT JOIN terms t ON a.term_id = t.id" : "";
+        $sessionTermSelect = ($hasSessionId ? "sess.session_name" : "a.academic_year AS session_name") . ", " . ($hasTermId ? "t.term_name" : "a.term AS term_name");
+
+        $whereClause = "a.student_id = ?";
+        $params = [$studentId];
+
+        if ($hasSessionId) {
+            $whereClause .= " AND (? = 0 OR a.session_id IS NULL OR a.session_id = ?)";
+            $params[] = $sessionId;
+            $params[] = $sessionId;
+        }
+
+        if ($hasTermId) {
+            $whereClause .= " AND (? = 0 OR a.term_id IS NULL OR a.term_id = ?)";
+            $params[] = $termId;
+            $params[] = $termId;
+        }
+
         return QueryDB(
             "SELECT a.*,
-                    COALESCE(c.class_name, sc.class_name) AS class_name,
-                    COALESCE(c.class_arm, sc.section) AS class_arm,
+                    {$classNameSelect},
                     sub.subject_name,
                     COALESCE(a.remarks, a.reason) AS remarks,
-                    COALESCE(a.date, a.attendance_date) AS date
+                    COALESCE(a.date, a.attendance_date) AS date,
+                    {$sessionTermSelect}
              FROM student_attendance a
-             LEFT JOIN classes c ON a.class_id = c.id
-             LEFT JOIN school_classes sc ON a.school_class_id = sc.id
+             {$classJoin}
+             {$schoolClassJoin}
              LEFT JOIN subjects sub ON a.subject_id = sub.id
-             WHERE a.student_id = ? AND (? = 0 OR a.session_id IS NULL OR a.session_id = ?)
+             {$sessionJoin}
+             {$termJoin}
+             WHERE {$whereClause}
              ORDER BY COALESCE(a.date, a.attendance_date) DESC, a.id DESC",
-            [$studentId, $sessionId, $sessionId]
+            $params
         )->fetchAll();
     }
 
@@ -2417,7 +2468,7 @@ function get_student_attendance_history(int $studentId, ?int $sessionId = null):
 
 function get_student_results(int $studentId, ?int $sessionId = null, ?string $term = null): array
 {
-    $sessionId ??= get_current_academic_session_id() ?? 0;
+    $sessionId ??= 0;
     $term = $term !== null && $term !== '' ? (string) $term : null;
 
     if (schema_has_table('student_grades')) {
@@ -2429,27 +2480,44 @@ function get_student_results(int $studentId, ?int $sessionId = null, ?string $te
             '1' => 'first',
             '2' => 'second',
             '3' => 'third',
-            default => null,
+            default => $term,
         };
+
+        $hasClassId = schema_has_column('student_grades', 'class_id');
+        $hasSchoolClassId = schema_has_column('student_grades', 'school_class_id');
+
+        $classJoin = $hasClassId ? "LEFT JOIN classes c ON g.class_id = c.id" : "";
+        $schoolClassJoin = $hasSchoolClassId ? "LEFT JOIN school_classes sc ON g.school_class_id = sc.id" : "";
+        $classNameSelect = ($hasClassId && $hasSchoolClassId)
+            ? "COALESCE(c.class_name, sc.class_name) AS class_name, COALESCE(c.class_arm, sc.section) AS class_arm"
+            : ($hasSchoolClassId ? "sc.class_name AS class_name, sc.section AS class_arm" : "NULL AS class_name, NULL AS class_arm");
 
         return QueryDB(
             "SELECT g.*,
                     sub.subject_name,
                     sub.subject_code,
-                    COALESCE(c.class_name, sc.class_name) AS class_name,
-                    COALESCE(c.class_arm, sc.section) AS class_arm,
-                    ? AS session_name,
+                    {$classNameSelect},
+                    COALESCE(sess.session_name, g.academic_year) AS session_name,
                     NULL AS term_code,
-                    g.term AS term_name
+                    COALESCE(t.term_name, g.term) AS term_name
              FROM student_grades g
              LEFT JOIN subjects sub ON g.subject_id = sub.id
-             LEFT JOIN classes c ON g.class_id = c.id
-             LEFT JOIN school_classes sc ON g.school_class_id = sc.id
+             {$classJoin}
+             {$schoolClassJoin}
+             LEFT JOIN academic_sessions sess ON g.academic_year = sess.session_name
+             LEFT JOIN terms t ON (
+                 (g.term = 'first' AND t.term_number = 1) OR
+                 (g.term = 'second' AND t.term_number = 2) OR
+                 (g.term = 'third' AND t.term_number = 3) OR
+                 (g.term = '1' AND t.term_number = 1) OR
+                 (g.term = '2' AND t.term_number = 2) OR
+                 (g.term = '3' AND t.term_number = 3)
+             )
              WHERE g.student_id = ?
                AND (? = '' OR g.academic_year = ?)
-               AND (? IS NULL OR g.term = ?)
-             ORDER BY sub.subject_name, g.term, g.assessment_type, g.assessment_date",
-            [$sessionName, $studentId, $sessionName, $sessionName, $termName, $termName]
+               AND (? IS NULL OR g.term = ? OR g.term = ?)
+             ORDER BY COALESCE(sess.session_name, g.academic_year) DESC, g.term DESC, sub.subject_name ASC, g.assessment_type ASC, g.assessment_date DESC",
+            [$studentId, $sessionName, $sessionName, $termName, $termName, $term]
         )->fetchAll();
     }
 

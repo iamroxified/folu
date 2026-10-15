@@ -101,6 +101,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $termId = (int) ($_POST['term_id'] ?? 0);
             $result = allocate_active_session_fees($selectedSessionId > 0 ? $selectedSessionId : null, $termId > 0 ? $termId : null);
             $message = 'Fees assigned successfully. New allocations: ' . $result['allocated'] . '. Existing allocations skipped: ' . $result['skipped'] . '.';
+        } elseif ($action === 'sync_all_students') {
+            $sessId = (int) ($_POST['session_id'] ?? (get_current_academic_session_id() ?? 1));
+            $tId = (int) ($_POST['term_id'] ?? (get_current_academic_term_id($sessId) ?? 1));
+            $res = \App\Services\AcademicSessionTransitionService::transitionToSessionAndTerm($sessId, $tId, true);
+            $message = $res['message'];
         }
     } catch (Throwable $e) {
         $error = $e->getMessage();
@@ -244,6 +249,17 @@ $allTerms = QueryDB(
                                                 <?php endif; ?>
                                             </div>
                                         </div>
+                                    </div>
+                                    <div class="mt-3 pt-3 border-top d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <div class="small text-muted">
+                                            <i class="fas fa-info-circle me-1 text-primary"></i> Setting an active session or term automatically assigns all active students and applies scheduled fee allocations without disrupting historical records.
+                                        </div>
+                                        <form method="POST" class="d-inline">
+                                            <input type="hidden" name="action" value="sync_all_students">
+                                            <button type="submit" class="btn btn-outline-primary btn-sm fw-bold">
+                                                <i class="fas fa-sync-alt me-1"></i> Sync Students & Apply Scheduled Fees
+                                            </button>
+                                        </form>
                                     </div>
                                 </div>
                             </div>

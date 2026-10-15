@@ -1044,7 +1044,11 @@ class AdminController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        AcademicSession::create($request->all());
+        $session = AcademicSession::create($request->all());
+
+        if ($session->is_active) {
+            \App\Services\AcademicSessionTransitionService::transitionToSessionAndTerm($session->id, null, true);
+        }
 
         return redirect()->route('admin.sessions')->with('success', 'Session created successfully.');
     }
@@ -1226,14 +1230,10 @@ class AdminController extends Controller
 
         $settings->save();
 
-        if ($request->filled('active_session_id')) {
-            AcademicSession::where('is_active', true)->update(['is_active' => false]);
-            AcademicSession::where('id', $request->active_session_id)->update(['is_active' => true]);
-        }
-
-        if ($request->filled('active_term_id')) {
-            Term::where('is_active', true)->update(['is_active' => false]);
-            Term::where('id', $request->active_term_id)->update(['is_active' => true]);
+        if ($request->filled('active_session_id') || $request->filled('active_term_id')) {
+            $targetSess = (int) ($request->active_session_id ?: (AcademicSession::where('is_active', true)->value('id') ?? 1));
+            $targetTerm = $request->filled('active_term_id') ? (int) $request->active_term_id : null;
+            \App\Services\AcademicSessionTransitionService::transitionToSessionAndTerm($targetSess, $targetTerm, true);
         }
 
         FinancialAuditLog::logAction('updated_school_settings', null, [], $settings->toArray());
