@@ -472,7 +472,8 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                 </div>
             </div>
         </div>
-    </div>
+
+                                                    
     @include('admin.partials.footer')
 
     <script>
