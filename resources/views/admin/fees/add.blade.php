@@ -17,17 +17,16 @@ $genderOptions = schema_enum_values('fee_structures', 'gender');
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = validate((string) ($_POST['name'] ?? ''));
     $description = validate((string) ($_POST['description'] ?? ''));
-    $classId = filter_input(INPUT_POST, 'class_id', FILTER_VALIDATE_INT) ?: null;
-    $sessionId = filter_input(INPUT_POST, 'session_id', FILTER_VALIDATE_INT);
+    $sessionId = filter_var($_POST['session_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
     $category = validate((string) ($_POST['category'] ?? 'NI'));
-    $termId = filter_input(INPUT_POST, 'term_id', FILTER_VALIDATE_INT) ?: null;
+    $termId = filter_var($_POST['term_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
 
     // CRITICAL BUSINESS RULE: New Intake fees ignore term
     if ($category === 'NI') {
         $termId = null;
     }
 
-    $amount = filter_input(INPUT_POST, 'amount', FILTER_VALIDATE_FLOAT);
+    $amount = filter_var($_POST['amount'] ?? null, FILTER_VALIDATE_FLOAT);
     $feeType = validate((string) ($_POST['fee_type'] ?? ''));
     $frequency = validate((string) ($_POST['frequency'] ?? ''));
     $gender = validate((string) ($_POST['gender'] ?? 'All'));
@@ -35,6 +34,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $effectiveTo = validate((string) ($_POST['effective_to'] ?? ''));
     $isMandatory = (int) ($_POST['is_mandatory'] ?? 1) === 1 ? 1 : 0;
     $isActive = (int) ($_POST['is_active'] ?? 1) === 1 ? 1 : 0;
+    $prefixClassName = !empty($_POST['prefix_class_name']);
+    $applyAllClasses = !empty($_POST['apply_all_classes']);
+
+    // Multiple class selection resolution
+    $targetClassIds = [];
+    if ($applyAllClasses) {
+        $targetClassIds = [null];
+    } elseif (!empty($_POST['class_ids']) && is_array($_POST['class_ids'])) {
+        $targetClassIds = array_values(array_unique(array_filter(array_map('intval', $_POST['class_ids']))));
+        if (empty($targetClassIds)) {
+            $targetClassIds = [null];
+        }
+    } elseif (!empty($_POST['class_id'])) {
+        $targetClassIds = [(int) $_POST['class_id']];
+    } else {
+        $targetClassIds = [null];
+    }
 
     if (
         $name === '' ||
@@ -49,45 +65,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please complete all required fee structure fields.';
     } else {
         try {
-            // Check duplicates: only block if an active fee structure with the exact same name AND fee type already exists for this exact combination
-            $termSql = $termId 
-                ? "AND term_id = ?" 
-                : "AND (term_id IS NULL OR term_id = 0)";
-            $params = [$sessionId, $classId, $classId, $gender, $category, $feeType, $name];
-            if ($termId) {
-                $params[] = $termId;
+            $created = [];
+            $skipped = [];
+
+            // Pre-load class lookup table
+            $classesById = [];
+            $allSchoolClasses = QueryDB('SELECT id, class_name, section, grade_level FROM school_classes')->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($allSchoolClasses as $sc) {
+                $classesById[(int) $sc['id']] = $sc;
             }
 
-            $duplicateCheck = QueryDB(
-                "SELECT id, name, fee_type FROM fee_structures 
-                 WHERE session_id = ? 
-                 AND (class_id = ? OR (class_id IS NULL AND ? IS NULL)) 
-                 AND gender = ? 
-                 AND category = ? 
-                 AND fee_type = ? 
-                 AND LOWER(TRIM(name)) = LOWER(TRIM(?)) 
-                 AND is_active = 1 
-                 {$termSql} 
-                 LIMIT 1",
-                $params
-            )->fetch(PDO::FETCH_ASSOC);
+            foreach ($targetClassIds as $classId) {
+                $selectedClass = $classId && isset($classesById[$classId]) ? $classesById[$classId] : null;
+                if ($selectedClass) {
+                    $rawClassName = trim($selectedClass['class_name'] ?? '');
+                    $rawSection = trim($selectedClass['section'] ?? '');
+                    if ($rawSection !== '' && substr(strtoupper($rawClassName), -strlen($rawSection)) !== strtoupper($rawSection)) {
+                        $classNameStr = $rawClassName . ' ' . $rawSection;
+                    } else {
+                        $classNameStr = $rawClassName;
+                    }
+                } else {
+                    $classNameStr = 'All Classes';
+                }
 
-            if ($duplicateCheck) {
-                $error = "An active fee structure with this name ('" . htmlspecialchars($name) . "') and fee type ('" . htmlspecialchars($feeType) . "') already exists for this combination.";
-            } else {
-                $selectedClass = null;
-                if ($classId) {
-                    $selectedClass = QueryDB(
-                        'SELECT class_name, grade_level FROM school_classes WHERE id = ? LIMIT 1',
-                        [$classId]
-                    )->fetch(PDO::FETCH_ASSOC);
+                // Determine fee name for this specific class
+                if ($selectedClass) {
+                    if (stripos($name, '{class}') !== false || stripos($name, '{class_name}') !== false) {
+                        $feeNameForClass = trim(str_ireplace(['{class_name}', '{class}'], $classNameStr, $name));
+                    } elseif ($prefixClassName) {
+                        $feeNameForClass = $classNameStr . ' - ' . $name;
+                    } else {
+                        $feeNameForClass = $name;
+                    }
+                } else {
+                    $feeNameForClass = trim(str_ireplace(['{class_name}', '{class}'], 'All Classes', $name));
+                }
+
+                // Check duplicates
+                $termSql = $termId 
+                    ? "AND term_id = ?" 
+                    : "AND (term_id IS NULL OR term_id = 0)";
+                $params = [$sessionId, $classId, $classId, $gender, $category, $feeType, $feeNameForClass];
+                if ($termId) {
+                    $params[] = $termId;
+                }
+
+                $duplicateCheck = QueryDB(
+                    "SELECT id, name FROM fee_structures 
+                     WHERE session_id = ? 
+                     AND (class_id = ? OR (class_id IS NULL AND ? IS NULL)) 
+                     AND gender = ? 
+                     AND category = ? 
+                     AND fee_type = ? 
+                     AND LOWER(TRIM(name)) = LOWER(TRIM(?)) 
+                     AND is_active = 1 
+                     {$termSql} 
+                     LIMIT 1",
+                    $params
+                )->fetch(PDO::FETCH_ASSOC);
+
+                if ($duplicateCheck) {
+                    $skipped[] = "{$classNameStr} ('{$feeNameForClass}')";
+                    continue;
                 }
 
                 QueryDB(
                     'INSERT INTO fee_structures (name, description, grade_level, class_name, amount, frequency, fee_type, category, gender, effective_from, effective_to, is_mandatory, is_active, additional_details, created_at, updated_at, session_id, term_id, class_id)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?, ?)',
                     [
-                        $name,
+                        $feeNameForClass,
                         $description !== '' ? $description : null,
                         $selectedClass['grade_level'] ?? null,
                         $selectedClass['class_name'] ?? null,
@@ -107,7 +154,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]
                 );
 
-                $success = 'Fee structure added successfully.';
+                $created[] = $classNameStr;
+            }
+
+            if (count($created) > 0) {
+                $success = "Successfully added fee structure for " . count($created) . " class(es): " . implode(', ', $created) . ".";
+                if (count($skipped) > 0) {
+                    $success .= " (Note: " . count($skipped) . " skipped as active duplicates: " . implode('; ', $skipped) . ")";
+                }
+            } elseif (count($skipped) > 0) {
+                $error = "No fee structure added. An active fee structure already exists for: " . implode('; ', $skipped) . ".";
+            } else {
+                $error = "No valid class was selected.";
             }
         } catch (Throwable $e) {
             $error = 'Failed to add fee structure: ' . $e->getMessage();
@@ -121,6 +179,32 @@ $classes = QueryDB(
      WHERE status = 'active'
      ORDER BY grade_level, class_name, section"
 )->fetchAll(PDO::FETCH_ASSOC);
+
+// Helper to group classes into meaningful categories for easy multi-selection
+$gradeGroups = [];
+foreach ($classes as $class) {
+    $cName = $class['class_name'] ?? '';
+    $gLevel = $class['grade_level'] ?? '';
+    $combined = strtoupper($cName . ' ' . $gLevel);
+
+    if (strpos($combined, 'NUR') !== false || strpos($combined, 'CRECHE') !== false || strpos($combined, 'PRE') !== false || strpos($combined, 'KG') !== false) {
+        $group = 'Nursery & Pre-Primary';
+    } elseif (strpos($combined, 'PRI') !== false || strpos($combined, 'BASIC') !== false) {
+        $group = 'Primary Classes';
+    } elseif (strpos($combined, 'JSS') !== false || strpos($combined, 'JUNIOR') !== false) {
+        $group = 'Junior Secondary (JSS)';
+    } elseif (strpos($combined, 'SSS') !== false || strpos($combined, 'SENIOR') !== false) {
+        $group = 'Senior Secondary (SSS)';
+    } else {
+        $group = 'Other Classes';
+    }
+
+    if (!isset($gradeGroups[$group])) {
+        $gradeGroups[$group] = [];
+    }
+    $gradeGroups[$group][] = $class;
+}
+
 $sessions = QueryDB("SELECT id, session_name, is_active FROM academic_sessions ORDER BY is_active DESC, start_date DESC")->fetchAll(PDO::FETCH_ASSOC);
 $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER BY term_number ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -164,7 +248,20 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                                             <div class="col-md-6">
                                                 <div class="form-group">
                                                     <label for="name">Fee Name <span class="text-danger">*</span></label>
-                                                    <input type="text" class="form-control" name="name" id="name" required>
+                                                    <input type="text" class="form-control" name="name" id="name" required placeholder="e.g. Tuition Fee, or {class} School fees" oninput="updateFeeNamePreview()">
+                                                    <div class="d-flex flex-wrap align-items-center justify-content-between mt-1">
+                                                        <div class="form-check mb-0 ps-0">
+                                                            <input class="form-check-input ms-0 me-1" type="checkbox" name="prefix_class_name" id="prefix_class_name" value="1" onchange="updateFeeNamePreview()">
+                                                            <label class="form-check-label small text-muted" for="prefix_class_name">
+                                                                Auto-prefix class name (e.g. <em>"Primary 1 - Tuition Fee"</em>)
+                                                            </label>
+                                                        </div>
+                                                        <small class="text-muted"><i class="fas fa-info-circle me-1"></i>You can use <code>{class}</code> placeholder</small>
+                                                    </div>
+                                                    <div id="fee_name_preview_box" class="small mt-2 p-2 rounded bg-light border" style="display:none;">
+                                                        <span class="text-muted fw-bold">Live Name Preview:</span>
+                                                        <div id="fee_name_preview_list" class="mt-1 d-flex flex-wrap align-items-center"></div>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
@@ -179,8 +276,9 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                                                 </div>
                                             </div>
                                         </div>
+
                                         <div class="row">
-                                            <div class="col-md-3">
+                                            <div class="col-md-4">
                                                 <div class="form-group">
                                                     <label for="category">Student Type / Category <span class="text-danger">*</span></label>
                                                     <select class="form-control" name="category" id="category" required onchange="toggleTermField()">
@@ -189,20 +287,7 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                                                     </select>
                                                 </div>
                                             </div>
-                                            <div class="col-md-3">
-                                                <div class="form-group">
-                                                    <label for="class_id">Class</label>
-                                                    <select class="form-control" name="class_id" id="class_id">
-                                                        <option value="">All Classes</option>
-                                                        <?php foreach ($classes as $class): ?>
-                                                            <option value="<?php echo (int) $class['id']; ?>">
-                                                                <?php echo htmlspecialchars(trim($class['class_name'] . ' ' . ($class['section'] ?? ''))); ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
+                                            <div class="col-md-4">
                                                 <div class="form-group">
                                                     <label for="session_id">Session <span class="text-danger">*</span></label>
                                                     <select class="form-control" name="session_id" id="session_id" required>
@@ -215,7 +300,7 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                                                     </select>
                                                 </div>
                                             </div>
-                                            <div class="col-md-3">
+                                            <div class="col-md-4">
                                                 <div class="form-group" id="term_group">
                                                     <label for="term_id">Term <small class="text-muted">(Optional for whole session)</small></label>
                                                     <select class="form-control" name="term_id" id="term_id">
@@ -226,6 +311,87 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                                                             </option>
                                                         <?php endforeach; ?>
                                                     </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Multi-Class Selection Card -->
+                                        <div class="card mb-4 border shadow-none bg-light">
+                                            <div class="card-body p-3">
+                                                <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+                                                    <div>
+                                                        <label class="form-label fw-bold mb-0 text-dark">
+                                                            <i class="fas fa-school text-primary me-1"></i> Target Class(es)
+                                                        </label>
+                                                        <small class="text-muted d-block">Choose single, multiple, or all classes to apply this fee structure to.</small>
+                                                    </div>
+                                                    <div class="d-flex align-items-center gap-2 mt-2 mt-sm-0">
+                                                        <span class="badge bg-warning text-dark" id="selectedClassCountBadge">0 classes selected (Will default to School-wide)</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mb-3 p-2 bg-white rounded border">
+                                                    <div class="form-check mb-0">
+                                                        <input class="form-check-input" type="checkbox" name="apply_all_classes" id="apply_all_classes" value="1" onchange="toggleSchoolWideOption(this)">
+                                                        <label class="form-check-label fw-bold text-primary" for="apply_all_classes">
+                                                            <i class="fas fa-globe me-1"></i> Apply as School-wide Fee (All Classes / General)
+                                                        </label>
+                                                        <div class="small text-muted ps-1">Creates a single universal fee structure (class_id = NULL) applicable school-wide.</div>
+                                                    </div>
+                                                </div>
+
+                                                <div id="class_selection_container">
+                                                    <!-- Quick select buttons -->
+                                                    <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                                                        <span class="small fw-bold text-muted me-1">Quick Select:</span>
+                                                        <button type="button" class="btn btn-xs btn-outline-primary" onclick="selectAllClasses(true)">
+                                                            <i class="fas fa-check-square me-1"></i> Select All Classes
+                                                        </button>
+                                                        <?php foreach ($gradeGroups as $groupName => $groupClasses): ?>
+                                                            <button type="button" class="btn btn-xs btn-outline-secondary" onclick="selectClassGroup('<?php echo htmlspecialchars(addslashes($groupName)); ?>')">
+                                                                <?php echo htmlspecialchars($groupName); ?> (<?php echo count($groupClasses); ?>)
+                                                            </button>
+                                                        <?php endforeach; ?>
+                                                        <button type="button" class="btn btn-xs btn-outline-danger" onclick="selectAllClasses(false)">
+                                                            <i class="fas fa-times me-1"></i> Clear
+                                                        </button>
+                                                    </div>
+
+                                                    <!-- Grouped class checkboxes -->
+                                                    <div class="row g-3">
+                                                        <?php foreach ($gradeGroups as $groupName => $groupClasses): ?>
+                                                            <div class="col-md-4 col-sm-6">
+                                                                <div class="bg-white rounded border p-2 h-100">
+                                                                    <div class="fw-bold text-secondary small border-bottom pb-1 mb-2 d-flex justify-content-between align-items-center">
+                                                                        <span><?php echo htmlspecialchars($groupName); ?></span>
+                                                                        <a href="javascript:void(0)" class="small text-primary text-decoration-none fw-bold" onclick="selectClassGroup('<?php echo htmlspecialchars(addslashes($groupName)); ?>')">Toggle All</a>
+                                                                    </div>
+                                                                    <div class="d-flex flex-column gap-1">
+                                                                        <?php 
+                                                                            foreach ($groupClasses as $cls): 
+                                                                                $rCName = trim($cls['class_name'] ?? '');
+                                                                                $rSec = trim($cls['section'] ?? '');
+                                                                                $dispName = ($rSec !== '' && substr(strtoupper($rCName), -strlen($rSec)) !== strtoupper($rSec)) ? $rCName . ' ' . $rSec : $rCName;
+                                                                        ?>
+                                                                            <div class="form-check">
+                                                                                <input class="form-check-input class-checkbox" 
+                                                                                       type="checkbox" 
+                                                                                       name="class_ids[]" 
+                                                                                       id="class_<?php echo (int) $cls['id']; ?>" 
+                                                                                       value="<?php echo (int) $cls['id']; ?>" 
+                                                                                       data-group="<?php echo htmlspecialchars($groupName); ?>"
+                                                                                       data-name="<?php echo htmlspecialchars($dispName); ?>"
+                                                                                       onchange="onClassCheckboxChanged()">
+                                                                                <label class="form-check-label small" for="class_<?php echo (int) $cls['id']; ?>">
+                                                                                    <?php echo htmlspecialchars($dispName); ?>
+                                                                                </label>
+                                                                            </div>
+                                                                        <?php endforeach; ?>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        <?php endforeach; ?>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -326,7 +492,138 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                 if (termStar) termStar.style.display = 'none';
             }
         }
-        document.addEventListener('DOMContentLoaded', toggleTermField);
+
+        function toggleSchoolWideOption(elem) {
+            var isSchoolWide = elem.checked;
+            var container = document.getElementById('class_selection_container');
+            var classCheckboxes = document.querySelectorAll('.class-checkbox');
+            var badge = document.getElementById('selectedClassCountBadge');
+
+            if (isSchoolWide) {
+                classCheckboxes.forEach(function(cb) {
+                    cb.checked = false;
+                    cb.disabled = true;
+                });
+                container.style.opacity = '0.5';
+                container.style.pointerEvents = 'none';
+                badge.className = 'badge bg-secondary';
+                badge.textContent = 'School-wide (All Classes)';
+            } else {
+                classCheckboxes.forEach(function(cb) {
+                    cb.disabled = false;
+                });
+                container.style.opacity = '1';
+                container.style.pointerEvents = 'auto';
+                onClassCheckboxChanged();
+            }
+            updateFeeNamePreview();
+        }
+
+        function selectAllClasses(checked) {
+            var schoolWide = document.getElementById('apply_all_classes');
+            if (schoolWide && schoolWide.checked) {
+                schoolWide.checked = false;
+                toggleSchoolWideOption(schoolWide);
+            }
+            var classCheckboxes = document.querySelectorAll('.class-checkbox');
+            classCheckboxes.forEach(function(cb) {
+                cb.checked = checked;
+            });
+            onClassCheckboxChanged();
+        }
+
+        function selectClassGroup(groupName) {
+            var schoolWide = document.getElementById('apply_all_classes');
+            if (schoolWide && schoolWide.checked) {
+                schoolWide.checked = false;
+                toggleSchoolWideOption(schoolWide);
+            }
+            var groupCheckboxes = document.querySelectorAll('.class-checkbox[data-group="' + CSS.escape(groupName) + '"]');
+            var allChecked = true;
+            groupCheckboxes.forEach(function(cb) {
+                if (!cb.checked) allChecked = false;
+            });
+            groupCheckboxes.forEach(function(cb) {
+                cb.checked = !allChecked;
+            });
+            onClassCheckboxChanged();
+        }
+
+        function onClassCheckboxChanged() {
+            var checked = document.querySelectorAll('.class-checkbox:checked');
+            var count = checked.length;
+            var badge = document.getElementById('selectedClassCountBadge');
+            var schoolWide = document.getElementById('apply_all_classes');
+
+            if (schoolWide && schoolWide.checked) {
+                badge.className = 'badge bg-secondary';
+                badge.textContent = 'School-wide (All Classes)';
+            } else if (count === 0) {
+                badge.className = 'badge bg-warning text-dark';
+                badge.textContent = '0 classes selected (Will default to School-wide)';
+            } else {
+                badge.className = 'badge bg-primary';
+                badge.textContent = count + ' class(es) selected';
+            }
+            updateFeeNamePreview();
+        }
+
+        function updateFeeNamePreview() {
+            var nameInput = document.getElementById('name');
+            var prefixCheck = document.getElementById('prefix_class_name');
+            var schoolWide = document.getElementById('apply_all_classes');
+            var previewBox = document.getElementById('fee_name_preview_box');
+            var previewList = document.getElementById('fee_name_preview_list');
+
+            var rawName = nameInput ? nameInput.value.trim() : '';
+            if (!rawName) {
+                previewBox.style.display = 'none';
+                return;
+            }
+
+            var checked = Array.from(document.querySelectorAll('.class-checkbox:checked'));
+            var isSchoolWide = schoolWide && schoolWide.checked;
+            var shouldPrefix = prefixCheck && prefixCheck.checked;
+
+            var previews = [];
+            if (isSchoolWide || checked.length === 0) {
+                var n = rawName.replace(/\{class_name\}|\{class\}/gi, 'All Classes');
+                previews.push(n + ' <span class="badge bg-light text-muted border ms-1">School-wide / All Classes</span>');
+            } else {
+                checked.forEach(function(cb) {
+                    var cName = cb.getAttribute('data-name') || '';
+                    var feeTitle = rawName;
+                    if (/\{class_name\}|\{class\}/i.test(feeTitle)) {
+                        feeTitle = feeTitle.replace(/\{class_name\}|\{class\}/gi, cName);
+                    } else if (shouldPrefix) {
+                        feeTitle = cName + ' - ' + feeTitle;
+                    }
+                    previews.push(feeTitle);
+                });
+            }
+
+            if (previews.length > 0) {
+                previewBox.style.display = 'block';
+                if (previews.length <= 4) {
+                    previewList.innerHTML = previews.map(function(p) {
+                        return '<span class="badge bg-white text-dark border me-1 mb-1 p-2">' + p + '</span>';
+                    }).join('');
+                } else {
+                    var firstThree = previews.slice(0, 3).map(function(p) {
+                        return '<span class="badge bg-white text-dark border me-1 mb-1 p-2">' + p + '</span>';
+                    }).join('');
+                    var remaining = previews.length - 3;
+                    previewList.innerHTML = firstThree + ' <span class="badge bg-primary text-white p-2 mb-1">+' + remaining + ' more class(es)</span>';
+                }
+            } else {
+                previewBox.style.display = 'none';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleTermField();
+            onClassCheckboxChanged();
+        });
     </script>
 </body>
 

@@ -253,12 +253,23 @@ class AdminController extends Controller
 
     public function storeFee(Request $request)
     {
+        if (!function_exists('QueryDB')) {
+            require_once base_path('db/config.php');
+            require_once base_path('db/functions.php');
+        }
+        require_once base_path('db/school_portal_helpers.php');
+
+        $feeTypeValues = function_exists('schema_enum_values') ? \schema_enum_values('fee_structures', 'fee_type') : [];
+        if (empty($feeTypeValues)) {
+            $feeTypeValues = ['tuition', 'registration', 'transport', 'library', 'sports', 'laboratory', 'uniform', 'exam', 'other', 'stationary'];
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'amount' => 'required|numeric|min:0',
             'frequency' => 'required|in:one_time,monthly,quarterly,semi_annual,annual',
-            'fee_type' => 'required|in:' . implode(',', schema_enum_values('fee_structures', 'fee_type')),
+            'fee_type' => 'required|in:' . implode(',', $feeTypeValues),
             'effective_from' => 'required|date',
             'effective_to' => 'nullable|date|after:effective_from',
             'category' => 'required|in:NI,OS',
@@ -266,40 +277,105 @@ class AdminController extends Controller
             'session_id' => 'required|exists:academic_sessions,id',
             'term_id' => 'nullable|exists:terms,id',
             'class_id' => 'nullable|exists:school_classes,id',
+            'class_ids' => 'nullable|array',
+            'class_ids.*' => 'nullable|exists:school_classes,id',
+            'prefix_class_name' => 'nullable',
+            'apply_all_classes' => 'nullable',
         ]);
 
         $category = $request->category;
         $termId = $category === 'NI' ? null : ($request->term_id ?: null);
+        $prefixClassName = $request->boolean('prefix_class_name');
+        $applyAllClasses = $request->boolean('apply_all_classes');
 
-        // Prevent duplicate fee structure for exact same name, fee type, session, class, gender, category, and term
-        $duplicateQuery = FeeStructure::where('session_id', $request->session_id)
-            ->where('class_id', $request->class_id)
-            ->where('gender', $request->gender)
-            ->where('category', $category)
-            ->where('fee_type', $request->fee_type)
-            ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower(trim((string) $request->name))])
-            ->where('is_active', true);
-
-        if ($category === 'OS') {
-            if ($termId) {
-                $duplicateQuery->where('term_id', $termId);
-            } else {
-                $duplicateQuery->whereNull('term_id');
+        // Determine target class IDs
+        $targetClassIds = [];
+        if ($applyAllClasses) {
+            $targetClassIds = [null];
+        } elseif ($request->has('class_ids') && is_array($request->class_ids) && count($request->class_ids) > 0) {
+            $targetClassIds = array_values(array_unique(array_filter(array_map('intval', $request->class_ids))));
+            if (empty($targetClassIds)) {
+                $targetClassIds = [null];
             }
+        } elseif ($request->filled('class_id')) {
+            $targetClassIds = [(int) $request->class_id];
+        } else {
+            $targetClassIds = [null];
         }
 
-        if ($duplicateQuery->exists()) {
-            return back()->withInput()->withErrors(['duplicate' => "An active fee structure with this exact name ('{$request->name}') and fee type ('{$request->fee_type}') already exists for this combination."]);
+        $created = [];
+        $skipped = [];
+        $schoolClasses = SchoolClass::whereIn('id', array_filter($targetClassIds))->get()->keyBy('id');
+
+        foreach ($targetClassIds as $classId) {
+            $classObj = $classId && isset($schoolClasses[$classId]) ? $schoolClasses[$classId] : null;
+            if ($classObj) {
+                $rawClassName = trim($classObj->class_name ?? '');
+                $rawSection = trim($classObj->section ?? '');
+                if ($rawSection !== '' && substr(strtoupper($rawClassName), -strlen($rawSection)) !== strtoupper($rawSection)) {
+                    $classNameStr = $rawClassName . ' ' . $rawSection;
+                } else {
+                    $classNameStr = $rawClassName;
+                }
+            } else {
+                $classNameStr = 'All Classes';
+            }
+
+            if ($classObj) {
+                if (stripos($request->name, '{class}') !== false || stripos($request->name, '{class_name}') !== false) {
+                    $feeNameForClass = trim(str_ireplace(['{class_name}', '{class}'], $classNameStr, $request->name));
+                } elseif ($prefixClassName) {
+                    $feeNameForClass = $classNameStr . ' - ' . $request->name;
+                } else {
+                    $feeNameForClass = $request->name;
+                }
+            } else {
+                $feeNameForClass = trim(str_ireplace(['{class_name}', '{class}'], 'All Classes', $request->name));
+            }
+
+            // Duplicate query
+            $duplicateQuery = FeeStructure::where('session_id', $request->session_id)
+                ->where('class_id', $classId)
+                ->where('gender', $request->gender)
+                ->where('category', $category)
+                ->where('fee_type', $request->fee_type)
+                ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower(trim((string) $feeNameForClass))])
+                ->where('is_active', true);
+
+            if ($category === 'OS') {
+                if ($termId) {
+                    $duplicateQuery->where('term_id', $termId);
+                } else {
+                    $duplicateQuery->whereNull('term_id');
+                }
+            }
+
+            if ($duplicateQuery->exists()) {
+                $skipped[] = "{$classNameStr} ('{$feeNameForClass}')";
+                continue;
+            }
+
+            $feeData = $request->except(['class_ids', 'prefix_class_name', 'apply_all_classes']);
+            $feeData['name'] = $feeNameForClass;
+            $feeData['class_id'] = $classId;
+            $feeData['class_name'] = $classObj ? $classObj->class_name : null;
+            $feeData['grade_level'] = $classObj ? $classObj->grade_level : null;
+            $feeData['term_id'] = $termId;
+
+            $feeStructure = FeeStructure::create($feeData);
+            FinancialAuditLog::logAction('created_fee_structure', $feeStructure, [], $feeStructure->toArray());
+            $created[] = $classNameStr;
         }
 
-        $feeData = $request->all();
-        $feeData['term_id'] = $termId;
+        if (count($created) > 0) {
+            $msg = 'Successfully created fee structure for ' . count($created) . ' class(es): ' . implode(', ', $created) . '.';
+            if (count($skipped) > 0) {
+                $msg .= ' (Note: ' . count($skipped) . ' skipped as duplicates: ' . implode('; ', $skipped) . ')';
+            }
+            return redirect()->route('admin.fees')->with('success', $msg);
+        }
 
-        $feeStructure = FeeStructure::create($feeData);
-
-        FinancialAuditLog::logAction('created_fee_structure', $feeStructure, [], $feeStructure->toArray());
-
-        return redirect()->route('admin.fees')->with('success', 'Fee structure created successfully.');
+        return back()->withInput()->withErrors(['duplicate' => 'No fee structure was created. An active fee structure already exists for: ' . implode('; ', $skipped)]);
     }
 
     public function editFee(FeeStructure $fee)
