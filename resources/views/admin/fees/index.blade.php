@@ -121,11 +121,11 @@ $fees = QueryDB(
                                                     <td><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $fee['fee_type']))); ?></td>
                                                     <td><?php echo htmlspecialchars(trim(((string) ($fee['class_name'] ?? 'All Classes')) . ' ' . ((string) ($fee['class_arm'] ?? '')))); ?></td>
                                                     <td><?php echo htmlspecialchars((string) ($fee['session_name'] ?? 'N/A')); ?></td>
-                                                    <td><?php echo htmlspecialchars((string) ($fee['term_name'] ?? ($fee['category'] === 'NI' ? 'Session-Based (N/A)' : 'N/A'))); ?></td>
+                                                    <td><?php echo htmlspecialchars((string) ($fee['term_name'] ?? ($fee['category'] === 'NI' ? 'Session-Based (N/A)' : 'All Terms / Whole Session'))); ?></td>
                                                     <td class="fw-bold text-primary">₦<?php echo number_format((float) ($fee['amount'] ?? 0), 2); ?></td>
                                                     <td>
-                                                        <span class="badge bg-<?php echo $fee['category'] === 'NI' ? 'info' : 'secondary'; ?>">
-                                                            <?php echo $fee['category'] === 'NI' ? 'New Intake (NI)' : 'Returning (OS)'; ?>
+                                                        <span class="badge bg-<?php echo $fee['category'] === 'ALL' ? 'primary' : ($fee['category'] === 'NI' ? 'info' : 'secondary'); ?>">
+                                                            <?php echo $fee['category'] === 'ALL' ? 'All Students' : ($fee['category'] === 'NI' ? 'New Intake (NI)' : 'Returning (OS)'); ?>
                                                         </span>
                                                     </td>
                                                     <td>

@@ -38,10 +38,15 @@ class FeeAllocationService
             $gender = 'M'; // default fallback
         }
 
-        // Query FeeStructure matching session, category, gender, and class (or class_id IS NULL)
+        // Query FeeStructure matching session, category (student category OR 'ALL'), gender, and class (or class_id IS NULL)
         $query = FeeStructure::where('session_id', $sessionId)
             ->where('is_active', true)
-            ->where('category', $category)
+            ->where(function($q) use ($category) {
+                $q->where('category', $category)
+                  ->orWhere('category', 'ALL')
+                  ->orWhere('category', 'All')
+                  ->orWhereNull('category');
+            })
             ->where(function($q) use ($student) {
                 $q->where('class_id', $student->current_class_id)
                   ->orWhereNull('class_id');
@@ -51,11 +56,20 @@ class FeeAllocationService
                   ->orWhere('gender', 'All');
             });
 
-        // New Intake fees ignore term; Returning student fees filter by term (or whole session where term_id IS NULL).
-        if ($category === 'OS' && $termId) {
+        // Term filtering:
+        // - NI-specific fee structures ignore term.
+        // - OS and ALL fee structures filter by term (must match current term or be NULL for all-terms/whole-session).
+        if ($termId) {
             $query->where(function($q) use ($termId) {
-                $q->where('term_id', $termId)
-                  ->orWhereNull('term_id');
+                $q->where('category', 'NI')
+                  ->orWhere(function($sub) use ($termId) {
+                      $sub->whereIn('category', ['OS', 'ALL', 'All'])
+                          ->where(function($tq) use ($termId) {
+                              $tq->where('term_id', $termId)
+                                 ->orWhereNull('term_id');
+                          });
+                  })
+                  ->orWhereNull('category');
             });
         }
 
@@ -69,20 +83,20 @@ class FeeAllocationService
         // Filter and prioritize candidates:
         // Group by fee_type (or fee name if fee_type is general):
         // If a class-specific fee structure exists for a fee_type, do not allocate a generic (null class) fee structure for that same fee_type.
+        // If a category-specific fee structure exists for a fee_type, prefer it over a generic 'ALL' structure.
         $selectedStructures = collect();
 
         if ($allCandidates->isNotEmpty()) {
             $grouped = $allCandidates->groupBy('fee_type');
             foreach ($grouped as $feeType => $structures) {
                 $classSpecific = $structures->where('class_id', $student->current_class_id);
-                if ($classSpecific->isNotEmpty()) {
-                    foreach ($classSpecific as $struct) {
-                        $selectedStructures->push($struct);
-                    }
-                } else {
-                    foreach ($structures as $struct) {
-                        $selectedStructures->push($struct);
-                    }
+                $pool = $classSpecific->isNotEmpty() ? $classSpecific : $structures;
+
+                $categorySpecific = $pool->where('category', $category);
+                $finalForType = $categorySpecific->isNotEmpty() ? $categorySpecific : $pool;
+
+                foreach ($finalForType as $struct) {
+                    $selectedStructures->push($struct);
                 }
             }
         }

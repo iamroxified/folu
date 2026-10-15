@@ -272,7 +272,7 @@ class AdminController extends Controller
             'fee_type' => 'required|in:' . implode(',', $feeTypeValues),
             'effective_from' => 'required|date',
             'effective_to' => 'nullable|date|after:effective_from',
-            'category' => 'required|in:NI,OS',
+            'category' => 'required|in:NI,OS,ALL',
             'gender' => 'required|in:M,F,All',
             'session_id' => 'required|exists:academic_sessions,id',
             'term_id' => 'nullable|exists:terms,id',
@@ -342,7 +342,7 @@ class AdminController extends Controller
                 ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower(trim((string) $feeNameForClass))])
                 ->where('is_active', true);
 
-            if ($category === 'OS') {
+            if ($category === 'OS' || $category === 'ALL') {
                 if ($termId) {
                     $duplicateQuery->where('term_id', $termId);
                 } else {
@@ -396,7 +396,7 @@ class AdminController extends Controller
             'fee_type' => 'required|in:' . implode(',', schema_enum_values('fee_structures', 'fee_type')),
             'effective_from' => 'required|date',
             'effective_to' => 'nullable|date|after:effective_from',
-            'category' => 'required|in:NI,OS',
+            'category' => 'required|in:NI,OS,ALL',
             'gender' => 'required|in:M,F,All',
             'session_id' => 'required|exists:academic_sessions,id',
             'term_id' => 'nullable|exists:terms,id',
@@ -415,7 +415,7 @@ class AdminController extends Controller
             ->where('is_active', true)
             ->where('id', '!=', $fee->id);
 
-        if ($category === 'OS') {
+        if ($category === 'OS' || $category === 'ALL') {
             if ($termId) {
                 $duplicateQuery->where('term_id', $termId);
             } else {

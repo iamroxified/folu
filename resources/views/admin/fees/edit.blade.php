@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->where('is_active', true)
                 ->where('id', '!=', $targetFee->id);
 
-            if ($category === 'OS') {
+            if ($category === 'OS' || $category === 'ALL') {
                 if ($termId) {
                     $duplicateCheck->where('term_id', $termId);
                 } else {
@@ -189,6 +189,7 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                                                     <select class="form-control" name="category" id="category" required onchange="toggleTermField()">
                                                         <option value="NI" <?php echo ($feeRecord && $feeRecord->category === 'NI') ? 'selected' : ''; ?>>New Intake (NI - Session Based)</option>
                                                         <option value="OS" <?php echo ($feeRecord && $feeRecord->category === 'OS') ? 'selected' : ''; ?>>Returning Student (OS - Term Based)</option>
+                                                        <option value="ALL" <?php echo ($feeRecord && $feeRecord->category === 'ALL') ? 'selected' : ''; ?>>All Students (New Intake & Returning - Per Term)</option>
                                                     </select>
                                                 </div>
                                             </div>

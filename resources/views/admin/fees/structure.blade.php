@@ -309,9 +309,9 @@ try {
             $fsParams[] = $studentClassId;
         }
 
-        // Match category ('NI', 'OS' or 'All')
+        // Match category ('NI', 'OS' or 'ALL'/'All')
         if ($studentCategory !== '') {
-            $conditions[] = "(fs.category = ? OR fs.category = 'All' OR fs.category IS NULL)";
+            $conditions[] = "(fs.category = ? OR fs.category = 'ALL' OR fs.category = 'All' OR fs.category IS NULL)";
             $fsParams[] = $studentCategory;
         }
 

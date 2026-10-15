@@ -234,7 +234,7 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                             <div class="card">
                                 <div class="card-header">
                                     <div class="card-title">Fee Structure Details</div>
-                                    <div class="card-category">Note: New Intake (NI) fees are session-based (Term not applicable). Returning (OS) fees require Term.</div>
+                                    <div class="card-category">Note: New Intake (NI) fees are session-based (Term not applicable). Returning (OS) and All Students fees are term-based (or whole session).</div>
                                 </div>
                                 <div class="card-body">
                                     <?php if (isset($error)): ?>
@@ -245,48 +245,49 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                                     <?php endif; ?>
                                     <form method="POST" action="">
                                         <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label for="name">Fee Name <span class="text-danger">*</span></label>
-                                                    <input type="text" class="form-control" name="name" id="name" required placeholder="e.g. Tuition Fee, or {class} School fees" oninput="updateFeeNamePreview()">
-                                                    <div class="d-flex flex-wrap align-items-center justify-content-between mt-1">
-                                                        <div class="form-check mb-0 ps-0">
-                                                            <input class="form-check-input ms-0 me-1" type="checkbox" name="prefix_class_name" id="prefix_class_name" value="1" onchange="updateFeeNamePreview()">
-                                                            <label class="form-check-label small text-muted" for="prefix_class_name">
-                                                                Auto-prefix class name (e.g. <em>"Primary 1 - Tuition Fee"</em>)
-                                                            </label>
-                                                        </div>
-                                                        <small class="text-muted"><i class="fas fa-info-circle me-1"></i>You can use <code>{class}</code> placeholder</small>
-                                                    </div>
-                                                    <div id="fee_name_preview_box" class="small mt-2 p-2 rounded bg-light border" style="display:none;">
-                                                        <span class="text-muted fw-bold">Live Name Preview:</span>
-                                                        <div id="fee_name_preview_list" class="mt-1 d-flex flex-wrap align-items-center"></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label for="fee_type">Fee Type <span class="text-danger">*</span></label>
-                                                    <select class="form-control" name="fee_type" id="fee_type" required>
-                                                        <option value="">Select Fee Type</option>
-                                                        <?php foreach ($feeTypeOptions as $option): ?>
-                                                            <option value="<?php echo htmlspecialchars($option); ?>"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $option))); ?></option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
+                                             <div class="col-md-6">
+                                                 <div class="form-group">
+                                                     <label for="name">Fee Name <span class="text-danger">*</span></label>
+                                                     <input type="text" class="form-control" name="name" id="name" required placeholder="e.g. Tuition Fee, or {class} School fees" oninput="updateFeeNamePreview()">
+                                                     <div class="d-flex flex-wrap align-items-center justify-content-between mt-1">
+                                                         <div class="form-check mb-0 ps-0">
+                                                             <input class="form-check-input ms-0 me-1" type="checkbox" name="prefix_class_name" id="prefix_class_name" value="1" onchange="updateFeeNamePreview()">
+                                                             <label class="form-check-label small text-muted" for="prefix_class_name">
+                                                                 Auto-prefix class name (e.g. <em>"Primary 1 - Tuition Fee"</em>)
+                                                             </label>
+                                                         </div>
+                                                         <small class="text-muted"><i class="fas fa-info-circle me-1"></i>You can use <code>{class}</code> placeholder</small>
+                                                     </div>
+                                                     <div id="fee_name_preview_box" class="small mt-2 p-2 rounded bg-light border" style="display:none;">
+                                                         <span class="text-muted fw-bold">Live Name Preview:</span>
+                                                         <div id="fee_name_preview_list" class="mt-1 d-flex flex-wrap align-items-center"></div>
+                                                     </div>
+                                                 </div>
+                                             </div>
+                                             <div class="col-md-6">
+                                                 <div class="form-group">
+                                                     <label for="fee_type">Fee Type <span class="text-danger">*</span></label>
+                                                     <select class="form-control" name="fee_type" id="fee_type" required>
+                                                         <option value="">Select Fee Type</option>
+                                                         <?php foreach ($feeTypeOptions as $option): ?>
+                                                             <option value="<?php echo htmlspecialchars($option); ?>"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $option))); ?></option>
+                                                         <?php endforeach; ?>
+                                                     </select>
+                                                 </div>
+                                             </div>
+                                         </div>
 
-                                        <div class="row">
-                                            <div class="col-md-4">
-                                                <div class="form-group">
-                                                    <label for="category">Student Type / Category <span class="text-danger">*</span></label>
-                                                    <select class="form-control" name="category" id="category" required onchange="toggleTermField()">
-                                                        <option value="NI">New Intake (NI - Session Based)</option>
-                                                        <option value="OS">Returning Student (OS - Term Based)</option>
-                                                    </select>
-                                                </div>
-                                            </div>
+                                         <div class="row">
+                                             <div class="col-md-4">
+                                                 <div class="form-group">
+                                                     <label for="category">Student Type / Category <span class="text-danger">*</span></label>
+                                                     <select class="form-control" name="category" id="category" required onchange="toggleTermField()">
+                                                         <option value="NI">New Intake (NI - Session Based)</option>
+                                                         <option value="OS">Returning Student (OS - Term Based)</option>
+                                                         <option value="ALL">All Students (New Intake & Returning - Per Term)</option>
+                                                     </select>
+                                                 </div>
+                                             </div>
                                             <div class="col-md-4">
                                                 <div class="form-group">
                                                     <label for="session_id">Session <span class="text-danger">*</span></label>
@@ -472,8 +473,6 @@ $terms = QueryDB("SELECT id, term_name, term_number, is_active FROM terms ORDER 
                 </div>
             </div>
         </div>
-
-                                                    
     @include('admin.partials.footer')
 
     <script>
