@@ -12,6 +12,18 @@ class StudentPortalController extends Controller
         if ($normalized === 'index' || $normalized === 'dashboard') {
             return redirect()->route('student.dashboard');
         }
+        if ($normalized === 'payments') {
+            return redirect()->route('student.payments');
+        }
+        if ($normalized === 'results') {
+            return redirect()->route('student.results');
+        }
+        if ($normalized === 'receipts') {
+            return redirect()->route('student.receipts');
+        }
+        if ($normalized === 'profile') {
+            return redirect()->route('student.profile');
+        }
 
         if (session_status() === PHP_SESSION_NONE) {
             session_start();

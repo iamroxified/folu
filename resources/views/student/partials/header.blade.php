@@ -1,5 +1,13 @@
 @php
-    $hdrStudent = $student ?? null;
+    $rawHdrStudent = $student ?? null;
+    $hdrStudent = null;
+
+    if ($rawHdrStudent instanceof \App\Models\Student) {
+        $hdrStudent = $rawHdrStudent;
+    } elseif (is_array($rawHdrStudent) && !empty($rawHdrStudent['id'])) {
+        $hdrStudent = \App\Models\Student::with(['currentClass', 'currentSession', 'currentTerm'])->find($rawHdrStudent['id']);
+    }
+
     if (!$hdrStudent && auth()->check()) {
         $u = auth()->user();
         $hdrStudent = \App\Models\Student::with(['currentClass', 'currentSession', 'currentTerm'])
@@ -11,6 +19,12 @@
     }
     if (!$hdrStudent && !empty($_SESSION['student_id'])) {
         $hdrStudent = \App\Models\Student::with(['currentClass', 'currentSession', 'currentTerm'])->find($_SESSION['student_id']);
+    }
+
+    if (is_array($hdrStudent)) {
+        $hdrStudent = (object) $hdrStudent;
+    } elseif (!$hdrStudent && is_array($rawHdrStudent)) {
+        $hdrStudent = (object) $rawHdrStudent;
     }
 
     $hdrSession = $currentSession ?? ($hdrStudent?->currentSession ?? \App\Models\AcademicSession::where('is_active', true)->first());

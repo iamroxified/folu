@@ -2,17 +2,8 @@
 require_once base_path('db/config.php');
 require_once base_path('db/functions.php');
 
-if (!isset($_SESSION['student_user_id'], $_SESSION['student_id'])) {
-    header('Location: /student/login.php');
-    exit;
-}
-
-$student = get_student_profile_by_user_id((int) $_SESSION['student_user_id']);
-
-if (!$student) {
-    header('Location: /student/logout.php');
-    exit;
-}
+header('Location: /student/results');
+exit;
 
 $selectedSessionId = (int) ($_GET['academic_session_link'] ?? (get_current_academic_session_id() ?? (int) ($student['academic_session_link'] ?? 0)));
 $selectedTerm = validate($_GET['term'] ?? '');

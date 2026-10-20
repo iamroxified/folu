@@ -103,9 +103,11 @@ class UnifiedLoginController extends Controller
 
             if ($student && !empty($student->user_link)) {
                 $user = User::find($student->user_link);
-                if ($user) return $user;
+                if ($user)
+                    return $user;
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) {
+        }
 
         // 3. Search teacher/staff ID or email
         try {
@@ -116,9 +118,11 @@ class UnifiedLoginController extends Controller
 
             if ($teacher && !empty($teacher->user_link)) {
                 $user = User::find($teacher->user_link);
-                if ($user) return $user;
+                if ($user)
+                    return $user;
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) {
+        }
 
         // 4. Search parent email/phone
         try {
@@ -130,9 +134,11 @@ class UnifiedLoginController extends Controller
 
             if ($parent && !empty($parent->user_link)) {
                 $user = User::find($parent->user_link);
-                if ($user) return $user;
+                if ($user)
+                    return $user;
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) {
+        }
 
         return null;
     }
@@ -148,11 +154,11 @@ class UnifiedLoginController extends Controller
 
         $roleName = strtolower($this->getUserRoleName($user));
 
-        if (in_array($roleName, ['admin', 'super_admin', 'superadmin', 'administrator', 'manager'], true) || (isset($user->role_id) && (int)$user->role_id === 1)) {
+        if (in_array($roleName, ['admin', 'super_admin', 'superadmin', 'administrator', 'manager'], true) || (isset($user->role_id) && (int) $user->role_id === 1)) {
             $_SESSION['adid'] = $user->id;
             $_SESSION['username'] = $user->username ?? $user->name;
             $_SESSION['email'] = $user->email ?? '';
-        } elseif ($roleName === 'student' || (isset($user->role_id) && (int)$user->role_id === 4)) {
+        } elseif ($roleName === 'student' || (isset($user->role_id) && (int) $user->role_id === 4)) {
             $_SESSION['student_user_id'] = $user->id;
             $_SESSION['student_username'] = $user->username ?? $user->name;
             $_SESSION['student_name'] = $user->name;
@@ -170,8 +176,9 @@ class UnifiedLoginController extends Controller
                         DB::table('students')->where('id', $student->id)->update(['user_link' => $user->id]);
                     }
                 }
-            } catch (Throwable $e) {}
-        } elseif (in_array($roleName, ['teacher', 'accountant', 'staff'], true) || (isset($user->role_id) && in_array((int)$user->role_id, [2, 3], true))) {
+            } catch (Throwable $e) {
+            }
+        } elseif (in_array($roleName, ['teacher', 'accountant', 'staff'], true) || (isset($user->role_id) && in_array((int) $user->role_id, [2, 3], true))) {
             $_SESSION['teacher_user_id'] = $user->id;
             $_SESSION['teacher_username'] = $user->username ?? $user->name;
             $_SESSION['teacher_name'] = $user->name;
@@ -188,7 +195,8 @@ class UnifiedLoginController extends Controller
                         DB::table('teachers')->where('id', $staff->id)->update(['user_link' => $user->id]);
                     }
                 }
-            } catch (Throwable $e) {}
+            } catch (Throwable $e) {
+            }
         }
     }
 
@@ -213,7 +221,7 @@ class UnifiedLoginController extends Controller
                 4 => 'Student',
                 5 => 'Parent',
             ];
-            return $roleMap[(int)$user->role_id] ?? 'Student';
+            return $roleMap[(int) $user->role_id] ?? 'Student';
         }
 
         return 'Student';
@@ -226,19 +234,19 @@ class UnifiedLoginController extends Controller
     {
         $roleName = strtolower($this->getUserRoleName($user));
 
-        if (in_array($roleName, ['admin', 'super_admin', 'superadmin', 'administrator', 'manager'], true) || (isset($user->role_id) && (int)$user->role_id === 1)) {
+        if (in_array($roleName, ['admin', 'super_admin', 'superadmin', 'administrator', 'manager'], true) || (isset($user->role_id) && (int) $user->role_id === 1)) {
             return redirect()->intended(route('admin.dashboard'));
         }
 
-        if ($roleName === 'teacher' || (isset($user->role_id) && (int)$user->role_id === 2)) {
+        if ($roleName === 'teacher' || (isset($user->role_id) && (int) $user->role_id === 2)) {
             return redirect()->intended(route('teacher.dashboard'));
         }
 
-        if ($roleName === 'accountant' || (isset($user->role_id) && (int)$user->role_id === 3)) {
+        if ($roleName === 'accountant' || (isset($user->role_id) && (int) $user->role_id === 3)) {
             return redirect()->intended(route('accountant.dashboard'));
         }
 
-        if ($roleName === 'student' || $roleName === 'parent' || (isset($user->role_id) && (int)$user->role_id === 4)) {
+        if ($roleName === 'student' || $roleName === 'parent' || (isset($user->role_id) && (int) $user->role_id === 4)) {
             return redirect()->intended(route('student.dashboard'));
         }
 
