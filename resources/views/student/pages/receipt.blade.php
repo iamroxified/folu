@@ -3,11 +3,29 @@ require_once base_path('db/config.php');
 require_once base_path('db/functions.php');
 
 if (!isset($_SESSION['student_user_id'], $_SESSION['student_id'])) {
+    if (class_exists(\Illuminate\Support\Facades\Auth::class) && \Illuminate\Support\Facades\Auth::check()) {
+        $u = \Illuminate\Support\Facades\Auth::user();
+        $_SESSION['student_user_id'] = $u->id;
+        $st = \App\Models\Student::where('user_link', $u->id)
+            ->orWhere('admission_no', $u->username)
+            ->orWhere('student_number', $u->username)
+            ->orWhere('email', $u->email)
+            ->first();
+        if ($st) {
+            $_SESSION['student_id'] = $st->id;
+        }
+    }
+}
+
+if (!isset($_SESSION['student_user_id']) || empty($_SESSION['student_id'])) {
     header('Location: /student/login.php');
     exit;
 }
 
 $student = get_student_profile_by_user_id((int) $_SESSION['student_user_id']);
+if (!$student && !empty($_SESSION['student_id'])) {
+    $student = get_student_profile_by_id((int) $_SESSION['student_id']);
+}
 
 if (!$student) {
     header('Location: /student/logout.php');
@@ -65,7 +83,30 @@ if (!$payment) {
 }
 
 if (!$payment) {
-    header('Location: /student/payments.php');
+    $payment = QueryDB(
+        "SELECT p.*,
+                COALESCE(r.receipt_number, p.payment_reference) AS receipt_number,
+                p.amount AS amount_paid,
+                p.description AS payment_description,
+                NULL AS fee_structure_link,
+                COALESCE(p.description, 'School Fee Payment') AS fee_name,
+                p.description AS fee_description,
+                'fee' AS fee_type,
+                p.amount AS amount_due,
+                p.amount AS total_fee_paid,
+                0.00 AS fee_balance,
+                NULL AS session_name,
+                NULL AS session_term
+         FROM payments p
+         LEFT JOIN receipts r ON r.payment_id = p.id
+         WHERE p.id = ? AND (r.student_id = ? OR p.payable_id = ?) AND p.status = 'completed'
+         LIMIT 1",
+        [$paymentId, (int) $student['id'], (int) $student['id']]
+    )->fetch(PDO::FETCH_ASSOC);
+}
+
+if (!$payment) {
+    header('Location: /student/payments');
     exit;
 }
 

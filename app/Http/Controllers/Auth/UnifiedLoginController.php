@@ -98,15 +98,11 @@ class UnifiedLoginController extends Controller
         try {
             $student = DB::table('students')
                 ->where('admission_no', $loginInput)
+                ->orWhere('student_number', $loginInput)
                 ->first();
 
             if ($student && !empty($student->user_link)) {
                 $user = User::find($student->user_link);
-                if ($user) return $user;
-            }
-
-            if ($student && !empty($student->user_id)) {
-                $user = User::find($student->user_id);
                 if ($user) return $user;
             }
         } catch (Throwable $e) {}
@@ -118,8 +114,8 @@ class UnifiedLoginController extends Controller
                 ->orWhere('email', $loginInput)
                 ->first();
 
-            if ($teacher && !empty($teacher->user_id)) {
-                $user = User::find($teacher->user_id);
+            if ($teacher && !empty($teacher->user_link)) {
+                $user = User::find($teacher->user_link);
                 if ($user) return $user;
             }
         } catch (Throwable $e) {}
@@ -132,8 +128,8 @@ class UnifiedLoginController extends Controller
                 ->orWhere('parent_id', $loginInput)
                 ->first();
 
-            if ($parent && !empty($parent->user_id)) {
-                $user = User::find($parent->user_id);
+            if ($parent && !empty($parent->user_link)) {
+                $user = User::find($parent->user_link);
                 if ($user) return $user;
             }
         } catch (Throwable $e) {}
@@ -164,11 +160,15 @@ class UnifiedLoginController extends Controller
             try {
                 $student = DB::table('students')
                     ->where('email', $user->email)
+                    ->orWhere('admission_no', $user->username)
+                    ->orWhere('student_number', $user->username)
                     ->orWhere('user_link', $user->id)
-                    ->orWhere('user_id', $user->id)
                     ->first();
                 if ($student) {
                     $_SESSION['student_id'] = $student->id;
+                    if (empty($student->user_link)) {
+                        DB::table('students')->where('id', $student->id)->update(['user_link' => $user->id]);
+                    }
                 }
             } catch (Throwable $e) {}
         } elseif (in_array($roleName, ['teacher', 'accountant', 'staff'], true) || (isset($user->role_id) && in_array((int)$user->role_id, [2, 3], true))) {
@@ -179,10 +179,14 @@ class UnifiedLoginController extends Controller
             try {
                 $staff = DB::table('teachers')
                     ->where('email', $user->email)
-                    ->orWhere('user_id', $user->id)
+                    ->orWhere('teacher_id', $user->username)
+                    ->orWhere('user_link', $user->id)
                     ->first();
                 if ($staff) {
                     $_SESSION['teacher_id'] = $staff->id;
+                    if (empty($staff->user_link)) {
+                        DB::table('teachers')->where('id', $staff->id)->update(['user_link' => $user->id]);
+                    }
                 }
             } catch (Throwable $e) {}
         }

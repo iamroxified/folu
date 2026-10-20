@@ -834,7 +834,7 @@ function get_teacher_profile_by_user_id(int $userId): ?array
 function get_student_profile_by_user_id(int $userId): ?array
 {
     $studentUserJoin = schema_has_column('students', 'user_link')
-        ? 's.user_link = u.id'
+        ? '(s.user_link = u.id OR s.admission_no = u.username OR (s.email IS NOT NULL AND s.email != "" AND s.email = u.email))'
         : 's.admission_no = u.username';
 
     return QueryDB(
@@ -856,6 +856,30 @@ function get_student_profile_by_user_id(int $userId): ?array
          WHERE u.id = ?
          LIMIT 1',
         [$userId]
+    )->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function get_student_profile_by_id(int $studentId): ?array
+{
+    return QueryDB(
+        'SELECT s.*, u.username, u.email AS user_email, u.status AS user_status,
+                COALESCE(c.class_name, sc.class_name) AS class_name,
+                COALESCE(c.class_arm, sc.section) AS class_arm,
+                COALESCE(c.class_level, sc.grade_level) AS class_level,
+                ac.session_name,
+                COALESCE(t.term_name, at.term_name) AS session_term,
+                COALESCE(t.term_name, at.term_name) AS term_name,
+                COALESCE(CAST(t.term_number AS CHAR), at.term_code) AS term_code
+         FROM students s
+         LEFT JOIN users u ON (s.user_link = u.id OR s.admission_no = u.username)
+         LEFT JOIN classes c ON s.class_link = c.id
+         LEFT JOIN school_classes sc ON s.current_class_id = sc.id
+         LEFT JOIN academic_sessions ac ON COALESCE(s.current_session_id, s.academic_session_link) = ac.id
+         LEFT JOIN terms t ON COALESCE(s.current_term_id, s.term_link) = t.id
+         LEFT JOIN academic_terms at ON s.term_link = at.id
+         WHERE s.id = ?
+         LIMIT 1',
+        [$studentId]
     )->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
